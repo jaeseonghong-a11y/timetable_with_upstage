@@ -42,13 +42,24 @@
   런타임에 파싱해 HakgwaCode 리스트로 로드
 - (Phase 2) `scraper/skku_scraper/client.py`: `fetch_major_courses`/`fetch_elective_courses` 구현,
   목(mock) 단위테스트 10개 전부 통과
-- (Phase 2) ★ 라이브 호출로 검증 중 두 가지 발견:
+- (Phase 2) ★ 라이브 호출로 검증 중 발견 (여러 라운드):
   1. (해결) 기본 python-requests UA로는 404/커넥션리셋 → 브라우저 UA·Referer·Origin 헤더 필요.
-     `client.py`에 반영 완료.
-  2. (미해결·블로커) 헤더 수정 후 실제 selectMain.do 호출은 ErrorCode:int=0(성공)이지만
-     데이터 행이 0개로 옴. "KEY=VALUE"·"KEY:string=VALUE" 두 인코딩 다 시도했으나 동일.
-     → `docs/05_미해결_과제.md` P3-a로 기록. ssv.py 파서 자체는 실제 서버가 준 컬럼정의로
-     검증됨 (컬럼명에 ":string(4000)" 같은 타입접미사가 붙는다는 것도 이번에 확인해 파서에 반영).
+  2. (해결) ssv.py 파서: 컬럼명에 ":string(4000)" 같은 타입접미사가 붙는다는 걸 실서버 응답으로 확인,
+     파서에 스트립 로직 반영.
+  3. (미해결·블로커, P3-a) `docs/02_기술검증_기록.md`가 제시한 두 가지 수정을 모두 적용했으나
+     여전히 경영학과(316901)+TERM=20+CAMPUS_GB=1 라이브 호출이 214행이 아니라 0행(806바이트,
+     컬럼 스키마만)이다:
+     - raw UTF-8 bytes 전송(%가 %25로 안 깨짐) — 이미 처음부터 이렇게 구현돼 있었음
+     - `requests.Session()` + `sessionLogin.do` 선호출 — `client.py`에 구현 완료.
+       세션 자체는 진짜로 성립됨을 확인함(로그인 응답이 실제 gdsUser/gdsMsg 데이터 포함,
+       이후 요청에 동일 JSESSIONID 쿠키가 계속 전송되는 것도 확인).
+     - 그래도 안 돼서 문서에 언급된 전체 호출 순서(sessionLogin→refreshSession→selectMenutree→
+       selectMain)까지 그대로 재현했지만 결과는 동일(0행).
+     - 즉 "세션 없음"이 유일한 원인은 아닌 것으로 보임. 브라우저 fetch로 성공했다는 것과
+       Python/curl 재현이 계속 어긋나는 원인은 아직 못 찾음(TLS/HTTP2 핑거프린트, 헤더
+       순서/대소문자, 또는 sessionLogin 응답 안의 어떤 토큰을 놓치고 있을 가능성).
+     - 이 세션에서 실서버에 상당히 많은 라이브 요청을 이미 보냈음 — 추가 블라인드 시도는
+       자제하고, 사용자가 가진 실제 브라우저 요청/응답 원본(HAR 등)을 받아서 diff하는 쪽을 권장.
 
 ## 📂 변경한 파일
 > 이번 세션에서 건드린 파일 목록. `git diff --name-only` 결과를 붙여도 됨.

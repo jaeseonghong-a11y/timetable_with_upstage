@@ -3,12 +3,9 @@
 명세 출처: ../../docs/02_기술검증_기록.md "방법 A: 순수 API 직접호출".
 요청 간격을 두어 서버 부담을 줄인다 (../../docs/04_규칙과_지켜야할것.md 데이터 안전선).
 
-⚠️ 2026-07-13 실측 메모 (docs/05_미해결_과제.md 참조):
-- 기본 User-Agent(python-requests)로는 404/커넥션리셋 → 브라우저 User-Agent·Referer·Origin
-  헤더를 붙여야 200을 받는다 (아래 _HEADERS에 반영 완료).
-- 단, "KEY=VALUE"·"KEY:string=VALUE" 두 인코딩 모두 ErrorCode:int=0(성공)은 받지만
-  데이터 행이 0개로 돌아옴 → 파라미터 인코딩 자체가 아직 완전히 맞지 않는 것으로 추정.
-  실제 넥사크로 엔진이 보내는 바이트를 다시 캡처(브라우저 네트워크 후킹)해서 재검증 필요.
+selectMain.do는 유효한 세션(JSESSIONID)이 없으면 ErrorCode:int=0(성공)인데도 데이터가 0행으로
+온다 (docs/02_기술검증_기록.md "P3-a 블로커 진짜 원인 = 세션" 참조). 그래서 실제 조회 전에
+sessionLogin.do를 한 번 호출해 세션을 성립시킨 뒤, 같은 Session으로 이어서 조회한다.
 """
 
 from __future__ import annotations
@@ -17,9 +14,10 @@ import time
 
 import requests
 
-from skku_scraper.ssv import SSVError, SSVResponse, parse_ssv
+from skku_scraper.ssv import RS, SSVError, SSVResponse, parse_ssv
 
 BASE_URL = "https://kingoinfo.skku.edu/gaia"
+SESSION_LOGIN_ENDPOINT = f"{BASE_URL}/E_NCommon/sessionLogin.do"
 MAJOR_ENDPOINT = f"{BASE_URL}/E_NHSSU900020M/selectMain.do"
 ELECTIVE_ENDPOINT = f"{BASE_URL}/E_NHSSU900010M/selectMain03.do"
 
@@ -40,6 +38,10 @@ _HEADERS = {
 
 DEFAULT_REQUEST_INTERVAL_SECONDS = 0.5
 
+_session = requests.Session()
+_session.headers.update(_HEADERS)
+_session_logged_in = False
+
 
 class SkkuApiError(Exception):
     """성대 API가 ErrorCode!=0을 반환했을 때."""
@@ -48,12 +50,29 @@ class SkkuApiError(Exception):
 def _build_ssv_body(**params: str) -> str:
     """Nexacro SSV 요청 바디를 만든다. 각 파라미터를 'KEY=VALUE' 레코드로 직렬화."""
     records = [f"{key}={value}" for key, value in params.items()]
-    return "\x1e".join(records) + "\x1e"
+    return RS.join(records) + RS
+
+
+def _ensure_session() -> None:
+    """sessionLogin.do로 JSESSIONID를 성립시킨다. 이미 성립됐으면 아무것도 안 한다."""
+    global _session_logged_in
+    if _session_logged_in:
+        return
+    resp = _session.post(SESSION_LOGIN_ENDPOINT, data=f"SSV:utf-8{RS}".encode(), timeout=10)
+    resp.raise_for_status()
+    _session_logged_in = True
+
+
+def reset_session() -> None:
+    """세션을 강제로 새로 시작한다 (테스트용, 또는 장시간 실행 중 세션 만료 대응용)."""
+    global _session_logged_in
+    _session_logged_in = False
 
 
 def _post(endpoint: str, **params: str) -> SSVResponse:
+    _ensure_session()
     body = _build_ssv_body(**params)
-    resp = requests.post(endpoint, headers=_HEADERS, data=body.encode("utf-8"), timeout=10)
+    resp = _session.post(endpoint, data=body.encode("utf-8"), timeout=10)
     resp.raise_for_status()
     try:
         parsed = parse_ssv(resp.text)
