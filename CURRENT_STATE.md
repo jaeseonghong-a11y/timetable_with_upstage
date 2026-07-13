@@ -15,7 +15,8 @@
 강의계획서 PDF를 Upstage Parse로 읽어 "학기 부담까지 예측하는" 시간표 추천이 핵심 차별점.
 
 ### 지금 어느 단계인가
-**현재 작업:** Phase 1(web/·scraper/ 스캐폴딩) 완료. Phase 2(수집기 실제 구현) 착수 전.
+**현재 작업:** Phase 2(수집기 구현) 부분 완료 — SSV 파서·학과코드·API 클라이언트 코드는 완성했으나
+**요청 바디 인코딩이 아직 실제 서버에서 0건 응답 → 블로커 상태** (`docs/05_미해결_과제.md` P3-a 참조).
 
 - 개발 순서(확정): Phase 1 스캐폴딩 → Phase 2 수집기 → Phase 3 Upstage 파싱 파이프라인
   → Phase 4 조합로직 → Phase 5 Solar 추천사유 → Phase 6 UI → Phase 7 통합·배포 → Phase 8 데모준비
@@ -36,12 +37,24 @@
   vitest 추가, `package.json`에 `typecheck`(tsc --noEmit)·`test`(vitest run) 스크립트 신설.
   `npm run lint/typecheck/test` 전부 통과 확인
 - (Phase 1) `python -m pre_commit run --all-files`로 전체 게이트(ruff/ruff-format/web eslint/web typecheck) 실통과 검증
+- (Phase 2) `scraper/skku_scraper/ssv.py` SSV 파서 구현 (RS=0x1e/US=0x1f 분리, 컬럼명 타입접미사 스트립)
+- (Phase 2) `scraper/skku_scraper/codes.py`: TERM·CAMPUS_GB 상수, `docs/성대_학과코드_전체.txt`를
+  런타임에 파싱해 HakgwaCode 리스트로 로드
+- (Phase 2) `scraper/skku_scraper/client.py`: `fetch_major_courses`/`fetch_elective_courses` 구현,
+  목(mock) 단위테스트 10개 전부 통과
+- (Phase 2) ★ 라이브 호출로 검증 중 두 가지 발견:
+  1. (해결) 기본 python-requests UA로는 404/커넥션리셋 → 브라우저 UA·Referer·Origin 헤더 필요.
+     `client.py`에 반영 완료.
+  2. (미해결·블로커) 헤더 수정 후 실제 selectMain.do 호출은 ErrorCode:int=0(성공)이지만
+     데이터 행이 0개로 옴. "KEY=VALUE"·"KEY:string=VALUE" 두 인코딩 다 시도했으나 동일.
+     → `docs/05_미해결_과제.md` P3-a로 기록. ssv.py 파서 자체는 실제 서버가 준 컬럼정의로
+     검증됨 (컬럼명에 ":string(4000)" 같은 타입접미사가 붙는다는 것도 이번에 확인해 파서에 반영).
 
 ## 📂 변경한 파일
 > 이번 세션에서 건드린 파일 목록. `git diff --name-only` 결과를 붙여도 됨.
 
 - `docs/01_의사결정_로그.md`, `docs/00_프로젝트_현황_요약.md`, `docs/05_미해결_과제.md`, `CURRENT_STATE.md`
-- `scraper/` 전체 신설 (pyproject.toml, skku_scraper/, tests/, data/, README.md)
+- `scraper/` 전체 신설 (pyproject.toml, skku_scraper/{ssv,codes,client}.py, tests/, data/, README.md)
 - `web/` 전체 신설 (Next.js 표준 구조 + src/lib/version.ts,.test.ts)
 
 ## 💻 실행한 명령어
@@ -58,17 +71,23 @@
 ## ⚠️ 남은 문제 / 막힌 곳
 > 해결 못 한 것, 에러, 판단이 필요한 지점. 없으면 "없음".
 
+- ★ **P3-a (블로커, 신규)**: `client.py`의 selectMain.do 요청이 ErrorCode:int=0(성공)은 받는데 행이 0개.
+  요청 바디 인코딩이 아직 정확하지 않음. 이 세션엔 브라우저 자동화 도구가 없어 실제 바이트 재캡처
+  불가 → 브라우저 MCP(Claude-in-Chrome 등) 있는 세션에서 `docs/02_기술검증_기록.md` "방법C"를
+  다시 수행해 정확한 요청 바디를 재확보해야 함. 상세: `docs/05_미해결_과제.md` P3-a.
 - P2(Upstage 콘솔 실검증)·P6(강의계획서 PDF 접근성)는 아직 미검증. Phase 3 착수 즉시 최우선 처리 예정.
   결과에 따라 Phase 3~4 설계가 바뀔 수 있는 최대 리스크 지점.
 - scraper/venv(.venv/)는 gitignore 대상이라 커밋 안 됨. 다음 세션에서 재현하려면 위 명령어로 재설치 필요.
 
 ## ▶️ Recommended Next Step (다음 도구가 이어서 할 일)
 
-1. **Phase 2 수집기**: `docs/02_기술검증_기록.md`의 API 명세대로 `scraper/skku_scraper/ssv.py`(SSV파서, RS=0x1e/US=0x1f)
-   → `codes.py`(학과코드 `docs/성대_학과코드_전체.txt`·TERM 10/15/20/25) → `client.py`(전공 selectMain.do /
-   교양 selectMain03.do 호출, requests 기반, 요청 간격 적용) 순으로 구현. 각 모듈 단위테스트 작성.
-   이 단계에서 P5(교양 2단계 조회)도 실호출로 확인.
-2. **Phase 2 확인**: 학과 1~2개 실호출 → JSON 저장, `INTRO_URL`(강의계획서 링크) 포함 확인.
+1. **Phase 2 블로커부터 해결**: 브라우저 자동화 도구(Claude-in-Chrome MCP 등)가 있는 세션에서
+   `docs/02_기술검증_기록.md` "방법C"(넥사크로 엔진 통신 후킹)를 다시 수행해 selectMain.do의
+   정확한 요청 바이트를 재캡처. `scraper/skku_scraper/client.py`의 `_build_ssv_body`를 그에
+   맞게 수정. (지금은 ErrorCode:0인데 행이 0개로 돌아오는 상태 — `docs/05` P3-a 참조)
+2. **Phase 2 마무리**: 위 수정 후 학과 1~2개 실호출 → 실제 행이 나오는지, JSON 저장까지 확인.
+   P5(교양 2단계 조회)도 이 시점에 함께 실호출로 확인. `scraper/skku_scraper/models.py`(Course 데이터클래스)와
+   실제 수집→저장 스크립트는 아직 미작성 — 요청 인코딩 해결 후 추가.
 3. **Phase 3 착수 직전**: P2(Upstage 콘솔 실검증)·P6(강의계획서 PDF 접근성)를 최우선으로 실제 검증부터.
 
 ---
