@@ -15,8 +15,9 @@
 강의계획서 PDF를 Upstage Parse로 읽어 "학기 부담까지 예측하는" 시간표 추천이 핵심 차별점.
 
 ### 지금 어느 단계인가
-**현재 작업:** Phase 2(수집기 구현) 부분 완료 — SSV 파서·학과코드·API 클라이언트 코드는 완성했으나
-**요청 바디 인코딩이 아직 실제 서버에서 0건 응답 → 블로커 상태** (`docs/05_미해결_과제.md` P3-a 참조).
+**현재 작업:** Phase 2(수집기 구현) 핵심 로직 완료 — SSV 파서·학과코드·API 클라이언트 전부 라이브
+검증까지 통과 (경영학과 실데이터 수신 확인). P3-a 블로커 해소. `models.py`(데이터클래스)와 실제
+수집→저장 스크립트는 아직 없음.
 
 - 개발 순서(확정): Phase 1 스캐폴딩 → Phase 2 수집기 → Phase 3 Upstage 파싱 파이프라인
   → Phase 4 조합로직 → Phase 5 Solar 추천사유 → Phase 6 UI → Phase 7 통합·배포 → Phase 8 데모준비
@@ -42,24 +43,18 @@
   런타임에 파싱해 HakgwaCode 리스트로 로드
 - (Phase 2) `scraper/skku_scraper/client.py`: `fetch_major_courses`/`fetch_elective_courses` 구현,
   목(mock) 단위테스트 10개 전부 통과
-- (Phase 2) ★ 라이브 호출로 검증 중 발견 (여러 라운드):
+- (Phase 2) ★ 라이브 호출로 검증하며 발견·해결한 것들 (여러 라운드):
   1. (해결) 기본 python-requests UA로는 404/커넥션리셋 → 브라우저 UA·Referer·Origin 헤더 필요.
   2. (해결) ssv.py 파서: 컬럼명에 ":string(4000)" 같은 타입접미사가 붙는다는 걸 실서버 응답으로 확인,
      파서에 스트립 로직 반영.
-  3. (미해결·블로커, P3-a) `docs/02_기술검증_기록.md`가 제시한 두 가지 수정을 모두 적용했으나
-     여전히 경영학과(316901)+TERM=20+CAMPUS_GB=1 라이브 호출이 214행이 아니라 0행(806바이트,
-     컬럼 스키마만)이다:
-     - raw UTF-8 bytes 전송(%가 %25로 안 깨짐) — 이미 처음부터 이렇게 구현돼 있었음
-     - `requests.Session()` + `sessionLogin.do` 선호출 — `client.py`에 구현 완료.
-       세션 자체는 진짜로 성립됨을 확인함(로그인 응답이 실제 gdsUser/gdsMsg 데이터 포함,
-       이후 요청에 동일 JSESSIONID 쿠키가 계속 전송되는 것도 확인).
-     - 그래도 안 돼서 문서에 언급된 전체 호출 순서(sessionLogin→refreshSession→selectMenutree→
-       selectMain)까지 그대로 재현했지만 결과는 동일(0행).
-     - 즉 "세션 없음"이 유일한 원인은 아닌 것으로 보임. 브라우저 fetch로 성공했다는 것과
-       Python/curl 재현이 계속 어긋나는 원인은 아직 못 찾음(TLS/HTTP2 핑거프린트, 헤더
-       순서/대소문자, 또는 sessionLogin 응답 안의 어떤 토큰을 놓치고 있을 가능성).
-     - 이 세션에서 실서버에 상당히 많은 라이브 요청을 이미 보냈음 — 추가 블라인드 시도는
-       자제하고, 사용자가 가진 실제 브라우저 요청/응답 원본(HAR 등)을 받아서 diff하는 쪽을 권장.
+  3. (★해결, P3-a) selectMain.do가 세션을 맞춰도 계속 0행이던 진짜 원인 = 요청 바디 맨 앞에
+     "SSV:utf-8" 레코드가 빠져있었던 것. `X-NX-Content-Type: 2` 헤더는 처음부터 정상 전송 중이었음
+     (prepared request 덤프로 확인). `_ALL_OUT_DS_NM` 파라미터는 불필요했음(있으나 없으나 동일).
+     `_build_ssv_body`가 이제 리딩 마커를 자동으로 붙임 — 회귀 방지 테스트도 추가.
+  4. 라이브 최종 검증: 경영학과(316901) TERM=10/CAMPUS_GB=1 → 103행(42행에 INTRO_URL 채워짐,
+     lcms.skku.edu/em/... 형태), TERM=20 → 107행. ⚠️ 문서의 "TERM=20→214행" 기록과는 불일치
+     (내 실측 107행은 오히려 02 문서 section2의 더 이전 실측과 일치) — 원인 불명, 수집기 동작
+     자체엔 지장 없으나 총 개설강좌 수 정확도가 중요해지면 재확인 필요.
 
 ## 📂 변경한 파일
 > 이번 세션에서 건드린 파일 목록. `git diff --name-only` 결과를 붙여도 됨.
@@ -82,24 +77,22 @@
 ## ⚠️ 남은 문제 / 막힌 곳
 > 해결 못 한 것, 에러, 판단이 필요한 지점. 없으면 "없음".
 
-- ★ **P3-a (블로커, 신규)**: `client.py`의 selectMain.do 요청이 ErrorCode:int=0(성공)은 받는데 행이 0개.
-  요청 바디 인코딩이 아직 정확하지 않음. 이 세션엔 브라우저 자동화 도구가 없어 실제 바이트 재캡처
-  불가 → 브라우저 MCP(Claude-in-Chrome 등) 있는 세션에서 `docs/02_기술검증_기록.md` "방법C"를
-  다시 수행해 정확한 요청 바디를 재확보해야 함. 상세: `docs/05_미해결_과제.md` P3-a.
-- P2(Upstage 콘솔 실검증)·P6(강의계획서 PDF 접근성)는 아직 미검증. Phase 3 착수 즉시 최우선 처리 예정.
-  결과에 따라 Phase 3~4 설계가 바뀔 수 있는 최대 리스크 지점.
+- P2(Upstage 콘솔 실검증)는 아직 미검증. Phase 3 착수 즉시 최우선 처리 예정.
+- P6(강의계획서 PDF 접근성)는 아직 미검증이지만, 실제 테스트용 URL은 이미 확보됨
+  (예: https://lcms.skku.edu/em/67b55bfa1ec82). Phase 3에서 바로 GET 테스트 가능.
+- TERM=20 행수(107 vs 문서상 214) 불일치 — 원인 불명, 수집기 동작엔 지장 없음(위 참조).
 - scraper/venv(.venv/)는 gitignore 대상이라 커밋 안 됨. 다음 세션에서 재현하려면 위 명령어로 재설치 필요.
+- `scraper/skku_scraper/models.py`(Course 데이터클래스)와 실제 수집→저장 스크립트는 아직 미작성.
+- P5(교양 2단계 조회)는 아직 실호출로 확인 안 됨 — `fetch_elective_courses`는 구현·목테스트만 됨.
 
 ## ▶️ Recommended Next Step (다음 도구가 이어서 할 일)
 
-1. **Phase 2 블로커부터 해결**: 브라우저 자동화 도구(Claude-in-Chrome MCP 등)가 있는 세션에서
-   `docs/02_기술검증_기록.md` "방법C"(넥사크로 엔진 통신 후킹)를 다시 수행해 selectMain.do의
-   정확한 요청 바이트를 재캡처. `scraper/skku_scraper/client.py`의 `_build_ssv_body`를 그에
-   맞게 수정. (지금은 ErrorCode:0인데 행이 0개로 돌아오는 상태 — `docs/05` P3-a 참조)
-2. **Phase 2 마무리**: 위 수정 후 학과 1~2개 실호출 → 실제 행이 나오는지, JSON 저장까지 확인.
-   P5(교양 2단계 조회)도 이 시점에 함께 실호출로 확인. `scraper/skku_scraper/models.py`(Course 데이터클래스)와
-   실제 수집→저장 스크립트는 아직 미작성 — 요청 인코딩 해결 후 추가.
-3. **Phase 3 착수 직전**: P2(Upstage 콘솔 실검증)·P6(강의계획서 PDF 접근성)를 최우선으로 실제 검증부터.
+1. **Phase 2 마무리**: `fetch_elective_courses`를 교양 영역코드(GEDG001 등)로 실호출해 P5 확인.
+   `scraper/skku_scraper/models.py`(Course 데이터클래스)와 여러 학과를 순회하며 JSON으로 저장하는
+   수집 스크립트 작성. `docs/성대_학과코드_전체.txt`가 126개뿐이라는 점(02 문서 참조, 실시간
+   selectBizType04.do 호출을 진실의 원천으로 삼으라고 되어있음) 감안해서 설계.
+2. **Phase 3 착수**: P2(Upstage 콘솔 실검증)부터. 이미 확보한 실제 INTRO_URL로 P6(PDF 접근성)도
+   바로 검증 가능.
 
 ---
 

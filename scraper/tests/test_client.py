@@ -43,6 +43,7 @@ def test_fetch_major_courses_parses_rows():
 
     assert rows == [{"GWAMOK_NAME": "경영정보시스템", "PER_NAME": "홍길동"}]
     body = post.call_args.kwargs["data"].decode("utf-8")
+    assert body.startswith("SSV:utf-8\x1e")  # 없으면 세션 있어도 0행 (2026-07-13 실측)
     assert "HAKGWA_CD=316901" in body
     assert "_TRANSACTION_ID=selectMain" in body
     assert "ROAD_MAP=%" in body  # % 리터럴 유지 (URL 인코딩되면 %25가 되어 0행 원인)

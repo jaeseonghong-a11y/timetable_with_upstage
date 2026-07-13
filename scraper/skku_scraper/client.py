@@ -4,8 +4,12 @@
 요청 간격을 두어 서버 부담을 줄인다 (../../docs/04_규칙과_지켜야할것.md 데이터 안전선).
 
 selectMain.do는 유효한 세션(JSESSIONID)이 없으면 ErrorCode:int=0(성공)인데도 데이터가 0행으로
-온다 (docs/02_기술검증_기록.md "P3-a 블로커 진짜 원인 = 세션" 참조). 그래서 실제 조회 전에
-sessionLogin.do를 한 번 호출해 세션을 성립시킨 뒤, 같은 Session으로 이어서 조회한다.
+온다. 그래서 실제 조회 전에 sessionLogin.do를 한 번 호출해 세션을 성립시킨 뒤, 같은 Session으로
+이어서 조회한다.
+
+★ P3-a 블로커 해소 (2026-07-13 라이브 검증 완료): 세션을 맞춰도 여전히 0행이던 진짜 원인은
+바디 맨 앞에 "SSV:utf-8" 레코드가 빠져있었던 것. `_build_ssv_body`가 이를 자동으로 붙인다.
+실측: 경영학과(316901) TERM=10 → 103행(그중 42행에 INTRO_URL 채워짐), TERM=20 → 107행.
 """
 
 from __future__ import annotations
@@ -48,8 +52,12 @@ class SkkuApiError(Exception):
 
 
 def _build_ssv_body(**params: str) -> str:
-    """Nexacro SSV 요청 바디를 만든다. 각 파라미터를 'KEY=VALUE' 레코드로 직렬화."""
-    records = [f"{key}={value}" for key, value in params.items()]
+    """Nexacro SSV 요청 바디를 만든다.
+
+    맨 앞에 "SSV:utf-8" 레코드가 반드시 있어야 한다 — 이게 없으면 세션이 있어도
+    ErrorCode:0 + 데이터 0행이 돌아온다 (docs/02_기술검증_기록.md 실측, 2026-07-13 재확인).
+    """
+    records = ["SSV:utf-8", *(f"{key}={value}" for key, value in params.items())]
     return RS.join(records) + RS
 
 
