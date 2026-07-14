@@ -496,16 +496,19 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
   const selectedElectiveAreaLabel = selectedElectiveArea === "all"
     ? "전체 교양"
     : electiveAreaLabels.get(selectedElectiveArea) ?? "선택 영역";
+  // Deliberately NOT format-filtered: the format filter narrows what's browsable in the catalog
+  // (formatFilteredCourseGroups), but a course the user already added to the plan must stay in
+  // the plan even if they later hide its format while searching for something else.
   const effectiveSelectedGroupIds = useMemo(() => {
-    const availableIds = new Set(formatFilteredCourseGroups.map((group) => group.selectionId));
+    const availableIds = new Set(availableCourseGroups.map((group) => group.selectionId));
     return selectedGroupIds.filter((id) => availableIds.has(id));
-  }, [formatFilteredCourseGroups, selectedGroupIds]);
+  }, [availableCourseGroups, selectedGroupIds]);
   const selectedCourseGroups = useMemo(
     () =>
-      formatFilteredCourseGroups.filter(({ selectionId }) =>
+      availableCourseGroups.filter(({ selectionId }) =>
         effectiveSelectedGroupIds.includes(selectionId),
       ),
-    [formatFilteredCourseGroups, effectiveSelectedGroupIds],
+    [availableCourseGroups, effectiveSelectedGroupIds],
   );
   const choiceGroupSubjectCounts = useMemo(
     () =>
