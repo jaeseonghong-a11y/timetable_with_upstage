@@ -1,6 +1,13 @@
 "use client";
 
-import { type FocusEvent, type KeyboardEvent, useMemo, useRef, useState } from "react";
+import {
+  type FocusEvent,
+  type KeyboardEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import {
   getCourseQueryLabel,
@@ -15,6 +22,12 @@ import {
   type SkkuDepartment,
 } from "@/lib/skku-departments";
 import type { SkkuTerm } from "@/lib/skku-course-api";
+import {
+  ADMISSION_YEAR_OPTIONS,
+  COURSE_YEAR_OPTIONS,
+  parseDirectYear,
+  type YearOption,
+} from "@/lib/student-profile-options";
 
 import styles from "./StudentProfileForm.module.css";
 
@@ -31,10 +44,16 @@ const TERMS: ReadonlyArray<{ value: SkkuTerm; label: string }> = [
   { value: 20, label: "2학기" },
   { value: 25, label: "겨울학기" },
 ];
-const ADMISSION_YEAR_PRESETS = Array.from(
-  { length: 2026 - 2018 + 1 },
-  (_, index) => 2026 - index,
-);
+const GRADE_OPTIONS: ReadonlyArray<ProfileSelectOption> = [
+  { value: "", label: "학년 선택" },
+  ...[1, 2, 3, 4, 5, 6].map((grade) => ({ value: String(grade), label: `${grade}학년` })),
+  { value: "7", label: "초과학기" },
+];
+const CAMPUS_OPTIONS: ReadonlyArray<ProfileSelectOption> = [
+  { value: "", label: "캠퍼스 선택" },
+  { value: "humanities", label: "인문사회과학캠퍼스" },
+  { value: "natural_sciences", label: "자연과학캠퍼스" },
+];
 
 export function StudentProfileForm({ profile, appliedProfile, onChange, onApply }: Props) {
   const departmentInputRef = useRef<HTMLInputElement>(null);
@@ -266,101 +285,66 @@ export function StudentProfileForm({ profile, appliedProfile, onChange, onApply 
           </small>
         </div>
 
-        <div className={styles.field}>
-          <label className={styles.fieldLabel} htmlFor="student-admission-year">
-            입학연도
-          </label>
-          <input
-            id="student-admission-year"
-            autoComplete="off"
-            inputMode="numeric"
-            list="student-admission-year-options"
-            max={profile.courseYear}
-            min="2000"
-            placeholder="입력 또는 선택"
-            type="number"
-            value={profile.admissionYear ?? ""}
-            onChange={(event) =>
-              onChange({
-                ...profile,
-                admissionYear: event.target.value ? event.target.valueAsNumber : null,
-              })
-            }
-          />
-          <datalist id="student-admission-year-options">
-            {ADMISSION_YEAR_PRESETS.map((year) => (
-              <option key={year} value={year}>{year}년</option>
-            ))}
-          </datalist>
+        <YearCombobox
+          id="student-admission-year"
+          label="입학연도"
+          max={profile.courseYear}
+          min={2000}
+          options={ADMISSION_YEAR_OPTIONS.filter(({ value }) => value <= profile.courseYear)}
+          placeholder="연도 입력"
+          value={profile.admissionYear}
+          onChange={(admissionYear) => onChange({ ...profile, admissionYear })}
+        >
           <small className={styles.admissionYearHint}>
             2018~2026년은 목록에서 고르거나 다른 연도를 바로 입력하세요.
           </small>
-        </div>
+        </YearCombobox>
 
-        <label className={styles.field}>
-          <span>현재 학년</span>
-          <select
-            value={profile.currentGrade ?? ""}
-            onChange={(event) =>
-              onChange({
-                ...profile,
-                currentGrade: event.target.value ? Number(event.target.value) : null,
-              })
-            }
-          >
-            <option value="">학년 선택</option>
-            {[1, 2, 3, 4, 5, 6].map((grade) => (
-              <option key={grade} value={grade}>{grade}학년</option>
-            ))}
-            <option value="7">초과학기</option>
-          </select>
-        </label>
+        <ProfileSelect
+          id="student-current-grade"
+          label="현재 학년"
+          options={GRADE_OPTIONS}
+          value={profile.currentGrade === null ? "" : String(profile.currentGrade)}
+          onChange={(value) =>
+            onChange({ ...profile, currentGrade: value ? Number(value) : null })
+          }
+        />
 
-        <label className={styles.field}>
-          <span>주 캠퍼스</span>
-          <select
-            value={profile.primaryCampus ?? ""}
-            onChange={(event) =>
-              onChange({
-                ...profile,
-                primaryCampus: event.target.value
-                  ? (event.target.value as StudentPlanningProfile["primaryCampus"])
-                  : null,
-              })
-            }
-          >
-            <option value="">캠퍼스 선택</option>
-            <option value="humanities">인문사회과학캠퍼스</option>
-            <option value="natural_sciences">자연과학캠퍼스</option>
-          </select>
-        </label>
+        <ProfileSelect
+          id="student-primary-campus"
+          label="주 캠퍼스"
+          options={CAMPUS_OPTIONS}
+          value={profile.primaryCampus ?? ""}
+          onChange={(value) =>
+            onChange({
+              ...profile,
+              primaryCampus: value
+                ? (value as StudentPlanningProfile["primaryCampus"])
+                : null,
+            })
+          }
+        />
 
-        <label className={styles.field}>
-          <span>조회 학년도</span>
-          <input
-            max="2100"
-            min="2020"
-            type="number"
-            value={profile.courseYear}
-            onChange={(event) =>
-              onChange({ ...profile, courseYear: event.target.valueAsNumber || 2026 })
-            }
-          />
-        </label>
+        <YearCombobox
+          id="student-course-year"
+          label="조회 학년도"
+          max={2100}
+          min={2020}
+          options={COURSE_YEAR_OPTIONS}
+          placeholder="학년도 입력"
+          value={profile.courseYear}
+          onChange={(courseYear) => onChange({ ...profile, courseYear: courseYear ?? 2026 })}
+        />
 
-        <label className={styles.field}>
-          <span>조회 학기</span>
-          <select
-            value={profile.courseTerm}
-            onChange={(event) =>
-              onChange({ ...profile, courseTerm: Number(event.target.value) as SkkuTerm })
-            }
-          >
-            {TERMS.map((term) => (
-              <option key={term.value} value={term.value}>{term.label}</option>
-            ))}
-          </select>
-        </label>
+        <ProfileSelect
+          id="student-course-term"
+          label="조회 학기"
+          options={TERMS.map(({ value, label }) => ({ value: String(value), label }))}
+          value={String(profile.courseTerm)}
+          onChange={(value) =>
+            onChange({ ...profile, courseTerm: Number(value) as SkkuTerm })
+          }
+        />
       </div>
 
       <div className={styles.actions}>
@@ -369,5 +353,314 @@ export function StudentProfileForm({ profile, appliedProfile, onChange, onApply 
       </div>
       {error ? <p className={styles.error} role="alert">{error}</p> : null}
     </section>
+  );
+}
+
+interface ProfileSelectOption {
+  value: string;
+  label: string;
+}
+
+interface ProfileSelectProps {
+  id: string;
+  label: string;
+  value: string;
+  options: ReadonlyArray<ProfileSelectOption>;
+  onChange: (value: string) => void;
+}
+
+function ProfileSelect({ id, label, value, options, onChange }: ProfileSelectProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const selectedIndex = options.findIndex((option) => option.value === value);
+  const selectedOption = options[selectedIndex];
+
+  useEffect(() => {
+    if (isOpen && activeIndex >= 0) {
+      document.getElementById(`${id}-option-${activeIndex}`)?.scrollIntoView({ block: "nearest" });
+    }
+  }, [activeIndex, id, isOpen]);
+
+  function openList(): void {
+    setIsOpen(true);
+    setActiveIndex(options.length === 0 ? -1 : selectedIndex >= 0 ? selectedIndex : 0);
+  }
+
+  function closeList(): void {
+    setIsOpen(false);
+    setActiveIndex(-1);
+  }
+
+  function moveActiveOption(direction: 1 | -1): void {
+    if (options.length === 0) {
+      return;
+    }
+    setIsOpen(true);
+    setActiveIndex((current) => {
+      const start = current >= 0 ? current : selectedIndex >= 0 ? selectedIndex : 0;
+      return (start + direction + options.length) % options.length;
+    });
+  }
+
+  function selectOption(option: ProfileSelectOption): void {
+    onChange(option.value);
+    closeList();
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLButtonElement>): void {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      moveActiveOption(event.key === "ArrowDown" ? 1 : -1);
+      return;
+    }
+    if ((event.key === "Enter" || event.key === " ") && isOpen && activeIndex >= 0) {
+      event.preventDefault();
+      const option = options[activeIndex];
+      if (option) {
+        selectOption(option);
+      }
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeList();
+    }
+  }
+
+  return (
+    <div className={styles.field}>
+      <label className={styles.fieldLabel} id={`${id}-label`} htmlFor={id}>{label}</label>
+      <div
+        className={styles.profilePicker}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) {
+            closeList();
+          }
+        }}
+      >
+        <button
+          id={id}
+          aria-activedescendant={
+            isOpen && activeIndex >= 0 ? `${id}-option-${activeIndex}` : undefined
+          }
+          aria-controls={`${id}-options`}
+          aria-expanded={isOpen}
+          aria-haspopup="listbox"
+          className={styles.profileSelectControl}
+          type="button"
+          onClick={() => isOpen ? closeList() : openList()}
+          onKeyDown={handleKeyDown}
+        >
+          <span className={value ? styles.profileSelectValue : styles.profileSelectPlaceholder}>
+            {selectedOption?.label ?? "선택"}
+          </span>
+          <span aria-hidden="true" className={styles.profileSelectArrow}>⌄</span>
+        </button>
+        {isOpen ? (
+          <div
+            id={`${id}-options`}
+            aria-labelledby={`${id}-label`}
+            className={styles.profileDropdown}
+            role="listbox"
+          >
+            {options.map((option, index) => (
+              <button
+                key={option.value || "empty"}
+                id={`${id}-option-${index}`}
+                aria-selected={option.value === value}
+                className={[
+                  styles.profileOption,
+                  index === activeIndex ? styles.profileOptionActive : "",
+                  option.value === value ? styles.profileOptionSelected : "",
+                ].filter(Boolean).join(" ")}
+                role="option"
+                tabIndex={-1}
+                type="button"
+                onClick={() => selectOption(option)}
+                onMouseDown={(event) => event.preventDefault()}
+                onMouseEnter={() => setActiveIndex(index)}
+              >
+                <span>{option.label}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+interface YearComboboxProps {
+  id: string;
+  label: string;
+  value: number | null;
+  min: number;
+  max: number;
+  placeholder: string;
+  options: ReadonlyArray<YearOption>;
+  children?: React.ReactNode;
+  onChange: (value: number | null) => void;
+}
+
+function YearCombobox({
+  id,
+  label,
+  value,
+  min,
+  max,
+  placeholder,
+  options,
+  children,
+  onChange,
+}: YearComboboxProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const selectedIndex = options.findIndex((option) => option.value === value);
+
+  useEffect(() => {
+    if (isOpen && activeIndex >= 0) {
+      document.getElementById(`${id}-option-${activeIndex}`)?.scrollIntoView({ block: "nearest" });
+    }
+  }, [activeIndex, id, isOpen]);
+
+  function openList(): void {
+    setIsOpen(true);
+    setActiveIndex(options.length === 0 ? -1 : selectedIndex >= 0 ? selectedIndex : 0);
+  }
+
+  function closeList(): void {
+    setIsOpen(false);
+    setActiveIndex(-1);
+  }
+
+  function moveActiveOption(direction: 1 | -1): void {
+    if (options.length === 0) {
+      return;
+    }
+    setIsOpen(true);
+    setActiveIndex((current) => {
+      const start = current >= 0 ? current : selectedIndex >= 0 ? selectedIndex : 0;
+      return (start + direction + options.length) % options.length;
+    });
+  }
+
+  function selectOption(option: YearOption): void {
+    onChange(option.value);
+    closeList();
+    inputRef.current?.focus();
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      moveActiveOption(event.key === "ArrowDown" ? 1 : -1);
+      return;
+    }
+    if (event.key === "Enter" && isOpen && activeIndex >= 0) {
+      event.preventDefault();
+      const option = options[activeIndex];
+      if (option) {
+        selectOption(option);
+      }
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeList();
+    }
+  }
+
+  return (
+    <div className={styles.field}>
+      <label className={styles.fieldLabel} htmlFor={id}>{label}</label>
+      <div
+        className={styles.profilePicker}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) {
+            closeList();
+          }
+        }}
+      >
+        <div className={styles.yearControl}>
+          <input
+            ref={inputRef}
+            id={id}
+            aria-activedescendant={
+              isOpen && activeIndex >= 0 ? `${id}-option-${activeIndex}` : undefined
+            }
+            aria-autocomplete="list"
+            aria-controls={`${id}-options`}
+            aria-describedby={`${id}-range`}
+            aria-expanded={isOpen}
+            autoComplete="off"
+            inputMode="numeric"
+            maxLength={4}
+            placeholder={placeholder}
+            role="combobox"
+            type="text"
+            value={value ?? ""}
+            onChange={(event) => {
+              onChange(parseDirectYear(event.target.value));
+              setActiveIndex(-1);
+              setIsOpen(true);
+            }}
+            onFocus={openList}
+            onKeyDown={handleKeyDown}
+          />
+          {value !== null ? <span aria-hidden="true" className={styles.yearUnit}>년</span> : null}
+          <button
+            aria-label={isOpen ? `${label} 목록 닫기` : `${label} 목록 열기`}
+            className={styles.profileToggle}
+            tabIndex={-1}
+            type="button"
+            onClick={() => {
+              inputRef.current?.focus();
+              if (isOpen) {
+                closeList();
+              } else {
+                openList();
+              }
+            }}
+            onMouseDown={(event) => event.preventDefault()}
+          >
+            <span aria-hidden="true">⌄</span>
+          </button>
+        </div>
+        {isOpen ? (
+          <div
+            id={`${id}-options`}
+            aria-label={`${label} 빠른 선택`}
+            className={styles.profileDropdown}
+            role="listbox"
+          >
+            {options.map((option, index) => (
+              <button
+                key={option.value}
+                id={`${id}-option-${index}`}
+                aria-selected={option.value === value}
+                className={[
+                  styles.profileOption,
+                  index === activeIndex ? styles.profileOptionActive : "",
+                  option.value === value ? styles.profileOptionSelected : "",
+                ].filter(Boolean).join(" ")}
+                role="option"
+                tabIndex={-1}
+                type="button"
+                onClick={() => selectOption(option)}
+                onMouseDown={(event) => event.preventDefault()}
+                onMouseEnter={() => setActiveIndex(index)}
+              >
+                <span>{option.label}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      {children}
+      <span id={`${id}-range`} className={styles.srOnly}>
+        {min}년부터 {max}년까지 입력 가능
+      </span>
+    </div>
   );
 }
