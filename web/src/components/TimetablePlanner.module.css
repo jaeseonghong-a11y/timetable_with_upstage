@@ -1205,44 +1205,20 @@
   line-height: 1.5;
 }
 
-.recommendationList {
+.recommendationFooter {
   display: grid;
-  gap: 10px;
-  list-style: none;
+  gap: 4px;
+  margin: 0 16px 14px;
 }
 
-.recommendationCard {
-  display: grid;
-  gap: 6px;
-  padding: 12px 14px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-  background: var(--surface-card);
-}
-
-.recommendationCardHeading span {
-  color: var(--accent-strong);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.recommendationCourseList {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.recommendationCard p {
+.recommendationFooter p {
   margin: 0;
   color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.6;
 }
 
-.recommendationCard p.recommendationRequirement {
+.recommendationFooter p.recommendationRequirement {
   color: var(--accent-strong);
 }
 

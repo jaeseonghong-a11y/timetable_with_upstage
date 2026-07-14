@@ -34,6 +34,7 @@ import {
 } from "@/lib/timetable";
 import {
   DEFAULT_RECOMMENDATION_WEIGHTS,
+  getTimetableCandidateId,
   type RecommendationWeight,
   type ScoreBreakdown,
   type WeightId,
@@ -674,6 +675,14 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
       dayOffFilters.every((day) => isDayFree(timetable, day)),
     );
   }, [dayOffFilters, result.entries]);
+
+  const filteredEntryByCandidateId = useMemo(() => {
+    const map = new Map<string, (typeof filteredEntries)[number]>();
+    for (const entry of filteredEntries) {
+      map.set(getTimetableCandidateId(entry.timetable), entry);
+    }
+    return map;
+  }, [filteredEntries]);
 
   const [recommendationWeights, setRecommendationWeights] = useState<RecommendationWeight[]>(
     DEFAULT_RECOMMENDATION_WEIGHTS,
@@ -1434,33 +1443,42 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
               </p>
             ) : null}
             {recommendations && recommendations.length > 0 ? (
-              <ol className={styles.recommendationList}>
-                {recommendations.map((recommendation) => (
-                  <li className={styles.recommendationCard} key={recommendation.candidateId}>
-                    <div className={styles.recommendationCardHeading}>
-                      <span>추천 {recommendation.rank}순위</span>
-                    </div>
-                    <ul className={styles.recommendationCourseList}>
-                      {recommendation.timetable.courses.map((course) => (
-                        <li key={course.id}>
-                          {course.title} · {course.schedule}
-                          {course.professor ? ` · ${course.professor}` : ""}
-                        </li>
-                      ))}
-                    </ul>
-                    {recommendation.reason ? <p>{recommendation.reason}</p> : null}
-                    {recommendation.requirementContribution ? (
-                      <p className={styles.recommendationRequirement}>
-                        {recommendation.requirementContribution}
-                      </p>
-                    ) : null}
-                    {recommendation.customPreferenceNote ? (
-                      <p className={styles.recommendationCustomNote}>
-                        {recommendation.customPreferenceNote}
-                      </p>
-                    ) : null}
-                  </li>
-                ))}
+              <ol className={styles.timetableList}>
+                {recommendations.map((recommendation) => {
+                  const localEntry = filteredEntryByCandidateId.get(recommendation.candidateId);
+                  const timetable = localEntry?.timetable ?? recommendation.timetable;
+                  const extras = localEntry?.extras ?? [];
+                  const hasFooterContent =
+                    recommendation.reason ||
+                    recommendation.requirementContribution ||
+                    recommendation.customPreferenceNote;
+                  return (
+                    <TimetableCard
+                      extras={extras}
+                      footer={
+                        hasFooterContent ? (
+                          <div className={styles.recommendationFooter}>
+                            {recommendation.reason ? <p>{recommendation.reason}</p> : null}
+                            {recommendation.requirementContribution ? (
+                              <p className={styles.recommendationRequirement}>
+                                {recommendation.requirementContribution}
+                              </p>
+                            ) : null}
+                            {recommendation.customPreferenceNote ? (
+                              <p className={styles.recommendationCustomNote}>
+                                {recommendation.customPreferenceNote}
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : null
+                      }
+                      heading={`AI 추천 ${recommendation.rank}순위`}
+                      index={recommendation.rank - 1}
+                      key={recommendation.candidateId}
+                      timetable={timetable}
+                    />
+                  );
+                })}
               </ol>
             ) : null}
           </div>
@@ -1586,10 +1604,14 @@ function CourseSectionMetadata({ candidate }: { candidate: CourseCandidate }) {
 
 function TimetableCard({
   extras,
+  footer,
+  heading,
   index,
   timetable,
 }: {
   extras: readonly TimetableExtra[];
+  footer?: ReactNode;
+  heading?: string;
   index: number;
   timetable: Timetable;
 }) {
@@ -1614,7 +1636,7 @@ function TimetableCard({
       <details open={index === 0}>
         <summary>
           <span>
-            조합 {index + 1}
+            {heading ?? `조합 ${index + 1}`}
             {versionLabel ? <small className={styles.timetableVersion}>{versionLabel}</small> : null}
           </span>
           <small>
@@ -1692,6 +1714,7 @@ function TimetableCard({
             시간 미정/온라인: {unscheduledCourses.map((course) => course.title).join(", ")}
           </p>
         ) : null}
+        {footer}
       </details>
     </li>
   );
