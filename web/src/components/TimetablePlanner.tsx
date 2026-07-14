@@ -3,17 +3,19 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import type { Requirement } from "@/lib/academic-profile";
+import { selectAiFillerSubjects } from "@/lib/ai-filler-selection";
 import {
   courseGroupsFromCollection,
   shouldShowSectionDetails,
   type CourseCandidateGroup,
 } from "@/lib/course-candidates";
-import type {
-  SkkuCourseQuery,
-  SkkuElectiveArea,
-  SkkuElectiveAreaCode,
-  SkkuElectiveCampus,
-  SkkuElectiveSubject,
+import {
+  SKKU_ELECTIVE_AREA_DEFINITIONS,
+  type SkkuCourseQuery,
+  type SkkuElectiveArea,
+  type SkkuElectiveAreaCode,
+  type SkkuElectiveCampus,
+  type SkkuElectiveSubject,
 } from "@/lib/skku-course-api";
 import {
   generateTimetablesForSelectionPlan,
@@ -22,6 +24,7 @@ import {
   SelectionPlanError,
   SelectionPlanLimitError,
   toggleEnabledSectionId,
+  type ChoiceBag,
   type SubjectOption,
 } from "@/lib/selection-plan";
 import {
@@ -131,6 +134,12 @@ function createElectivePreviewLanes(): Promise<void>[] {
   return Array.from({ length: ELECTIVE_PREVIEW_CONCURRENCY }, () => Promise.resolve());
 }
 
+/** How many extra elective subjects the AI recommendation step may consider/add as filler. */
+const MAX_FILLER_SHORTLIST = 8;
+const MAX_FILLER_SUBJECTS = 5;
+const AI_FILLER_BAG_ID = "ai-filler";
+const AI_FILLER_GROUP_TITLE = "AI 추천 보충 교양";
+
 export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, requirements }: Props) {
   const [majorCourseGroups, setMajorCourseGroups] = useState<CourseCandidateGroup[]>([]);
   const [electiveCourseGroups, setElectiveCourseGroups] = useState<PlannerCourseGroup[]>([]);
@@ -150,7 +159,7 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
   const [enabledSectionIds, setEnabledSectionIds] = useState<Record<string, string[]>>({});
   const [unavailableDays, setUnavailableDays] = useState<Weekday[]>([]);
   const [earliestStart, setEarliestStart] = useState("");
-  const [minimumCredits, setMinimumCredits] = useState("15");
+  const [minimumCredits, setMinimumCredits] = useState("12");
   const [maximumCredits, setMaximumCredits] = useState("21");
   const [disabledCourseTypes, setDisabledCourseTypes] = useState<Set<string>>(new Set());
   const [dayOffFilters, setDayOffFilters] = useState<Weekday[]>([]);
@@ -577,46 +586,45 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
     return map;
   }, [selectedCourseGroups]);
 
+  const manualSelectionPlanSubjects = useMemo(() => {
+    const choiceGroupIds = new Set(choiceGroups.map(({ id }) => id));
+    const requiredSubjects: SubjectOption[] = [];
+    const choiceSubjects = new Map<string, SubjectOption[]>(
+      choiceGroups.map(({ id }) => [id, []]),
+    );
+    for (const group of selectedCourseGroups) {
+      const enabledIds = new Set(
+        enabledSectionIds[group.selectionId] ?? getInitialSectionIds(group.candidates),
+      );
+      const subject = {
+        id: group.selectionId,
+        title: group.title,
+        credits: group.credits,
+        sections: group.candidates.filter((candidate) => enabledIds.has(candidate.id)),
+      };
+      const owner = courseOwners[group.selectionId] ?? "required";
+      if (owner === "required" || !choiceGroupIds.has(owner)) {
+        requiredSubjects.push(subject);
+      } else {
+        choiceSubjects.get(owner)?.push(subject);
+      }
+    }
+    const choiceBags: ChoiceBag[] = choiceGroups.flatMap((choiceGroup) => {
+      const subjects = choiceSubjects.get(choiceGroup.id) ?? [];
+      return subjects.length > 0 ? [{ ...choiceGroup, subjects }] : [];
+    });
+    return { requiredSubjects, choiceBags };
+  }, [choiceGroups, courseOwners, enabledSectionIds, selectedCourseGroups]);
+
   const result = useMemo(() => {
     if (selectedCourseGroups.length === 0) {
       return { entries: [], error: null };
     }
     try {
-      const choiceGroupIds = new Set(choiceGroups.map(({ id }) => id));
-      const requiredSubjects: SubjectOption[] = [];
-      const choiceSubjects = new Map<string, SubjectOption[]>(
-        choiceGroups.map(({ id }) => [id, []]),
-      );
-      for (const group of selectedCourseGroups) {
-        const enabledIds = new Set(
-          enabledSectionIds[group.selectionId] ?? getInitialSectionIds(group.candidates),
-        );
-        const subject = {
-          id: group.selectionId,
-          title: group.title,
-          credits: group.credits,
-          sections: group.candidates.filter((candidate) => enabledIds.has(candidate.id)),
-        };
-        const owner = courseOwners[group.selectionId] ?? "required";
-        if (owner === "required" || !choiceGroupIds.has(owner)) {
-          requiredSubjects.push(subject);
-        } else {
-          choiceSubjects.get(owner)?.push(subject);
-        }
-      }
-
       const timetables = generateTimetablesForSelectionPlan(
         {
-          requiredSubjects,
-          choiceBags: choiceGroups.flatMap((choiceGroup) => {
-            const subjects = choiceSubjects.get(choiceGroup.id) ?? [];
-            return subjects.length > 0
-              ? [{
-                  ...choiceGroup,
-                  subjects,
-                }]
-              : [];
-          }),
+          requiredSubjects: manualSelectionPlanSubjects.requiredSubjects,
+          choiceBags: manualSelectionPlanSubjects.choiceBags,
           creditRange: {
             minCredits: minimumCredits === "" ? Number.NaN : Number(minimumCredits),
             maxCredits: maximumCredits === "" ? Number.NaN : Number(maximumCredits),
@@ -651,7 +659,7 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
     choiceGroups,
     courseOwners,
     earliestStart,
-    enabledSectionIds,
+    manualSelectionPlanSubjects,
     maximumCredits,
     minimumCredits,
     sectionIdToGroup,
@@ -676,14 +684,6 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
     );
   }, [dayOffFilters, result.entries]);
 
-  const filteredEntryByCandidateId = useMemo(() => {
-    const map = new Map<string, (typeof filteredEntries)[number]>();
-    for (const entry of filteredEntries) {
-      map.set(getTimetableCandidateId(entry.timetable), entry);
-    }
-    return map;
-  }, [filteredEntries]);
-
   const [recommendationWeights, setRecommendationWeights] = useState<RecommendationWeight[]>(
     DEFAULT_RECOMMENDATION_WEIGHTS,
   );
@@ -691,15 +691,21 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
   const [recommendations, setRecommendations] = useState<TimetableRecommendationItem[] | null>(
     null,
   );
+  const [aiCandidateTimetables, setAiCandidateTimetables] = useState<
+    ReadonlyMap<string, { timetable: Timetable; extras: TimetableExtra[] }>
+  >(new Map());
   const [isRecommending, setIsRecommending] = useState(false);
   const [recommendationError, setRecommendationError] = useState("");
   const [aiExplanationFailed, setAiExplanationFailed] = useState(false);
 
-  const [previousResultEntries, setPreviousResultEntries] = useState(result.entries);
-  if (previousResultEntries !== result.entries) {
-    setPreviousResultEntries(result.entries);
+  const [previousManualPlanSubjects, setPreviousManualPlanSubjects] = useState(
+    manualSelectionPlanSubjects,
+  );
+  if (previousManualPlanSubjects !== manualSelectionPlanSubjects) {
+    setPreviousManualPlanSubjects(manualSelectionPlanSubjects);
     setRecommendations(null);
     setRecommendationError("");
+    setAiCandidateTimetables(new Map());
   }
 
   function toggleRecommendationWeight(id: WeightId): void {
@@ -735,16 +741,167 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
     );
   }
 
+  /**
+   * Looks beyond the user's manually chosen courses: pulls in elective subjects the user never
+   * added to a choice group, preferring areas that match unmet 교양(general) graduation
+   * requirements, and excluding already-completed subjects. Returns a synthetic, optional choice
+   * bag (`minSubjects: 0`) so the combination engine can freely mix in 0..N of them — the existing
+   * credit-range filter then keeps only combinations that actually land in the desired range.
+   */
+  async function buildAiFillerSubjects(): Promise<{
+    bag: ChoiceBag | null;
+    extrasBySectionId: Map<string, TimetableExtra>;
+  }> {
+    const extrasBySectionId = new Map<string, TimetableExtra>();
+    if (!query) {
+      return { bag: null, extrasBySectionId };
+    }
+
+    const campus = electiveCampus;
+    let catalog: ElectiveCatalog;
+    try {
+      const payload = await postJson("/api/skku-electives", {
+        year: query.year,
+        term: query.term,
+        campus,
+        mode: "all_subjects",
+      });
+      catalog = readElectiveCatalog(payload);
+    } catch {
+      return { bag: null, extrasBySectionId };
+    }
+
+    const usedSelectionIds = new Set([
+      ...manualSelectionPlanSubjects.requiredSubjects.map((subject) => subject.id),
+      ...manualSelectionPlanSubjects.choiceBags.flatMap((bag) =>
+        bag.subjects.map((subject) => subject.id),
+      ),
+    ]);
+    const unmetGeneralLabels = requirements
+      .filter((requirement) => requirement.scope === "general" && requirement.status !== "satisfied")
+      .map((requirement) => requirement.label);
+
+    const shortlist = selectAiFillerSubjects({
+      catalogSubjects: catalog.subjects,
+      usedSelectionIds,
+      excludedCourseNumbers: new Set(excludedCourseNumbers),
+      unmetGeneralLabels,
+      hasAnyRequirements: requirements.length > 0,
+      areaLabelByCode: new Map(SKKU_ELECTIVE_AREA_DEFINITIONS.map((area) => [area.code, area.label])),
+      selectionIdFor: (courseNumber) => getElectiveSelectionId(campus, courseNumber),
+      maxShortlist: MAX_FILLER_SHORTLIST,
+    });
+    if (shortlist.length === 0) {
+      return { bag: null, extrasBySectionId };
+    }
+
+    const groups = await Promise.all(
+      shortlist.map((subject) =>
+        fetchElectivePlannerGroup(query, campus, subject).catch(() => null),
+      ),
+    );
+
+    const subjects: SubjectOption[] = [];
+    for (const group of groups) {
+      if (!group) {
+        continue;
+      }
+      const filtered = filterGroupCandidatesByFormat(group, disabledCourseTypes);
+      if (filtered.candidates.length === 0) {
+        continue;
+      }
+      subjects.push({
+        id: filtered.selectionId,
+        title: filtered.title,
+        credits: filtered.credits,
+        sections: filtered.candidates,
+      });
+      for (const candidate of filtered.candidates) {
+        extrasBySectionId.set(candidate.id, {
+          groupTitle: AI_FILLER_GROUP_TITLE,
+          title: filtered.title,
+          classification: filtered.classification || "영역 미상",
+        });
+      }
+    }
+    if (subjects.length === 0) {
+      return { bag: null, extrasBySectionId };
+    }
+
+    return {
+      bag: {
+        id: AI_FILLER_BAG_ID,
+        title: AI_FILLER_GROUP_TITLE,
+        subjects,
+        minSubjects: 0,
+        maxSubjects: Math.min(subjects.length, MAX_FILLER_SUBJECTS),
+      },
+      extrasBySectionId,
+    };
+  }
+
   async function fetchAiRecommendations(): Promise<void> {
-    if (filteredEntries.length === 0) {
-      setRecommendationError("추천할 시간표 조합이 없습니다.");
+    const hasAnySelection =
+      manualSelectionPlanSubjects.requiredSubjects.length > 0 ||
+      manualSelectionPlanSubjects.choiceBags.length > 0;
+    if (!hasAnySelection) {
+      setRecommendationError("왼쪽에서 필수 과목이나 선택 그룹 후보를 먼저 추가해 주세요.");
       return;
     }
     setIsRecommending(true);
     setRecommendationError("");
     try {
+      const filler = await buildAiFillerSubjects();
+      const timetables = generateTimetablesForSelectionPlan(
+        {
+          requiredSubjects: manualSelectionPlanSubjects.requiredSubjects,
+          choiceBags: [
+            ...manualSelectionPlanSubjects.choiceBags,
+            ...(filler.bag ? [filler.bag] : []),
+          ],
+          creditRange: {
+            minCredits: minimumCredits === "" ? Number.NaN : Number(minimumCredits),
+            maxCredits: maximumCredits === "" ? Number.NaN : Number(maximumCredits),
+          },
+        },
+        {
+          unavailableDays,
+          earliestStartMinutes: earliestStart ? Number(earliestStart) : undefined,
+        },
+      );
+      const dayFiltered =
+        dayOffFilters.length === 0
+          ? timetables
+          : timetables.filter((timetable) =>
+              dayOffFilters.every((day) => isDayFree(timetable, day)),
+            );
+
+      if (dayFiltered.length === 0) {
+        setRecommendationError(
+          "조건을 만족하는 추천 조합을 만들지 못했습니다. 학점 범위·공강일·요일 제약을 조정해 보세요.",
+        );
+        setRecommendations(null);
+        setAiCandidateTimetables(new Map());
+        return;
+      }
+
+      const candidateMap = new Map<string, { timetable: Timetable; extras: TimetableExtra[] }>();
+      for (const timetable of dayFiltered) {
+        candidateMap.set(getTimetableCandidateId(timetable), {
+          timetable,
+          extras: describeTimetableExtras(
+            timetable,
+            sectionIdToGroup,
+            courseOwners,
+            choiceGroups,
+            filler.extrasBySectionId,
+          ),
+        });
+      }
+      setAiCandidateTimetables(candidateMap);
+
       const payload = await postJson("/api/timetable-recommendations", {
-        timetables: filteredEntries.map(({ timetable }) => timetable),
+        timetables: dayFiltered,
         weights: recommendationWeights,
         requirements,
         customPreference: customPreference.trim() || undefined,
@@ -1351,11 +1508,12 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
           <div className={styles.recommendationSection}>
             <h3>AI 시간표 추천</h3>
             <p className={styles.recommendationHint}>
-              위 목록은 그대로 두고, 이미 만들어진 조합 중에서 아래 조건에 맞는 상위 후보만 따로
-              추려서 보여줍니다.
+              위 목록은 그대로 두고, 필수·선택 과목에 더해 부족한 학점만큼 관련 교양을 자동으로
+              채운 뒤 아래 조건에 맞는 상위 후보를 골라 보여줍니다(이미 담은 과목은 그대로
+              유지). 기수강 과목은 제외합니다.
               {requirements.length > 0
-                ? " 업로드한 졸업요건 충족 현황도 함께 고려합니다."
-                : " 학사문서(졸업요건)를 업로드하면 충족 현황도 함께 고려합니다."}
+                ? " 업로드한 졸업요건 중 아직 충족하지 못한 교양 영역을 우선으로 채웁니다."
+                : " 학사문서(졸업요건)를 업로드하면 미충족 교양 영역을 우선으로 채웁니다."}
             </p>
 
             <div className={styles.recommendationWeights}>
@@ -1429,7 +1587,11 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
             </label>
 
             <button
-              disabled={isRecommending || filteredEntries.length === 0}
+              disabled={
+                isRecommending ||
+                (manualSelectionPlanSubjects.requiredSubjects.length === 0 &&
+                  manualSelectionPlanSubjects.choiceBags.length === 0)
+              }
               type="button"
               onClick={() => void fetchAiRecommendations()}
             >
@@ -1445,7 +1607,7 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
             {recommendations && recommendations.length > 0 ? (
               <ol className={styles.timetableList}>
                 {recommendations.map((recommendation) => {
-                  const localEntry = filteredEntryByCandidateId.get(recommendation.candidateId);
+                  const localEntry = aiCandidateTimetables.get(recommendation.candidateId);
                   const timetable = localEntry?.timetable ?? recommendation.timetable;
                   const extras = localEntry?.extras ?? [];
                   const hasFooterContent =
@@ -1746,10 +1908,17 @@ function describeTimetableExtras(
   sectionIdToGroup: ReadonlyMap<string, PlannerCourseGroup>,
   courseOwners: Readonly<Record<string, CourseDestination>>,
   choiceGroups: readonly ChoiceGroupConfig[],
+  fillerExtrasBySectionId?: ReadonlyMap<string, TimetableExtra>,
 ): TimetableExtra[] {
   const seenSubjectIds = new Set<string>();
   const extras: TimetableExtra[] = [];
   for (const course of timetable.courses) {
+    const fillerExtra = fillerExtrasBySectionId?.get(course.id);
+    if (fillerExtra && !seenSubjectIds.has(fillerExtra.title)) {
+      seenSubjectIds.add(fillerExtra.title);
+      extras.push(fillerExtra);
+      continue;
+    }
     const group = sectionIdToGroup.get(course.id);
     if (!group || seenSubjectIds.has(group.selectionId)) {
       continue;
