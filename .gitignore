@@ -8,6 +8,11 @@ secrets/
 **/apikey*
 **/api_key*
 
+# ─── 개인정보: 사용자 학사문서 원본 커밋 금지 ───
+private/
+docs/정보광장-*
+docs/졸업요건*
+
 # ─── Node / Next.js (web/) ───
 node_modules/
 .next/

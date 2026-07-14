@@ -1,0 +1,268 @@
+.panel {
+  width: 100%;
+  min-width: 0;
+  max-width: 1120px;
+  margin: 0 auto 28px;
+  padding: 28px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 24px;
+  background: var(--surface-card);
+  box-shadow: 0 18px 50px rgb(32 63 67 / 8%);
+}
+
+.heading,
+.actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.heading {
+  align-items: flex-start;
+  margin-bottom: 22px;
+}
+
+.heading p {
+  margin-bottom: 6px;
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.heading h2 {
+  font-size: clamp(22px, 3vw, 30px);
+  letter-spacing: -0.04em;
+}
+
+.appliedBadge {
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: var(--surface-note);
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 2fr repeat(5, minmax(110px, 1fr));
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.field > span,
+.fieldLabel {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.field input,
+.field select {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+}
+
+.admissionYearHint {
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.departmentHint {
+  align-self: flex-start;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.departmentField,
+.departmentPicker,
+.departmentControl {
+  position: relative;
+}
+
+.departmentControl input {
+  padding-right: 42px;
+}
+
+.departmentToggle {
+  position: absolute;
+  top: 50%;
+  right: 5px;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent-strong);
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  place-items: center;
+  transform: translateY(-50%);
+}
+
+.departmentToggle:hover,
+.departmentToggle:focus-visible {
+  background: var(--surface-note);
+  outline: none;
+}
+
+.departmentDropdown {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 7px);
+  left: 0;
+  width: max(100%, min(420px, calc(100vw - 48px)));
+  max-height: 360px;
+  overflow-y: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--surface-card);
+  box-shadow: 0 18px 42px rgb(32 63 67 / 18%);
+}
+
+.departmentGroup + .departmentGroup {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.departmentGroupLabel {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  padding: 10px 12px 8px;
+  background: var(--surface-note);
+  color: var(--accent-strong);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+
+.departmentOption {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px 9px 18px;
+  border: 0;
+  background: var(--surface-card);
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.departmentOption span {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.departmentOption small {
+  flex: none;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.departmentOptionActive,
+.departmentOption:hover {
+  background: var(--surface-page);
+}
+
+.departmentOptionSelected {
+  color: var(--accent-strong);
+}
+
+.departmentOptionSelected::before {
+  flex: none;
+  color: var(--accent-strong);
+  content: "✓";
+  font-weight: 900;
+}
+
+.departmentOptionSelected span {
+  margin-right: auto;
+}
+
+.departmentEmpty {
+  padding: 18px 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: center;
+}
+
+.actions {
+  align-items: center;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.actions p {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.actions button {
+  flex: none;
+  padding: 11px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--accent-strong);
+  color: white;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.error {
+  margin-top: 12px;
+  color: var(--text-error);
+  font-size: 13px;
+}
+
+@media (max-width: 980px) {
+  .grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .panel {
+    padding: 22px;
+  }
+
+  .heading,
+  .actions {
+    flex-direction: column;
+  }
+
+  .grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .field:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .actions button {
+    width: 100%;
+  }
+}
