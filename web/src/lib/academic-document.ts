@@ -100,13 +100,14 @@ export async function extractAcademicProfile(
       ? "Extract only completed course rows. requirements must be an empty array. SKKU course codes can end in three or four digits. Convert 1학기/2학기/여름학/겨울학 to spring/fall/summer/winter. Exclude subtotal and total rows. If one parsed row contains multiple course codes, split it into separate course results; successful splitting is not a review issue."
       : "Extract only graduation requirement rows. completedCourses must be an empty array. Audit the table from its first body row through its last body row and output one requirement for every row; do not stop after major requirements. Include general education, DS, and balanced-area rows. For one distribution rule shared by several area rows, use the same groupId on every member row: minimumAreas counts areas with any earned credits, and totalCredits is the combined credit minimum across the group, never a per-area minimum. Keep each scope row independent; never sum duplicated C/L credits across scopes. Ambiguous composite values such as '6 / 0' must use status review and preserve the text in rawValues.";
 
-  const content = await requestSolarCompletion(
+  const profile = await requestAndParseWithRetry(
     SYSTEM_PROMPT,
     `${kindInstruction}\n\n${OUTPUT_CONTRACT}\n\n<document>\n${input}\n</document>`,
     apiKey,
+    kind,
+    sourceDocumentId,
+    truncated,
   );
-
-  const profile = parseAcademicExtraction(content, kind, sourceDocumentId, truncated);
   if (kind === "graduation_requirements") {
     return supplementGraduationRequirementsFromMarkdown(profile, markdown, sourceDocumentId);
   }
@@ -116,6 +117,31 @@ export async function extractAcademicProfile(
     sourceDocumentId,
     apiKey,
   );
+}
+
+/**
+ * Solar occasionally returns malformed or truncated JSON for one call (live-verified: a 45-row
+ * table succeeded once and failed once with the same prompt). One retry with an unmodified
+ * prompt resolves most of these transient failures without changing what gets extracted.
+ */
+async function requestAndParseWithRetry(
+  systemPrompt: string,
+  userPrompt: string,
+  apiKey: string,
+  kind: AcademicDocumentKind,
+  sourceDocumentId: string,
+  truncated: boolean,
+): Promise<AcademicProfile> {
+  const content = await requestSolarCompletion(systemPrompt, userPrompt, apiKey);
+  try {
+    return parseAcademicExtraction(content, kind, sourceDocumentId, truncated);
+  } catch (error) {
+    if (!(error instanceof AcademicExtractionError)) {
+      throw error;
+    }
+    const retryContent = await requestSolarCompletion(systemPrompt, userPrompt, apiKey);
+    return parseAcademicExtraction(retryContent, kind, sourceDocumentId, truncated);
+  }
 }
 
 async function supplementCompletedCoursesWithRetry(

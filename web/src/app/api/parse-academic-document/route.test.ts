@@ -372,12 +372,15 @@ describe("POST /api/parse-academic-document", () => {
   });
 
   it("fails closed when Solar does not return the fixed JSON contract", async () => {
+    // extractAcademicProfile retries one malformed Solar response before giving up, so both the
+    // first attempt and the retry must return invalid content for this to fail closed.
+    const invalidSolarResponse = () =>
+      Response.json({ choices: [{ message: { role: "assistant", content: "not json" } }] });
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(Response.json({ content: { markdown: "parsed" } }))
-      .mockResolvedValueOnce(
-        Response.json({ choices: [{ message: { role: "assistant", content: "not json" } }] }),
-      );
+      .mockResolvedValueOnce(invalidSolarResponse())
+      .mockResolvedValueOnce(invalidSolarResponse());
     vi.stubGlobal("fetch", fetchMock);
 
     const response = await POST(
