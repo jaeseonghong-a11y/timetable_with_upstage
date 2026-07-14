@@ -108,7 +108,7 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
   const [courseSource, setCourseSource] = useState<CourseSource>("major");
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const [choiceGroups, setChoiceGroups] = useState<ChoiceGroupConfig[]>(INITIAL_CHOICE_GROUPS);
-  const [activeDestination, setActiveDestination] = useState<CourseDestination>("choice-1");
+  const [activeDestination, setActiveDestination] = useState<CourseDestination>("required");
   const [courseOwners, setCourseOwners] = useState<Record<string, CourseDestination>>({});
   const [enabledSectionIds, setEnabledSectionIds] = useState<Record<string, string[]>>({});
   const [unavailableDays, setUnavailableDays] = useState<Weekday[]>([]);
@@ -151,7 +151,7 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
       setCourseSource("major");
       setSelectedGroupIds([]);
       setChoiceGroups(INITIAL_CHOICE_GROUPS);
-      setActiveDestination("choice-1");
+      setActiveDestination("required");
       setCourseOwners({});
       setEnabledSectionIds({});
       setPreviewLoadingIds([]);
@@ -450,15 +450,27 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
       return next;
     });
   }
+  /**
+   * Format filtering happens here, while picking courses — not on already-generated timetables.
+   * A course whose every section is filtered out simply disappears from the catalog; sections
+   * already chosen for it drop out of the plan the same way excluded (기수강) courses do.
+   */
+  const formatFilteredCourseGroups = useMemo(
+    () =>
+      availableCourseGroups
+        .map((group) => filterGroupCandidatesByFormat(group, disabledCourseTypes))
+        .filter((group) => group.candidates.length > 0),
+    [availableCourseGroups, disabledCourseTypes],
+  );
   const visibleCourseGroups = useMemo(() => {
     const keyword = courseSearch.trim().toLowerCase();
     if (!keyword) {
-      return availableCourseGroups;
+      return formatFilteredCourseGroups;
     }
-    return availableCourseGroups.filter((group) =>
+    return formatFilteredCourseGroups.filter((group) =>
       `${group.id} ${group.title} ${group.classification}`.toLowerCase().includes(keyword),
     );
-  }, [availableCourseGroups, courseSearch]);
+  }, [courseSearch, formatFilteredCourseGroups]);
   const visibleMajorCourseGroups = useMemo(
     () => visibleCourseGroups.filter((group) => group.source === "major"),
     [visibleCourseGroups],
@@ -485,15 +497,15 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
     ? "전체 교양"
     : electiveAreaLabels.get(selectedElectiveArea) ?? "선택 영역";
   const effectiveSelectedGroupIds = useMemo(() => {
-    const availableIds = new Set(availableCourseGroups.map((group) => group.selectionId));
+    const availableIds = new Set(formatFilteredCourseGroups.map((group) => group.selectionId));
     return selectedGroupIds.filter((id) => availableIds.has(id));
-  }, [availableCourseGroups, selectedGroupIds]);
+  }, [formatFilteredCourseGroups, selectedGroupIds]);
   const selectedCourseGroups = useMemo(
     () =>
-      availableCourseGroups.filter(({ selectionId }) =>
+      formatFilteredCourseGroups.filter(({ selectionId }) =>
         effectiveSelectedGroupIds.includes(selectionId),
       ),
-    [availableCourseGroups, effectiveSelectedGroupIds],
+    [formatFilteredCourseGroups, effectiveSelectedGroupIds],
   );
   const choiceGroupSubjectCounts = useMemo(
     () =>
@@ -536,11 +548,7 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
           id: group.selectionId,
           title: group.title,
           credits: group.credits,
-          sections: group.candidates.filter(
-            (candidate) =>
-              enabledIds.has(candidate.id) &&
-              !disabledCourseTypes.has(getCourseTypeLabel(candidate)),
-          ),
+          sections: group.candidates.filter((candidate) => enabledIds.has(candidate.id)),
         };
         const owner = courseOwners[group.selectionId] ?? "required";
         if (owner === "required" || !choiceGroupIds.has(owner)) {
@@ -595,7 +603,6 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
   }, [
     choiceGroups,
     courseOwners,
-    disabledCourseTypes,
     earliestStart,
     enabledSectionIds,
     maximumCredits,
@@ -778,6 +785,26 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
                 기수강 과목 {excludedCount}개 자동 제외 · 재수강 체크 시 다시 표시
               </p>
             ) : null}
+            {availableCourseTypes.length > 0 ? (
+              <div className={styles.courseTypeFilter}>
+                <span>강의 형식으로 좁히기</span>
+                <div className={styles.courseTypeChoices}>
+                  {availableCourseTypes.map((label) => {
+                    const checked = !disabledCourseTypes.has(label);
+                    return (
+                      <label className={styles.courseTypeChoice} key={label}>
+                        <input
+                          checked={checked}
+                          type="checkbox"
+                          onChange={() => toggleCourseType(label)}
+                        />
+                        <span>{label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
             <div className={styles.courseList}>
               {courseSource === "major" ? visibleMajorCourseGroups.map((group) => {
                 const isSelectedElsewhere = selectedGroupIds.includes(group.selectionId);
@@ -831,6 +858,11 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
                 const loading = loadingCourseNumbers.includes(selectionId);
                 const previewLoading = previewLoadingIds.includes(selectionId);
                 const displayedGroup = selectedGroup ?? previewGroup;
+                // Filtered only for rendering/counts — toggle handlers below keep using the raw
+                // `displayedGroup` so a filtered-out section is never permanently dropped from state.
+                const filteredDisplayedGroup = displayedGroup
+                  ? filterGroupCandidatesByFormat(displayedGroup, disabledCourseTypes)
+                  : undefined;
                 const selectedSections = checked && selectedGroup
                   ? enabledSectionIds[selectionId] ?? getInitialSectionIds(selectedGroup.candidates)
                   : [];
@@ -863,19 +895,19 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
                             : isSelectedElsewhere
                               ? `${getDestinationLabel(courseOwners[selectionId], choiceGroups)}에 있음 · 눌러서 옮기기`
                               : previewGroup
-                                ? `${previewGroup.candidates.length}개 분반`
+                                ? `${filterGroupCandidatesByFormat(previewGroup, disabledCourseTypes).candidates.length}개 분반`
                                 : previewLoading
                                   ? "분반 확인 중…"
                                   : "선택"}
                       </small>
                     </label>
-                    {displayedGroup && shouldShowSectionDetails(displayedGroup.candidates.length)
+                    {filteredDisplayedGroup && shouldShowSectionDetails(filteredDisplayedGroup.candidates.length)
                       ? (
                         <CourseSectionDetails
-                          group={displayedGroup}
+                          group={filteredDisplayedGroup}
                           selectedSectionIds={selectedSections}
                           onToggleSection={(sectionId) =>
-                            toggleCatalogSection(displayedGroup, sectionId)
+                            toggleCatalogSection(displayedGroup!, sectionId)
                           }
                         />
                       )
@@ -1060,28 +1092,6 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
             </section>
           </fieldset>
 
-          {availableCourseTypes.length > 0 ? (
-            <fieldset>
-              <legend>강의 형식</legend>
-              <div className={styles.courseTypeChoices}>
-                {availableCourseTypes.map((label) => {
-                  const checked = !disabledCourseTypes.has(label);
-                  return (
-                    <label className={styles.courseTypeChoice} key={label}>
-                      <input
-                        checked={checked}
-                        type="checkbox"
-                        onChange={() => toggleCourseType(label)}
-                      />
-                      <span>{label}</span>
-                    </label>
-                  );
-                })}
-              </div>
-              <small>체크를 해제한 형식의 분반은 시간표 조합에서 제외합니다.</small>
-            </fieldset>
-          ) : null}
-
           <fieldset>
             <legend>수업 없는 요일</legend>
             <div className={styles.dayChoices}>
@@ -1120,9 +1130,9 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
               <label>
                 <span>최소</span>
                 <input
-                  inputMode="decimal"
+                  inputMode="numeric"
                   min="0"
-                  step="0.5"
+                  step="1"
                   type="number"
                   value={minimumCredits}
                   onChange={(event) => setMinimumCredits(event.target.value)}
@@ -1132,9 +1142,9 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
               <label>
                 <span>최대</span>
                 <input
-                  inputMode="decimal"
+                  inputMode="numeric"
                   min="0"
-                  step="0.5"
+                  step="1"
                   type="number"
                   value={maximumCredits}
                   onChange={(event) => setMaximumCredits(event.target.value)}
@@ -1543,6 +1553,26 @@ function getCourseTypeLabel(candidate: {
     .replaceAll("-", "")
     .toLowerCase();
   return onlineHint.includes("icampus") ? "온라인(I-CAMPUS)" : "수업 방식 미정";
+}
+
+/**
+ * Returns a shallow copy with only the sections whose lecture format is still allowed.
+ * Never mutates the original group, so callers may safely keep pointing at the raw,
+ * unfiltered group for anything that gets written back into persistent state.
+ */
+function filterGroupCandidatesByFormat<G extends { candidates: CourseCandidate[] }>(
+  group: G,
+  disabledCourseTypes: ReadonlySet<string>,
+): G {
+  if (disabledCourseTypes.size === 0) {
+    return group;
+  }
+  return {
+    ...group,
+    candidates: group.candidates.filter(
+      (candidate) => !disabledCourseTypes.has(getCourseTypeLabel(candidate)),
+    ),
+  };
 }
 
 function formatCredits(credits: number): string {
