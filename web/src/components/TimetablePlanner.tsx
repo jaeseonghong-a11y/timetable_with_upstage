@@ -2,6 +2,7 @@
 
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
+import type { Requirement } from "@/lib/academic-profile";
 import {
   courseGroupsFromCollection,
   shouldShowSectionDetails,
@@ -31,6 +32,13 @@ import {
   type Timetable,
   type Weekday,
 } from "@/lib/timetable";
+import {
+  DEFAULT_RECOMMENDATION_WEIGHTS,
+  type RecommendationWeight,
+  type ScoreBreakdown,
+  type WeightId,
+  type WeightImportance,
+} from "@/lib/timetable-scoring";
 
 import styles from "./TimetablePlanner.module.css";
 
@@ -38,6 +46,28 @@ interface Props {
   query: SkkuCourseQuery | null;
   queryLabel: string;
   excludedCourseNumbers: readonly string[];
+  requirements: readonly Requirement[];
+}
+
+const WEIGHT_LABELS: Record<WeightId, string> = {
+  free_days: "공강 요일 만들기",
+  back_to_back: "연강 선호/기피",
+  lunch_break: "점심시간(11~13시) 확보",
+  avoid_9am: "오전 9시 수업 회피",
+  compact_days: "수업일수 최소화",
+  prefer_in_person: "대면 수업 선호",
+  prefer_online: "온라인 수업 선호",
+  minimize_daily_span: "하루 재학시간 최소화",
+};
+
+interface TimetableRecommendationItem {
+  candidateId: string;
+  rank: number;
+  timetable: Timetable;
+  scoreBreakdown: ScoreBreakdown[];
+  reason: string | null;
+  requirementContribution: string | null;
+  customPreferenceNote: string | null;
 }
 
 const DAYS: ReadonlyArray<{ id: Weekday; label: string }> = [
@@ -94,7 +124,13 @@ const TIMETABLE_START_MINUTES = 8 * 60;
 const TIMETABLE_END_MINUTES = 22 * 60;
 const PIXELS_PER_MINUTE = 0.8;
 
-export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: Props) {
+const ELECTIVE_PREVIEW_CONCURRENCY = 3;
+
+function createElectivePreviewLanes(): Promise<void>[] {
+  return Array.from({ length: ELECTIVE_PREVIEW_CONCURRENCY }, () => Promise.resolve());
+}
+
+export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, requirements }: Props) {
   const [majorCourseGroups, setMajorCourseGroups] = useState<CourseCandidateGroup[]>([]);
   const [electiveCourseGroups, setElectiveCourseGroups] = useState<PlannerCourseGroup[]>([]);
   const [electivePreviewGroups, setElectivePreviewGroups] = useState<
@@ -126,7 +162,8 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
   const [previewLoadingIds, setPreviewLoadingIds] = useState<string[]>([]);
   const nextChoiceGroupId = useRef(2);
   const electivePreviewRequestIds = useRef(new Set<string>());
-  const electivePreviewQueue = useRef<Promise<void>>(Promise.resolve());
+  const electivePreviewLanes = useRef<Promise<void>[]>(createElectivePreviewLanes());
+  const electivePreviewLaneCursor = useRef(0);
   const electivePreviewGeneration = useRef(0);
 
   useEffect(() => {
@@ -136,7 +173,8 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
     const activeQuery = query;
     electivePreviewGeneration.current += 1;
     electivePreviewRequestIds.current.clear();
-    electivePreviewQueue.current = Promise.resolve();
+    electivePreviewLanes.current = createElectivePreviewLanes();
+    electivePreviewLaneCursor.current = 0;
     const controller = new AbortController();
     async function loadCourses(): Promise<void> {
       setIsLoading(true);
@@ -365,7 +403,12 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
         }
       }
     };
-    electivePreviewQueue.current = electivePreviewQueue.current.then(loadPreview, loadPreview);
+    const laneIndex = electivePreviewLaneCursor.current % electivePreviewLanes.current.length;
+    electivePreviewLaneCursor.current += 1;
+    electivePreviewLanes.current[laneIndex] = electivePreviewLanes.current[laneIndex].then(
+      loadPreview,
+      loadPreview,
+    );
   }
 
   async function toggleElectiveSubject(subject: SkkuElectiveSubject): Promise<void> {
@@ -631,6 +674,82 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
       dayOffFilters.every((day) => isDayFree(timetable, day)),
     );
   }, [dayOffFilters, result.entries]);
+
+  const [recommendationWeights, setRecommendationWeights] = useState<RecommendationWeight[]>(
+    DEFAULT_RECOMMENDATION_WEIGHTS,
+  );
+  const [customPreference, setCustomPreference] = useState("");
+  const [recommendations, setRecommendations] = useState<TimetableRecommendationItem[] | null>(
+    null,
+  );
+  const [isRecommending, setIsRecommending] = useState(false);
+  const [recommendationError, setRecommendationError] = useState("");
+  const [aiExplanationFailed, setAiExplanationFailed] = useState(false);
+
+  const [previousResultEntries, setPreviousResultEntries] = useState(result.entries);
+  if (previousResultEntries !== result.entries) {
+    setPreviousResultEntries(result.entries);
+    setRecommendations(null);
+    setRecommendationError("");
+  }
+
+  function toggleRecommendationWeight(id: WeightId): void {
+    setRecommendationWeights((weights) => {
+      const nextEnabled = !(weights.find((weight) => weight.id === id)?.enabled ?? false);
+      return weights.map((weight) => {
+        if (weight.id === id) {
+          return { ...weight, enabled: nextEnabled };
+        }
+        const isOppositeFormatPreference =
+          (id === "prefer_in_person" && weight.id === "prefer_online") ||
+          (id === "prefer_online" && weight.id === "prefer_in_person");
+        return nextEnabled && isOppositeFormatPreference ? { ...weight, enabled: false } : weight;
+      });
+    });
+  }
+
+  function setRecommendationWeightImportance(id: WeightId, importance: WeightImportance): void {
+    setRecommendationWeights((weights) =>
+      weights.map((weight) => (weight.id === id ? { ...weight, importance } : weight)),
+    );
+  }
+
+  function setBackToBackConfig(
+    partial: Partial<NonNullable<RecommendationWeight["config"]>>,
+  ): void {
+    setRecommendationWeights((weights) =>
+      weights.map((weight) =>
+        weight.id === "back_to_back"
+          ? { ...weight, config: { ...weight.config, ...partial } }
+          : weight,
+      ),
+    );
+  }
+
+  async function fetchAiRecommendations(): Promise<void> {
+    if (filteredEntries.length === 0) {
+      setRecommendationError("추천할 시간표 조합이 없습니다.");
+      return;
+    }
+    setIsRecommending(true);
+    setRecommendationError("");
+    try {
+      const payload = await postJson("/api/timetable-recommendations", {
+        timetables: filteredEntries.map(({ timetable }) => timetable),
+        weights: recommendationWeights,
+        requirements,
+        customPreference: customPreference.trim() || undefined,
+      });
+      const parsed = readRecommendationResponse(payload);
+      setRecommendations(parsed.recommendations);
+      setAiExplanationFailed(parsed.aiExplanationFailed);
+    } catch (error) {
+      setRecommendationError(readThrownMessage(error));
+      setRecommendations(null);
+    } finally {
+      setIsRecommending(false);
+    }
+  }
 
   const excludedCount = courseGroups.length - availableCourseGroups.length;
 
@@ -1219,6 +1338,132 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
               ))}
             </ol>
           ) : null}
+
+          <div className={styles.recommendationSection}>
+            <h3>AI 시간표 추천</h3>
+            <p className={styles.recommendationHint}>
+              위 목록은 그대로 두고, 이미 만들어진 조합 중에서 아래 조건에 맞는 상위 후보만 따로
+              추려서 보여줍니다.
+              {requirements.length > 0
+                ? " 업로드한 졸업요건 충족 현황도 함께 고려합니다."
+                : " 학사문서(졸업요건)를 업로드하면 충족 현황도 함께 고려합니다."}
+            </p>
+
+            <div className={styles.recommendationWeights}>
+              {recommendationWeights.map((weight) => (
+                <div className={styles.recommendationWeight} key={weight.id}>
+                  <label className={styles.recommendationWeightToggle}>
+                    <input
+                      checked={weight.enabled}
+                      type="checkbox"
+                      onChange={() => toggleRecommendationWeight(weight.id)}
+                    />
+                    <span>{WEIGHT_LABELS[weight.id]}</span>
+                  </label>
+                  {weight.enabled ? (
+                    <select
+                      aria-label={`${WEIGHT_LABELS[weight.id]} 중요도`}
+                      value={weight.importance}
+                      onChange={(event) =>
+                        setRecommendationWeightImportance(
+                          weight.id,
+                          event.target.value as WeightImportance,
+                        )
+                      }
+                    >
+                      <option value="low">낮음</option>
+                      <option value="medium">보통</option>
+                      <option value="high">높음</option>
+                    </select>
+                  ) : null}
+                  {weight.enabled && weight.id === "back_to_back" ? (
+                    <span className={styles.backToBackConfig}>
+                      <select
+                        aria-label="연강 선호/기피"
+                        value={weight.config?.direction ?? "avoid"}
+                        onChange={(event) =>
+                          setBackToBackConfig({
+                            direction: event.target.value as "prefer" | "avoid",
+                          })
+                        }
+                      >
+                        <option value="avoid">기피</option>
+                        <option value="prefer">선호</option>
+                      </select>
+                      <input
+                        aria-label="연강 기준 시간"
+                        inputMode="numeric"
+                        min="1"
+                        step="1"
+                        type="number"
+                        value={(weight.config?.thresholdMinutes ?? 180) / 60}
+                        onChange={(event) =>
+                          setBackToBackConfig({
+                            thresholdMinutes: Number(event.target.value) * 60,
+                          })
+                        }
+                      />
+                      <span>시간 이상</span>
+                    </span>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+
+            <label className={styles.customPreferenceInput}>
+              <span>기타 원하는 조건 (자유 입력, 선택)</span>
+              <textarea
+                placeholder="예: 화요일엔 3교시 이후 수업만 듣고 싶어요"
+                value={customPreference}
+                onChange={(event) => setCustomPreference(event.target.value)}
+              />
+            </label>
+
+            <button
+              disabled={isRecommending || filteredEntries.length === 0}
+              type="button"
+              onClick={() => void fetchAiRecommendations()}
+            >
+              {isRecommending ? "추천 생성 중…" : "AI 추천 받기"}
+            </button>
+
+            {recommendationError ? <p className={styles.error}>{recommendationError}</p> : null}
+            {aiExplanationFailed && recommendations ? (
+              <p className={styles.recommendationNotice}>
+                Solar 추천 이유 생성에 실패해 가중치 기준 순위만 표시합니다.
+              </p>
+            ) : null}
+            {recommendations && recommendations.length > 0 ? (
+              <ol className={styles.recommendationList}>
+                {recommendations.map((recommendation) => (
+                  <li className={styles.recommendationCard} key={recommendation.candidateId}>
+                    <div className={styles.recommendationCardHeading}>
+                      <span>추천 {recommendation.rank}순위</span>
+                    </div>
+                    <ul className={styles.recommendationCourseList}>
+                      {recommendation.timetable.courses.map((course) => (
+                        <li key={course.id}>
+                          {course.title} · {course.schedule}
+                          {course.professor ? ` · ${course.professor}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                    {recommendation.reason ? <p>{recommendation.reason}</p> : null}
+                    {recommendation.requirementContribution ? (
+                      <p className={styles.recommendationRequirement}>
+                        {recommendation.requirementContribution}
+                      </p>
+                    ) : null}
+                    {recommendation.customPreferenceNote ? (
+                      <p className={styles.recommendationCustomNote}>
+                        {recommendation.customPreferenceNote}
+                      </p>
+                    ) : null}
+                  </li>
+                ))}
+              </ol>
+            ) : null}
+          </div>
         </div>
       </div>
     </section>
@@ -1682,6 +1927,19 @@ function readCourseApiError(value: unknown): string {
     return value.error.message;
   }
   return "개설강좌를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
+}
+
+function readRecommendationResponse(value: unknown): {
+  recommendations: TimetableRecommendationItem[];
+  aiExplanationFailed: boolean;
+} {
+  if (!isRecord(value) || !Array.isArray(value.recommendations)) {
+    throw new Error("추천 결과 형식이 올바르지 않습니다.");
+  }
+  return {
+    recommendations: value.recommendations as TimetableRecommendationItem[],
+    aiExplanationFailed: value.aiExplanationFailed === true,
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

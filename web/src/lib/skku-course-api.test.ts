@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   fetchSkkuAllElectiveSubjects,
@@ -7,6 +7,7 @@ import {
   fetchSkkuElectiveSubjects,
   fetchSkkuMajorCourses,
   parseSsv,
+  resetSkkuApiCaches,
 } from "./skku-course-api";
 
 const RS = "\x1e";
@@ -45,6 +46,10 @@ function datasetSsv(name: string, columns: string[], values: string[]): string {
 }
 
 describe("SKKU course API", () => {
+  beforeEach(() => {
+    resetSkkuApiCaches();
+  });
+
   it("parses typed SSV columns and rows", () => {
     expect(parseSsv(courseSsv())).toMatchObject({
       errorCode: 0,
@@ -113,6 +118,7 @@ describe("SKKU course API", () => {
       ]),
     );
 
+    resetSkkuApiCaches();
     const subjectFetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(session())
@@ -199,5 +205,47 @@ describe("SKKU course API", () => {
 
   it("rejects an SSV response without an error code", () => {
     expect(() => parseSsv("SSV:utf-8")).toThrow("Missing SSV ErrorCode");
+  });
+
+  it("serves a repeated elective catalog request from cache without re-fetching", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response("ok", { headers: { "set-cookie": "JSESSIONID=session-1; Path=/" } }),
+      )
+      .mockResolvedValueOnce(
+        new Response(datasetSsv("dsGrdMain01", ["A5"], ["1"])),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          datasetSsv("dsGrdMain02", ["HAKSU_NO", "GWAMOK_NAME"], ["GEDG001", "영어쓰기"]),
+        ),
+      );
+
+    const query = { year: 2026, term: 20 as const, campus: 1 as const };
+    const first = await fetchSkkuAllElectiveSubjects(query, { fetcher, requestIntervalMs: 0 });
+    const second = await fetchSkkuAllElectiveSubjects(query, { fetcher, requestIntervalMs: 0 });
+
+    expect(second).toEqual(first);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+
+  it("reuses a cached session across independent calls", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response("ok", { headers: { "set-cookie": "JSESSIONID=session-1; Path=/" } }),
+      )
+      .mockResolvedValueOnce(new Response(courseSsv()))
+      .mockResolvedValueOnce(new Response(courseSsv()));
+
+    const query = { year: 2026, term: 20 as const, campus: 1 as const, departmentCode: "316901" };
+    await fetchSkkuMajorCourses(query, { fetcher, requestIntervalMs: 0 });
+    await fetchSkkuMajorCourses(
+      { ...query, departmentCode: "316902" },
+      { fetcher, requestIntervalMs: 0 },
+    );
+
+    expect(fetcher).toHaveBeenCalledTimes(3);
   });
 });

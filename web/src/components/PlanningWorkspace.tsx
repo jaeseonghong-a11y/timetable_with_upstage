@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-import type { AcademicDocumentKind, AcademicProfile } from "@/lib/academic-profile";
+import type { AcademicDocumentKind, AcademicProfile, Requirement } from "@/lib/academic-profile";
 import {
   getExcludedCourseNumbers,
   getCourseQueryLabel,
@@ -37,6 +37,12 @@ export function PlanningWorkspace() {
       ),
     [confirmedProfiles.course_history, workingProfiles.course_history],
   );
+  const requirements = useMemo<readonly Requirement[]>(
+    () =>
+      (workingProfiles.graduation_requirements ?? confirmedProfiles.graduation_requirements)
+        ?.requirements ?? [],
+    [confirmedProfiles.graduation_requirements, workingProfiles.graduation_requirements],
+  );
 
   function updateWorkingProfile(
     kind: AcademicDocumentKind,
@@ -69,6 +75,7 @@ export function PlanningWorkspace() {
         excludedCourseNumbers={excludedCourseNumbers}
         query={courseQuery}
         queryLabel={appliedProfile ? getCourseQueryLabel(appliedProfile) : ""}
+        requirements={requirements}
       />
     </>
   );

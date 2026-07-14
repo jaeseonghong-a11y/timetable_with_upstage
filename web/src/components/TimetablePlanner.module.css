@@ -1067,6 +1067,189 @@
   color: var(--text-error);
 }
 
+.recommendationSection {
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+  padding: 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  background: var(--surface-page);
+}
+
+.recommendationSection h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.recommendationHint {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.recommendationWeights {
+  display: grid;
+  gap: 8px;
+}
+
+.recommendationWeight {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.recommendationWeightToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.recommendationWeightToggle input {
+  accent-color: var(--accent-strong);
+}
+
+.recommendationWeightToggle:has(input:checked) {
+  border-color: var(--accent-strong);
+  background: var(--surface-note);
+  color: var(--accent-strong);
+}
+
+.recommendationWeight select {
+  padding: 6px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+}
+
+.backToBackConfig {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.backToBackConfig input {
+  width: 48px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+}
+
+.customPreferenceInput {
+  display: grid;
+  gap: 6px;
+}
+
+.customPreferenceInput span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.customPreferenceInput textarea {
+  min-height: 56px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+
+.recommendationSection > button {
+  justify-self: start;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent-strong);
+  color: var(--surface-card);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.recommendationSection > button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.recommendationNotice {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--surface-note);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.recommendationList {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+}
+
+.recommendationCard {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--surface-card);
+}
+
+.recommendationCardHeading span {
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.recommendationCourseList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.recommendationCard p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.recommendationCard p.recommendationRequirement {
+  color: var(--accent-strong);
+}
+
+.recommendationCustomNote {
+  font-style: italic;
+}
+
 @media (max-width: 760px) {
   .grid {
     grid-template-columns: 1fr;

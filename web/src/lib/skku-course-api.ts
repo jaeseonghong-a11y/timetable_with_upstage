@@ -1,3 +1,10 @@
+import {
+  ELECTIVE_CATALOG_CACHE_TTL_MS,
+  ELECTIVE_SECTIONS_CACHE_TTL_MS,
+  SESSION_COOKIE_CACHE_TTL_MS,
+} from "./cache-constants";
+import { InMemoryTtlCache, type CacheStore } from "./cache-store";
+
 const RS = "\x1e";
 const US = "\x1f";
 
@@ -110,13 +117,44 @@ export class SkkuCourseApiError extends Error {
   }
 }
 
+const SESSION_CACHE_KEY = "session";
+
+/**
+ * Module-level singletons. Swap the `InMemoryTtlCache` instances below for a
+ * `CacheStore` backed by Vercel KV/Upstash Redis to share state across
+ * serverless instances — every call site here only depends on the
+ * `CacheStore` interface.
+ */
+const defaultSessionCache: CacheStore<string> = new InMemoryTtlCache();
+const defaultElectiveCatalogCache: CacheStore<SkkuElectiveCatalog> = new InMemoryTtlCache();
+const defaultElectiveSectionsCache: CacheStore<SkkuCourse[]> = new InMemoryTtlCache();
+
+/** Test-only: clears every default cache so tests don't leak state across cases. */
+export function resetSkkuApiCaches(): void {
+  (defaultSessionCache as InMemoryTtlCache<string>).clear();
+  (defaultElectiveCatalogCache as InMemoryTtlCache<SkkuElectiveCatalog>).clear();
+  (defaultElectiveSectionsCache as InMemoryTtlCache<SkkuCourse[]>).clear();
+}
+
+function electiveCatalogCacheKey(query: SkkuElectiveQuery): string {
+  return `${query.year}:${query.term}:${query.campus}`;
+}
+
+function electiveSectionsCacheKey(query: SkkuElectiveQuery, courseNumber: string): string {
+  return `${query.year}:${query.term}:${query.campus}:${courseNumber}`;
+}
+
 export async function fetchSkkuMajorCourses(
   query: SkkuCourseQuery,
-  options: { fetcher?: typeof fetch; requestIntervalMs?: number } = {},
+  options: {
+    fetcher?: typeof fetch;
+    requestIntervalMs?: number;
+    sessionCache?: CacheStore<string>;
+  } = {},
 ): Promise<SkkuCourse[]> {
   const fetcher = options.fetcher ?? fetch;
   const requestIntervalMs = options.requestIntervalMs ?? 500;
-  const sessionCookie = await establishSkkuSession(fetcher);
+  const sessionCookie = await establishSkkuSession(fetcher, options.sessionCache);
   const rows = await fetchSkkuDataset(
     MAJOR_COURSES_URL,
     sessionCookie,
@@ -139,10 +177,14 @@ export async function fetchSkkuMajorCourses(
 
 export async function fetchSkkuElectiveAreas(
   query: SkkuElectiveQuery,
-  options: { fetcher?: typeof fetch; requestIntervalMs?: number } = {},
+  options: {
+    fetcher?: typeof fetch;
+    requestIntervalMs?: number;
+    sessionCache?: CacheStore<string>;
+  } = {},
 ): Promise<SkkuElectiveArea[]> {
   const fetcher = options.fetcher ?? fetch;
-  const sessionCookie = await establishSkkuSession(fetcher);
+  const sessionCookie = await establishSkkuSession(fetcher, options.sessionCache);
   const rows = await fetchSkkuDataset(
     ELECTIVE_AREAS_URL,
     sessionCookie,
@@ -162,10 +204,14 @@ export async function fetchSkkuElectiveAreas(
 export async function fetchSkkuElectiveSubjects(
   query: SkkuElectiveQuery,
   areaCode: SkkuElectiveAreaCode,
-  options: { fetcher?: typeof fetch; requestIntervalMs?: number } = {},
+  options: {
+    fetcher?: typeof fetch;
+    requestIntervalMs?: number;
+    sessionCache?: CacheStore<string>;
+  } = {},
 ): Promise<SkkuElectiveSubject[]> {
   const fetcher = options.fetcher ?? fetch;
-  const sessionCookie = await establishSkkuSession(fetcher);
+  const sessionCookie = await establishSkkuSession(fetcher, options.sessionCache);
   const rows = await fetchSkkuDataset(
     ELECTIVE_SUBJECTS_URL,
     sessionCookie,
@@ -188,11 +234,23 @@ export async function fetchSkkuElectiveSubjects(
 /** Loads every elective subject for one user-selected campus with one scoped SKKU session. */
 export async function fetchSkkuAllElectiveSubjects(
   query: SkkuElectiveQuery,
-  options: { fetcher?: typeof fetch; requestIntervalMs?: number } = {},
+  options: {
+    fetcher?: typeof fetch;
+    requestIntervalMs?: number;
+    sessionCache?: CacheStore<string>;
+    catalogCache?: CacheStore<SkkuElectiveCatalog>;
+  } = {},
 ): Promise<SkkuElectiveCatalog> {
+  const catalogCache = options.catalogCache ?? defaultElectiveCatalogCache;
+  const cacheKey = electiveCatalogCacheKey(query);
+  const cached = catalogCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   const fetcher = options.fetcher ?? fetch;
   const requestIntervalMs = options.requestIntervalMs ?? 300;
-  const sessionCookie = await establishSkkuSession(fetcher);
+  const sessionCookie = await establishSkkuSession(fetcher, options.sessionCache);
   const areaRows = await fetchSkkuDataset(
     ELECTIVE_AREAS_URL,
     sessionCookie,
@@ -236,16 +294,30 @@ export async function fetchSkkuAllElectiveSubjects(
     }
   }
 
-  return { areas, subjects: [...subjects.values()] };
+  const result = { areas, subjects: [...subjects.values()] };
+  catalogCache.set(cacheKey, result, ELECTIVE_CATALOG_CACHE_TTL_MS);
+  return result;
 }
 
 export async function fetchSkkuElectiveCourses(
   query: SkkuElectiveQuery,
   courseNumber: string,
-  options: { fetcher?: typeof fetch; requestIntervalMs?: number } = {},
+  options: {
+    fetcher?: typeof fetch;
+    requestIntervalMs?: number;
+    sessionCache?: CacheStore<string>;
+    sectionsCache?: CacheStore<SkkuCourse[]>;
+  } = {},
 ): Promise<SkkuCourse[]> {
+  const sectionsCache = options.sectionsCache ?? defaultElectiveSectionsCache;
+  const cacheKey = electiveSectionsCacheKey(query, courseNumber);
+  const cached = sectionsCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   const fetcher = options.fetcher ?? fetch;
-  const sessionCookie = await establishSkkuSession(fetcher);
+  const sessionCookie = await establishSkkuSession(fetcher, options.sessionCache);
   const rows = await fetchSkkuDataset(
     ELECTIVE_COURSES_URL,
     sessionCookie,
@@ -258,7 +330,9 @@ export async function fetchSkkuElectiveCourses(
     fetcher,
     options.requestIntervalMs ?? 500,
   );
-  return normalizeCourseRows(rows, "elective");
+  const result = normalizeCourseRows(rows, "elective");
+  sectionsCache.set(cacheKey, result, ELECTIVE_SECTIONS_CACHE_TTL_MS);
+  return result;
 }
 
 export function parseSsv(text: string): SsvResponse {
@@ -310,7 +384,15 @@ function buildSsvBody(params: Record<string, string>): string {
   ) + RS;
 }
 
-async function establishSkkuSession(fetcher: typeof fetch): Promise<string> {
+async function establishSkkuSession(
+  fetcher: typeof fetch,
+  sessionCache: CacheStore<string> = defaultSessionCache,
+): Promise<string> {
+  const cached = sessionCache.get(SESSION_CACHE_KEY);
+  if (cached) {
+    return cached;
+  }
+
   let response: Response;
   try {
     response = await fetcher(SESSION_LOGIN_URL, {
@@ -330,6 +412,7 @@ async function establishSkkuSession(fetcher: typeof fetch): Promise<string> {
   if (!sessionCookie) {
     throw new SkkuCourseApiError("invalid_response");
   }
+  sessionCache.set(SESSION_CACHE_KEY, sessionCookie, SESSION_COOKIE_CACHE_TTL_MS);
   return sessionCookie;
 }
 
