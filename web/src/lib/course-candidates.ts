@@ -8,8 +8,8 @@ export interface CourseCandidateGroup {
   candidates: CourseCandidate[];
 }
 
-export function shouldShowSectionDetails(sectionCount: number, isSelected: boolean): boolean {
-  return sectionCount === 1 || (sectionCount > 1 && isSelected);
+export function shouldShowSectionDetails(sectionCount: number): boolean {
+  return sectionCount > 0;
 }
 
 type ScrapedCourse = {

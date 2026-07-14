@@ -702,7 +702,7 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
                           : `${group.candidates.length}개 분반`}
                       </small>
                     </label>
-                    {shouldShowSectionDetails(group.candidates.length, checked)
+                    {shouldShowSectionDetails(group.candidates.length)
                       ? <CourseSectionDetails group={group} />
                       : null}
                   </div>
@@ -750,10 +750,7 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
                                 : "선택"}
                       </small>
                     </label>
-                    {displayedGroup && shouldShowSectionDetails(
-                      displayedGroup.candidates.length,
-                      checked,
-                    )
+                    {displayedGroup && shouldShowSectionDetails(displayedGroup.candidates.length)
                       ? <CourseSectionDetails group={displayedGroup} />
                       : null}
                   </ElectivePreviewBoundary>

@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 import { courseGroupsFromCollection, shouldShowSectionDetails } from "./course-candidates";
 
 describe("courseGroupsFromCollection", () => {
-  it("shows one section before selection but hides multiple sections until selection", () => {
-    expect(shouldShowSectionDetails(1, false)).toBe(true);
-    expect(shouldShowSectionDetails(2, false)).toBe(false);
-    expect(shouldShowSectionDetails(2, true)).toBe(true);
+  it("shows section metadata before course selection for one or multiple sections", () => {
+    expect(shouldShowSectionDetails(0)).toBe(false);
+    expect(shouldShowSectionDetails(1)).toBe(true);
+    expect(shouldShowSectionDetails(2)).toBe(true);
   });
 
   it("groups scraper Course JSON rows by course number and keeps every section", () => {
