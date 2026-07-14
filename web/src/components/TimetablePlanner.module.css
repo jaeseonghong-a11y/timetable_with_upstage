@@ -307,7 +307,7 @@
 }
 
 .singleCourseSection .courseSectionRow {
-  border-top: 0;
+  padding: 7px 4px;
 }
 
 .courseSectionDetails > summary {
@@ -334,12 +334,42 @@
   overflow-y: auto;
 }
 
+.courseSectionChoice {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 7px 4px;
+  border-top: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.courseSectionChoice:hover {
+  background: var(--surface-card);
+}
+
+.courseSectionChoiceSelected {
+  background: var(--surface-note);
+}
+
+.courseSectionChoiceSelected:hover {
+  background: var(--surface-note);
+}
+
+.courseSectionChoice > input {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  margin-top: 1px;
+  accent-color: var(--accent-strong);
+}
+
 .courseSectionRow {
   display: grid;
+  min-width: 0;
+  flex: 1;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 2px 8px;
-  padding: 7px 2px;
-  border-top: 1px solid var(--border-subtle);
 }
 
 .courseSectionRow strong,
@@ -697,6 +727,52 @@
   color: var(--surface-card);
 }
 
+.courseTypeChoices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.courseTypeChoice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.courseTypeChoice input {
+  accent-color: var(--accent-strong);
+}
+
+.courseTypeChoice:has(input:checked) {
+  border-color: var(--accent-strong);
+  background: var(--surface-note);
+  color: var(--accent-strong);
+}
+
+.dayOffFilter {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--surface-note);
+}
+
+.dayOffFilter > span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .startSelect select {
   width: 100%;
   padding: 11px 12px;
@@ -805,6 +881,34 @@
 
 .timetableCard summary small {
   color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.timetableCard summary > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.timetableVersion {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.timetableExtras {
+  margin: 0;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-note);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.resultHeading h2 small {
+  color: var(--text-secondary);
+  font-size: 13px;
   font-weight: 600;
 }
 

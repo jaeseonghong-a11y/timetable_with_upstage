@@ -23,17 +23,21 @@ import styles from "./AcademicDocumentManager.module.css";
 
 const KIND_DETAILS: Record<
   AcademicDocumentKind,
-  { label: string; heading: string; description: string }
+  { label: string; heading: string; description: string; attachGuide: string }
 > = {
   course_history: {
     label: "수강/취득과목",
     heading: "이미 들은 과목을 확인하세요.",
     description: "재수강할 과목은 토글로 다시 추천 후보에 포함할 수 있습니다.",
+    attachGuide:
+      "성균관대학교 GLS → 학적/개인영역 → 졸업자가진단 → 졸업요건충족현황조회 → 수강/취득 과목 출력 → PDF 저장 → 업로드",
   },
   graduation_requirements: {
     label: "졸업요건충족현황",
     heading: "남은 졸업요건을 확인하세요.",
     description: "복합값과 영역별 중복학점은 추측하지 않고 확인 항목으로 남깁니다.",
+    attachGuide:
+      "성균관대학교 GLS → 학적/개인영역 → 졸업자가진단 → 졸업요건충족현황조회 → 영역별 학점취득/수강현황 부분 스크린샷 → 붙여넣기, 혹은 저장 후 업로드",
   },
 };
 
@@ -319,6 +323,10 @@ export function AcademicDocumentManager({
           </div>
         ) : null}
       </div>
+
+      <p className={styles.attachGuide}>
+        <strong>어디서 받나요?</strong> {detail.attachGuide}
+      </p>
 
       <div className={styles.uploadRow}>
         <label className={styles.filePicker}>

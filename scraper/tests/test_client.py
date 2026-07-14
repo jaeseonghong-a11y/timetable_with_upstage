@@ -59,6 +59,17 @@ def test_fetch_elective_courses_parses_rows():
     assert "HAKSU_NO=GEDG001" in body
 
 
+def test_fetch_department_codes_parses_rows():
+    fake_response = _FakeResponse(_fake_ssv_response("dsHakgwa"))
+    with patch.object(client._session, "post", return_value=fake_response) as post:
+        rows = client.fetch_department_codes(2026, 10, "3169", request_interval=0)
+
+    assert rows == [{"GWAMOK_NAME": "경영정보시스템", "PER_NAME": "홍길동"}]
+    body = post.call_args.kwargs["data"].decode("utf-8")
+    assert "TONG_HAKBU=3169" in body
+    assert "_TRANSACTION_ID=selectBizType04" in body
+
+
 def test_error_code_raises():
     error_text = "\x1e".join(["SSV:UTF-8", "ErrorCode:int=-1", "ErrorMsg:string=FAIL"])
     with (

@@ -7,6 +7,7 @@ import {
   removeSubjectsOwnedBy,
   SelectionPlanError,
   SelectionPlanLimitError,
+  toggleEnabledSectionId,
   type SubjectOption,
 } from "./selection-plan";
 
@@ -27,6 +28,12 @@ describe("enumerateSubjectSelections", () => {
   it("enables only the first section when a subject is initially selected", () => {
     expect(getInitialSectionIds(subject("A", 3).sections)).toEqual(["A-1"]);
     expect(getInitialSectionIds([])).toEqual([]);
+  });
+
+  it("lets users add or replace sections without leaving a selected subject empty", () => {
+    expect(toggleEnabledSectionId(["A-1"], "A-2")).toEqual(["A-1", "A-2"]);
+    expect(toggleEnabledSectionId(["A-1", "A-2"], "A-1")).toEqual(["A-2"]);
+    expect(toggleEnabledSectionId(["A-2"], "A-2")).toEqual(["A-2"]);
   });
 
   it("removes every course and section setting owned by a deleted group", () => {

@@ -75,6 +75,19 @@ export function getInitialSectionIds(
   return firstSection ? [firstSection.id] : [];
 }
 
+/** Toggles one allowed section while keeping at least one section enabled. */
+export function toggleEnabledSectionId(
+  currentSectionIds: readonly string[],
+  sectionId: string,
+): string[] {
+  if (!currentSectionIds.includes(sectionId)) {
+    return [...currentSectionIds, sectionId];
+  }
+  return currentSectionIds.length === 1
+    ? [...currentSectionIds]
+    : currentSectionIds.filter((id) => id !== sectionId);
+}
+
 /** Removes every selected subject owned by one deleted choice group. */
 export function removeSubjectsOwnedBy(
   state: SubjectAssignmentState,

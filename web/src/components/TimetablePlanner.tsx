@@ -20,6 +20,7 @@ import {
   removeSubjectsOwnedBy,
   SelectionPlanError,
   SelectionPlanLimitError,
+  toggleEnabledSectionId,
   type SubjectOption,
 } from "@/lib/selection-plan";
 import {
@@ -113,7 +114,9 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
   const [unavailableDays, setUnavailableDays] = useState<Weekday[]>([]);
   const [earliestStart, setEarliestStart] = useState("");
   const [minimumCredits, setMinimumCredits] = useState("15");
-  const [maximumCredits, setMaximumCredits] = useState("18");
+  const [maximumCredits, setMaximumCredits] = useState("21");
+  const [disabledCourseTypes, setDisabledCourseTypes] = useState<Set<string>>(new Set());
+  const [dayOffFilters, setDayOffFilters] = useState<Weekday[]>([]);
   const [courseSearch, setCourseSearch] = useState("");
   const [collectionError, setCollectionError] = useState("");
   const [electiveError, setElectiveError] = useState("");
@@ -152,6 +155,8 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
       setCourseOwners({});
       setEnabledSectionIds({});
       setPreviewLoadingIds([]);
+      setDisabledCourseTypes(new Set());
+      setDayOffFilters([]);
       nextChoiceGroupId.current = 2;
       try {
         const majorResult = await postJson("/api/skku-courses", activeQuery, controller.signal);
@@ -171,12 +176,16 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
     return () => controller.abort();
   }, [query]);
 
-  function selectCourseGroup(group: PlannerCourseGroup, destination = activeDestination): void {
+  function selectCourseGroup(
+    group: PlannerCourseGroup,
+    destination = activeDestination,
+    initialSectionIds = getInitialSectionIds(group.candidates),
+  ): void {
     setSelectedGroupIds((ids) => [...new Set([...ids, group.selectionId])]);
     setCourseOwners((owners) => ({ ...owners, [group.selectionId]: destination }));
     setEnabledSectionIds((sections) => ({
       ...sections,
-      [group.selectionId]: getInitialSectionIds(group.candidates),
+      [group.selectionId]: initialSectionIds,
     }));
   }
 
@@ -203,11 +212,24 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
     }
   }
 
+  /**
+   * A course can only belong to one destination at a time. The catalog checkbox reflects
+   * membership in the *currently active* destination, not "selected anywhere" — otherwise a
+   * course assigned to 필수 still looks checked while browsing 선택 그룹 1, even though it isn't
+   * actually in that group.
+   */
+  function isAssignedToActiveDestination(selectionId: string): boolean {
+    return (
+      selectedGroupIds.includes(selectionId) &&
+      (courseOwners[selectionId] ?? "required") === activeDestination
+    );
+  }
+
   function toggleMajorCourseGroup(group: PlannerCourseGroup): void {
-    if (selectedGroupIds.includes(group.selectionId)) {
+    if (isAssignedToActiveDestination(group.selectionId)) {
       removeSelectedCourse(group);
     } else {
-      selectCourseGroup(group);
+      selectCourseGroup(group, activeDestination, enabledSectionIds[group.selectionId]);
     }
   }
 
@@ -260,11 +282,24 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
       const current = sections[group.selectionId] ?? getInitialSectionIds(group.candidates);
       return {
         ...sections,
-        [group.selectionId]: current.includes(sectionId)
-          ? current.filter((id) => id !== sectionId)
-          : [...current, sectionId],
+        [group.selectionId]: toggleEnabledSectionId(current, sectionId),
       };
     });
+  }
+
+  function toggleCatalogSection(group: PlannerCourseGroup, sectionId: string): void {
+    if (isAssignedToActiveDestination(group.selectionId)) {
+      toggleSection(group, sectionId);
+      return;
+    }
+    if (group.source === "elective") {
+      setElectiveCourseGroups((groups) =>
+        groups.some(({ selectionId }) => selectionId === group.selectionId)
+          ? groups
+          : [...groups, group],
+      );
+    }
+    selectCourseGroup(group, activeDestination, [sectionId]);
   }
 
   async function loadAllElectives(campus: SkkuElectiveCampus): Promise<void> {
@@ -338,7 +373,11 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
     const selectionId = getElectiveSelectionId(campus, subject.courseNumber);
     const existing = electiveCourseGroups.find((group) => group.selectionId === selectionId);
     if (existing) {
-      removeSelectedCourse(existing);
+      if (isAssignedToActiveDestination(selectionId)) {
+        removeSelectedCourse(existing);
+      } else {
+        selectCourseGroup(existing, activeDestination, enabledSectionIds[selectionId]);
+      }
       return;
     }
     if (!query || loadingCourseNumbers.includes(selectionId)) {
@@ -391,6 +430,26 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
     () => courseGroups.filter((group) => !excludedCourseSet.has(group.id.trim().toUpperCase())),
     [courseGroups, excludedCourseSet],
   );
+  const availableCourseTypes = useMemo(() => {
+    const labels = new Set<string>();
+    for (const group of availableCourseGroups) {
+      for (const candidate of group.candidates) {
+        labels.add(getCourseTypeLabel(candidate));
+      }
+    }
+    return [...labels].sort((first, second) => first.localeCompare(second, "ko"));
+  }, [availableCourseGroups]);
+  function toggleCourseType(label: string): void {
+    setDisabledCourseTypes((current) => {
+      const next = new Set(current);
+      if (next.has(label)) {
+        next.delete(label);
+      } else {
+        next.add(label);
+      }
+      return next;
+    });
+  }
   const visibleCourseGroups = useMemo(() => {
     const keyword = courseSearch.trim().toLowerCase();
     if (!keyword) {
@@ -449,9 +508,19 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
     [choiceGroups, courseOwners, selectedCourseGroups],
   );
 
+  const sectionIdToGroup = useMemo(() => {
+    const map = new Map<string, PlannerCourseGroup>();
+    for (const group of selectedCourseGroups) {
+      for (const candidate of group.candidates) {
+        map.set(candidate.id, group);
+      }
+    }
+    return map;
+  }, [selectedCourseGroups]);
+
   const result = useMemo(() => {
     if (selectedCourseGroups.length === 0) {
-      return { timetables: [], error: null };
+      return { entries: [], error: null };
     }
     try {
       const choiceGroupIds = new Set(choiceGroups.map(({ id }) => id));
@@ -467,7 +536,11 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
           id: group.selectionId,
           title: group.title,
           credits: group.credits,
-          sections: group.candidates.filter(({ id }) => enabledIds.has(id)),
+          sections: group.candidates.filter(
+            (candidate) =>
+              enabledIds.has(candidate.id) &&
+              !disabledCourseTypes.has(getCourseTypeLabel(candidate)),
+          ),
         };
         const owner = courseOwners[group.selectionId] ?? "required";
         if (owner === "required" || !choiceGroupIds.has(owner)) {
@@ -477,34 +550,40 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
         }
       }
 
+      const timetables = generateTimetablesForSelectionPlan(
+        {
+          requiredSubjects,
+          choiceBags: choiceGroups.flatMap((choiceGroup) => {
+            const subjects = choiceSubjects.get(choiceGroup.id) ?? [];
+            return subjects.length > 0
+              ? [{
+                  ...choiceGroup,
+                  subjects,
+                }]
+              : [];
+          }),
+          creditRange: {
+            minCredits: minimumCredits === "" ? Number.NaN : Number(minimumCredits),
+            maxCredits: maximumCredits === "" ? Number.NaN : Number(maximumCredits),
+          },
+        },
+        {
+          unavailableDays,
+          earliestStartMinutes: earliestStart ? Number(earliestStart) : undefined,
+        },
+      );
+
       return {
-        timetables: generateTimetablesForSelectionPlan(
-          {
-            requiredSubjects,
-            choiceBags: choiceGroups.flatMap((choiceGroup) => {
-              const subjects = choiceSubjects.get(choiceGroup.id) ?? [];
-              return subjects.length > 0
-                ? [{
-                    ...choiceGroup,
-                    subjects,
-                  }]
-                : [];
-            }),
-            creditRange: {
-              minCredits: minimumCredits === "" ? Number.NaN : Number(minimumCredits),
-              maxCredits: maximumCredits === "" ? Number.NaN : Number(maximumCredits),
-            },
-          },
-          {
-            unavailableDays,
-            earliestStartMinutes: earliestStart ? Number(earliestStart) : undefined,
-          },
-        ),
+        entries: timetables.map((timetable, index) => ({
+          index,
+          timetable,
+          extras: describeTimetableExtras(timetable, sectionIdToGroup, courseOwners, choiceGroups),
+        })),
         error: null,
       };
     } catch (error) {
       return {
-        timetables: [],
+        entries: [],
         error:
           error instanceof CombinationLimitError ||
           error instanceof SelectionPlanError ||
@@ -516,13 +595,32 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
   }, [
     choiceGroups,
     courseOwners,
+    disabledCourseTypes,
     earliestStart,
     enabledSectionIds,
     maximumCredits,
     minimumCredits,
+    sectionIdToGroup,
     selectedCourseGroups,
     unavailableDays,
   ]);
+
+  const dayOffOptions = useMemo(() => {
+    const total = result.entries.length;
+    return DAYS.filter(({ id }) => {
+      const freeCount = result.entries.filter(({ timetable }) => isDayFree(timetable, id)).length;
+      return freeCount > 0 && freeCount < total;
+    });
+  }, [result.entries]);
+
+  const filteredEntries = useMemo(() => {
+    if (dayOffFilters.length === 0) {
+      return result.entries;
+    }
+    return result.entries.filter(({ timetable }) =>
+      dayOffFilters.every((day) => isDayFree(timetable, day)),
+    );
+  }, [dayOffFilters, result.entries]);
 
   const excludedCount = courseGroups.length - availableCourseGroups.length;
 
@@ -652,7 +750,10 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
                   </option>
                 ))}
               </select>
-              <small>과목을 체크하면 이 위치에 들어갑니다. 아래에서 언제든 옮길 수 있습니다.</small>
+              <small>
+                체크박스는 지금 선택한 위치에 들어있는 과목만 표시합니다. 다른 위치에 이미 담긴
+                과목은 체크 해제 상태로 보이며, 눌러서 이 위치로 옮길 수 있습니다.
+              </small>
             </label>
             <label className={styles.courseSearch}>
               <span className={styles.srOnly}>과목 검색</span>
@@ -679,7 +780,11 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
             ) : null}
             <div className={styles.courseList}>
               {courseSource === "major" ? visibleMajorCourseGroups.map((group) => {
-                const checked = selectedGroupIds.includes(group.selectionId);
+                const isSelectedElsewhere = selectedGroupIds.includes(group.selectionId);
+                const checked = isAssignedToActiveDestination(group.selectionId);
+                const selectedSections = checked
+                  ? enabledSectionIds[group.selectionId] ?? getInitialSectionIds(group.candidates)
+                  : [];
                 return (
                   <div className={styles.courseCatalogItem} key={group.selectionId}>
                     <label className={styles.courseToggle}>
@@ -699,11 +804,19 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
                       <small>
                         {checked
                           ? getDestinationLabel(courseOwners[group.selectionId], choiceGroups)
-                          : `${group.candidates.length}개 분반`}
+                          : isSelectedElsewhere
+                            ? `${getDestinationLabel(courseOwners[group.selectionId], choiceGroups)}에 있음 · 눌러서 옮기기`
+                            : `${group.candidates.length}개 분반`}
                       </small>
                     </label>
                     {shouldShowSectionDetails(group.candidates.length)
-                      ? <CourseSectionDetails group={group} />
+                      ? (
+                        <CourseSectionDetails
+                          group={group}
+                          selectedSectionIds={selectedSections}
+                          onToggleSection={(sectionId) => toggleCatalogSection(group, sectionId)}
+                        />
+                      )
                       : null}
                   </div>
                 );
@@ -713,10 +826,14 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
                   (group) => group.selectionId === selectionId,
                 );
                 const previewGroup = electivePreviewGroups[selectionId];
-                const checked = Boolean(selectedGroup);
+                const isSelectedElsewhere = Boolean(selectedGroup) && !isAssignedToActiveDestination(selectionId);
+                const checked = isAssignedToActiveDestination(selectionId);
                 const loading = loadingCourseNumbers.includes(selectionId);
                 const previewLoading = previewLoadingIds.includes(selectionId);
                 const displayedGroup = selectedGroup ?? previewGroup;
+                const selectedSections = checked && selectedGroup
+                  ? enabledSectionIds[selectionId] ?? getInitialSectionIds(selectedGroup.candidates)
+                  : [];
                 return (
                   <ElectivePreviewBoundary
                     key={selectionId}
@@ -743,15 +860,25 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
                           ? "분반 조회 중…"
                           : checked
                             ? getDestinationLabel(courseOwners[selectionId], choiceGroups)
-                            : previewGroup
-                              ? `${previewGroup.candidates.length}개 분반`
-                              : previewLoading
-                                ? "분반 확인 중…"
-                                : "선택"}
+                            : isSelectedElsewhere
+                              ? `${getDestinationLabel(courseOwners[selectionId], choiceGroups)}에 있음 · 눌러서 옮기기`
+                              : previewGroup
+                                ? `${previewGroup.candidates.length}개 분반`
+                                : previewLoading
+                                  ? "분반 확인 중…"
+                                  : "선택"}
                       </small>
                     </label>
                     {displayedGroup && shouldShowSectionDetails(displayedGroup.candidates.length)
-                      ? <CourseSectionDetails group={displayedGroup} />
+                      ? (
+                        <CourseSectionDetails
+                          group={displayedGroup}
+                          selectedSectionIds={selectedSections}
+                          onToggleSection={(sectionId) =>
+                            toggleCatalogSection(displayedGroup, sectionId)
+                          }
+                        />
+                      )
                       : null}
                   </ElectivePreviewBoundary>
                 );
@@ -933,6 +1060,28 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
             </section>
           </fieldset>
 
+          {availableCourseTypes.length > 0 ? (
+            <fieldset>
+              <legend>강의 형식</legend>
+              <div className={styles.courseTypeChoices}>
+                {availableCourseTypes.map((label) => {
+                  const checked = !disabledCourseTypes.has(label);
+                  return (
+                    <label className={styles.courseTypeChoice} key={label}>
+                      <input
+                        checked={checked}
+                        type="checkbox"
+                        onChange={() => toggleCourseType(label)}
+                      />
+                      <span>{label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              <small>체크를 해제한 형식의 분반은 시간표 조합에서 제외합니다.</small>
+            </fieldset>
+          ) : null}
+
           <fieldset>
             <legend>수업 없는 요일</legend>
             <div className={styles.dayChoices}>
@@ -1000,24 +1149,56 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers }: P
           <div className={styles.resultHeading}>
             <div>
               <p>유효 시간표</p>
-              <h2>{result.timetables.length}개</h2>
+              <h2>
+                {filteredEntries.length}개
+                {dayOffFilters.length > 0 ? <small> · 전체 {result.entries.length}개 중</small> : null}
+              </h2>
             </div>
             <span>순위 없음 · {minimumCredits || "?"}~{maximumCredits || "?"}학점</span>
           </div>
+
+          {dayOffOptions.length > 0 ? (
+            <div className={styles.dayOffFilter}>
+              <span>공강일로 결과 좁히기</span>
+              <div className={styles.dayChoices}>
+                {dayOffOptions.map(({ id, label }) => {
+                  const checked = dayOffFilters.includes(id);
+                  return (
+                    <label className={styles.dayChoice} key={id}>
+                      <input
+                        checked={checked}
+                        type="checkbox"
+                        onChange={() =>
+                          setDayOffFilters((days) =>
+                            checked ? days.filter((day) => day !== id) : [...days, id],
+                          )
+                        }
+                      />
+                      <span>{label} 공강</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
 
           {result.error ? <p className={styles.error}>{result.error}</p> : null}
           {!result.error && effectiveSelectedGroupIds.length === 0 ? (
             <p className={styles.empty}>왼쪽에서 필수 과목이나 선택 그룹 후보를 추가해 주세요.</p>
           ) : null}
-          {!result.error && effectiveSelectedGroupIds.length > 0 && result.timetables.length === 0 ? (
+          {!result.error && effectiveSelectedGroupIds.length > 0 && result.entries.length === 0 ? (
             <p className={styles.empty}>
               조건을 만족하는 조합이 없습니다. 학점·요일·시작 시간이나 과목 그룹을 조정해 보세요.
             </p>
           ) : null}
-          {!result.error && result.timetables.length > 0 ? (
+          {!result.error && result.entries.length > 0 && filteredEntries.length === 0 ? (
+            <p className={styles.empty}>선택한 공강일 필터에 맞는 조합이 없습니다. 필터를 줄여 보세요.</p>
+          ) : null}
+          {!result.error && filteredEntries.length > 0 ? (
             <ol className={styles.timetableList}>
-              {result.timetables.map((timetable, index) => (
+              {filteredEntries.map(({ index, timetable, extras }) => (
                 <TimetableCard
+                  extras={extras}
                   index={index}
                   key={timetable.courses.map(({ id }) => id).join("-")}
                   timetable={timetable}
@@ -1074,11 +1255,19 @@ function ElectivePreviewBoundary({
   );
 }
 
-function CourseSectionDetails({ group }: { group: CourseCandidateGroup }) {
+function CourseSectionDetails({
+  group,
+  selectedSectionIds,
+  onToggleSection,
+}: {
+  group: CourseCandidateGroup;
+  selectedSectionIds: readonly string[];
+  onToggleSection: (sectionId: string) => void;
+}) {
   if (group.candidates.length === 1) {
     return (
       <div className={styles.singleCourseSection}>
-        <CourseSectionRow candidate={group.candidates[0]!} />
+        <CourseSectionMetadata candidate={group.candidates[0]!} />
       </div>
     );
   }
@@ -1087,28 +1276,65 @@ function CourseSectionDetails({ group }: { group: CourseCandidateGroup }) {
     <details className={styles.courseSectionDetails}>
       <summary>
         <span>분반별 교수·수업 방식</span>
-        <small>{group.candidates.length}개</small>
+        <small>
+          {selectedSectionIds.length > 0
+            ? `${selectedSectionIds.length}/${group.candidates.length} 선택`
+            : `${group.candidates.length}개 분반`}
+        </small>
       </summary>
       <div className={styles.courseSectionRows}>
-        {group.candidates.map((candidate) => (
-          <CourseSectionRow candidate={candidate} key={candidate.id} />
-        ))}
+        {group.candidates.map((candidate) => {
+          const checked = selectedSectionIds.includes(candidate.id);
+          return (
+            <CourseSectionChoice
+              candidate={candidate}
+              checked={checked}
+              key={candidate.id}
+              onToggle={() => onToggleSection(candidate.id)}
+            />
+          );
+        })}
       </div>
     </details>
   );
 }
 
-function CourseSectionRow({ candidate }: { candidate: CourseCandidate }) {
+function CourseSectionChoice({
+  candidate,
+  checked,
+  onToggle,
+}: {
+  candidate: CourseCandidate;
+  checked: boolean;
+  onToggle: () => void;
+}) {
   return (
-    <div className={styles.courseSectionRow}>
-      <strong>{candidate.section ? `${candidate.section}분반` : "분반 미정"}</strong>
-      <span>{candidate.professor || "교수 미정"}</span>
-      <span>{getCourseTypeLabel(candidate)}</span>
-    </div>
+    <label className={`${styles.courseSectionChoice} ${checked ? styles.courseSectionChoiceSelected : ""}`}>
+      <input checked={checked} type="checkbox" onChange={onToggle} />
+      <CourseSectionMetadata candidate={candidate} />
+    </label>
   );
 }
 
-function TimetableCard({ index, timetable }: { index: number; timetable: Timetable }) {
+function CourseSectionMetadata({ candidate }: { candidate: CourseCandidate }) {
+  return (
+    <span className={styles.courseSectionRow}>
+      <strong>{candidate.section ? `${candidate.section}분반` : "분반 미정"}</strong>
+      <span>{candidate.professor || "교수 미정"}</span>
+      <span>{getCourseTypeLabel(candidate)}</span>
+    </span>
+  );
+}
+
+function TimetableCard({
+  extras,
+  index,
+  timetable,
+}: {
+  extras: readonly TimetableExtra[];
+  index: number;
+  timetable: Timetable;
+}) {
   const scheduledCourses = timetable.courses.flatMap((course, courseIndex) =>
     mergeMeetingsForDisplay(parseSchedule(course.schedule)).map((meeting) => ({
       course,
@@ -1123,17 +1349,29 @@ function TimetableCard({ index, timetable }: { index: number; timetable: Timetab
     (credits, course) => credits + (course.credits ?? 0),
     0,
   );
+  const versionLabel = describeTimetableVersion(extras);
 
   return (
     <li className={styles.timetableCard}>
       <details open={index === 0}>
         <summary>
-          <span>조합 {index + 1}</span>
+          <span>
+            조합 {index + 1}
+            {versionLabel ? <small className={styles.timetableVersion}>{versionLabel}</small> : null}
+          </span>
           <small>
             {timetable.courses.length}과목 · {formatCredits(totalCredits)}학점 · 눌러서 시간표{" "}
             {index === 0 ? "접기" : "보기"}
           </small>
         </summary>
+        {extras.length > 0 ? (
+          <p className={styles.timetableExtras}>
+            추가 과목:{" "}
+            {extras
+              .map((extra) => `${extra.groupTitle} · ${extra.title}(${extra.classification})`)
+              .join(", ")}
+          </p>
+        ) : null}
         <div className={styles.weeklyViewport}>
           <div className={styles.weeklyTimetable}>
             <div className={styles.weekHeader}>
@@ -1213,6 +1451,53 @@ async function postJson(url: string, body: unknown, signal?: AbortSignal): Promi
     throw new Error(readCourseApiError(payload));
   }
   return payload;
+}
+
+interface TimetableExtra {
+  groupTitle: string;
+  title: string;
+  classification: string;
+}
+
+/** Lists the non-required subjects a generated timetable drew from each choice group. */
+function describeTimetableExtras(
+  timetable: Timetable,
+  sectionIdToGroup: ReadonlyMap<string, PlannerCourseGroup>,
+  courseOwners: Readonly<Record<string, CourseDestination>>,
+  choiceGroups: readonly ChoiceGroupConfig[],
+): TimetableExtra[] {
+  const seenSubjectIds = new Set<string>();
+  const extras: TimetableExtra[] = [];
+  for (const course of timetable.courses) {
+    const group = sectionIdToGroup.get(course.id);
+    if (!group || seenSubjectIds.has(group.selectionId)) {
+      continue;
+    }
+    const owner = courseOwners[group.selectionId] ?? "required";
+    const choiceGroup = choiceGroups.find(({ id }) => id === owner);
+    if (!choiceGroup) {
+      continue;
+    }
+    seenSubjectIds.add(group.selectionId);
+    extras.push({
+      groupTitle: choiceGroup.title,
+      title: group.title,
+      classification: group.classification || "영역 미상",
+    });
+  }
+  return extras;
+}
+
+function isDayFree(timetable: Timetable, day: Weekday): boolean {
+  return !timetable.meetings.some((meeting) => meeting.day === day);
+}
+
+/** Short label distinguishing which choice-group selection produced this timetable. */
+function describeTimetableVersion(extras: readonly TimetableExtra[]): string {
+  if (extras.length === 0) {
+    return "";
+  }
+  return [...new Set(extras.map((extra) => `${extra.groupTitle}: ${extra.title}`))].join(" · ");
 }
 
 async function fetchElectivePlannerGroup(

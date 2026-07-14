@@ -24,6 +24,7 @@ BASE_URL = "https://kingoinfo.skku.edu/gaia"
 SESSION_LOGIN_ENDPOINT = f"{BASE_URL}/E_NCommon/sessionLogin.do"
 MAJOR_ENDPOINT = f"{BASE_URL}/E_NHSSU900020M/selectMain.do"
 ELECTIVE_ENDPOINT = f"{BASE_URL}/E_NHSSU900010M/selectMain03.do"
+DEPARTMENT_ENDPOINT = f"{BASE_URL}/E_NHSSU900020M/selectBizType04.do"
 
 _HEADERS = {
     "Content-Type": "text/xml",
@@ -137,3 +138,24 @@ def fetch_elective_courses(
         _TRANSACTION_ID="selectMain03",
     )
     return result.datasets.get("dsGrdMain03", [])
+
+
+def fetch_department_codes(
+    year: int,
+    term: int,
+    college_code: str,
+    *,
+    request_interval: float = DEFAULT_REQUEST_INTERVAL_SECONDS,
+) -> list[dict[str, str]]:
+    """대학코드에 속한 최신 학과 목록을 조회한다. 응답 데이터셋명은 dsHakgwa."""
+    time.sleep(request_interval)
+    result = _post(
+        DEPARTMENT_ENDPOINT,
+        JOJIK_GB="31",
+        TONG_HAKBU=college_code,
+        YEAR=str(year),
+        TERM=str(term),
+        _FIRST_OUT_DS_NM="dsHakgwa",
+        _TRANSACTION_ID="selectBizType04",
+    )
+    return result.datasets.get("dsHakgwa", [])

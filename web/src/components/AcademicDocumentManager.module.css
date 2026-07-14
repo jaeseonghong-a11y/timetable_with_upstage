@@ -182,6 +182,21 @@
   cursor: pointer;
 }
 
+.attachGuide {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-note);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.attachGuide strong {
+  color: var(--text-primary);
+}
+
 .uploadRow {
   display: flex;
   flex-wrap: wrap;
@@ -365,18 +380,18 @@
 
 .dataCard {
   display: grid;
-  gap: 16px;
+  gap: 10px;
   min-width: 0;
-  padding: 18px;
+  padding: 12px;
   border: 1px solid var(--border-subtle);
-  border-radius: 14px;
+  border-radius: 12px;
   background: var(--surface-page);
 }
 
 .requirementCard {
-  gap: 7px;
-  padding: 10px 12px;
-  border-radius: 12px;
+  gap: 5px;
+  padding: 8px 10px;
+  border-radius: 10px;
 }
 
 .collapsedCard {
@@ -449,26 +464,30 @@
 
 .requirementCard .fieldGrid,
 .requirementCard .ruleEditor {
-  gap: 6px;
+  gap: 5px;
 }
 
 .requirementFieldGrid {
-  grid-template-columns: minmax(190px, 1.8fr) repeat(4, minmax(88px, 1fr));
+  grid-template-columns: minmax(170px, 1.8fr) repeat(4, minmax(78px, 1fr));
+}
+
+.courseFieldGrid {
+  grid-template-columns: minmax(70px, 0.9fr) minmax(150px, 1.7fr) repeat(6, minmax(64px, 1fr));
 }
 
 .requirementCard .field {
-  gap: 4px;
+  gap: 3px;
 }
 
 .requirementCard .field input,
 .requirementCard .field select {
-  min-height: 32px;
-  padding: 4px 7px;
-  font-size: 13px;
+  min-height: 28px;
+  padding: 3px 6px;
+  font-size: 12px;
 }
 
 .requirementCard .ruleEditor {
-  padding: 8px;
+  padding: 6px;
 }
 
 .fieldGrid {
@@ -664,6 +683,10 @@
     grid-template-columns: minmax(170px, 1.7fr) repeat(4, minmax(78px, 1fr));
   }
 
+  .courseFieldGrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
   .distributionRuleEditor {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
@@ -677,6 +700,7 @@
   }
 
   .requirementFieldGrid,
+  .courseFieldGrid,
   .distributionRuleEditor {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
