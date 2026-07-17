@@ -74,10 +74,23 @@ export function getDocumentMarkdown(parsedDocument: unknown): string | null {
   return typeof markdown === "string" && markdown.trim() ? markdown.trim() : null;
 }
 
+export interface SolarJsonSchema {
+  name: string;
+  schema: Record<string, unknown>;
+}
+
+/**
+ * Optional strict JSON Schema for response_format. Verified live against solar-pro3
+ * (2026-07-18): eliminates schema-shape drift (e.g. the model echoing the literal word
+ * "string" or prompt text back as field values) but does not by itself make row selection
+ * or status judgements consistent — callers that have a deterministic cross-check should
+ * still prefer it over trusting Solar's own judgement fields.
+ */
 export async function requestSolarCompletion(
   systemPrompt: string,
   userPrompt: string,
   apiKey: string,
+  jsonSchema?: SolarJsonSchema,
 ): Promise<string> {
   let response: Response;
   try {
@@ -94,6 +107,14 @@ export async function requestSolarCompletion(
           { role: "user", content: userPrompt },
         ],
         stream: false,
+        ...(jsonSchema
+          ? {
+              response_format: {
+                type: "json_schema",
+                json_schema: { name: jsonSchema.name, schema: jsonSchema.schema, strict: true },
+              },
+            }
+          : {}),
       }),
       cache: "no-store",
     });

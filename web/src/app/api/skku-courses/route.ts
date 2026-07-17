@@ -25,7 +25,7 @@ export async function POST(request: Request): Promise<Response> {
     return errorResponse(
       400,
       "invalid_query",
-      "년도·학기·캠퍼스·6자리 학과코드를 다시 확인해 주세요.",
+      "년도·학기·캠퍼스·학과코드를 다시 확인해 주세요.",
     );
   }
 
@@ -67,7 +67,7 @@ function parseCourseQuery(value: unknown): SkkuCourseQuery | null {
     !SKKU_TERMS.includes(term as SkkuTerm) ||
     (campus !== 1 && campus !== 2) ||
     typeof departmentCode !== "string" ||
-    !/^\d{6}$/.test(departmentCode)
+    !/^\d{4,8}$/.test(departmentCode)
   ) {
     return null;
   }

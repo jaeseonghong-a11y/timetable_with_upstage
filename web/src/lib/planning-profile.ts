@@ -21,8 +21,8 @@ export const INITIAL_STUDENT_PROFILE: StudentPlanningProfile = {
 };
 
 export function getStudentProfileError(profile: StudentPlanningProfile): string | null {
-  if (!/^\d{6}$/.test(profile.departmentCode)) {
-    return "소속 학과를 선택하거나 6자리 학과코드를 입력해 주세요.";
+  if (!/^\d{4,8}$/.test(profile.departmentCode)) {
+    return "소속 학과를 선택하거나 학과코드를 입력해 주세요.";
   }
   if (
     profile.admissionYear === null ||

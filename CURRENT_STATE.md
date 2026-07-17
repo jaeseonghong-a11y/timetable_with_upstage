@@ -932,13 +932,82 @@ Q1 체크리스트만) 체크리스트를 [완료]로 갱신했다.
   이미지(OG/아이콘)를 직접 받아 픽셀 단위로 확인(스크린샷 대신 PNG를 직접 열어 검토).
   포트 점유 문제 발생 시마다 `Get-NetTCPConnection`으로 PID 찾아 `taskkill`로 정리.
 
+## ⏸️ 2026-07-18 Claude Code — 학과 목록 갱신 + Solar 졸업요건 추출 정확도 개선
+
+> 이 섹션이 지금 이 저장소의 최신 상태다. 위쪽 섹션들은 그 시점까지의 이력이다.
+
+### 이번에 한 일
+
+**1. 학과/전공/트랙 목록 정확도 (`web/src/lib/skku-departments.ts`)**
+사용자가 개설강좌 사이트와 우리 소속학과 드롭다운의 목록이 다르다고 지적. 확인해보니
+`skku-departments.ts`의 정적 시드가 110개뿐이었고, `scraper/skku_scraper/codes.py`의
+`load_departments()`로 성균관대 실시간 API(`selectBizType04.do`)를 직접 재조회하니 130개가
+나왔다. **동아시아학술원 전체**(한국학전공·한국학연계전공)와 성균융합원·소프트웨어융합대학의
+최근 신설 융합/연계전공 다수가 통째로 빠져 있었다. 전체 130개로 시드를 교체했다.
+- 부수 발견: 새로 채워진 22개 중 다수가 4자리(예: 3170)·8자리(예: 31760601) 학과코드인데,
+  기존 검증 로직 3곳이 전부 `/^\d{6}$/`(6자리 고정)로 하드코딩돼 있어 목록에 있어도 실제
+  선택하면 막혔을 것 — `StudentProfileForm.tsx`(직접입력 폴백), `planning-profile.ts`(폼
+  검증), `api/skku-courses/route.ts`(서버 API 검증) 전부 `/^\d{4,8}$/`로 넓힘.
+- 이 스냅샷은 재수집 시점(2026-07-18) 기준이라 학과 신설·개편이 있으면 다시 벌어질 수 있다.
+  재수집 방법: `cd scraper && python -m venv .venv (최초 1회) && pip install -e ".[dev]"` 후
+  `load_departments(year, term)` 호출.
+
+**2. Solar 졸업요건 추출 정확도·일관성 (`web/src/lib/academic-document.ts`, `upstage.ts`)**
+중간피드백 Q2("Solar 답변이 매번 다르다")를 실제로 조사. 이미 하이브리드 구조(결정론적 표
+파서 우선, Solar는 보완)였지만, 실측(동일 입력 3회 반복 호출)해보니 **표 파싱이 성공해도
+Solar가 붙이는 `reviewReasons`가 매번 달랐고**, 한 번은 `["string"]`(JSON 스키마 설명 문구를
+그대로 베낌), 한 번은 프롬프트 지시문을 그대로 echo하는 등 심각한 오작동을 확인함(재현 스크립트는
+임시 파일로만 실행하고 커밋하지 않음).
+- `requestSolarCompletion`(`upstage.ts`)에 선택적 `jsonSchema` 파라미터 추가 —
+  `response_format: json_schema` 지원 여부를 solar-pro3에 실제 호출로 검증(지원 확인,
+  `strict: true` + 자유 키 객체(`rawValues`) 혼합도 정상 동작 확인). AI 시간표 추천이 쓰는
+  기존 호출은 파라미터 안 넘기면 그대로 동작(하위호환).
+- `academic-document.ts`에 실제 프로덕션 스키마(`ACADEMIC_EXTRACTION_SCHEMA`)를 정의해 학사문서
+  추출 3개 호출 지점(최초 요청·재시도·수강내역 누락분 재시도)에 전부 적용 — 이후 재현 시
+  `"string"` 등 플레이스홀더 베끼기는 재현 안 됨.
+- **구조화 출력만으로는 "몇 개 항목을 반환할지·status를 뭐로 매길지"의 비일관성까진 안 잡혀서**
+  (실측 확인됨), `mergeSolarAndTableRequirement`를 고쳐 **표 파서가 이미 처리한 요건 항목은
+  Solar의 `reviewReasons`를 아예 안 받도록** 변경(`rule` 분류는 표 파서가 "manual"로 못 정한
+  경우에 한해 계속 사용). 테스트 중 문서 단위 `reviewIssues`에도 같은 문제(Solar가 존재하지
+  않는 변수명을 지어냄)를 발견해 `supplementGraduationRequirementsFromMarkdown`에서 표 파싱
+  성공 시 코드가 직접 생성한 이슈만 남기고 Solar의 문서 단위 이슈도 버리도록 같이 고침.
+- **최종 검증**: 사용자가 준 실제 졸업요건충족현황 스크린샷과 동일한 표(균형교양 rowspan,
+  "6/0" 복합값 포함)로 수정 전/후 각각 실제 API 3회 재호출 비교 — 수정 전엔 매번 다른
+  reviewReasons/reviewIssues, 수정 후엔 **3회 모두 바이트 단위로 완전히 동일**.
+- 범위: 이번엔 졸업요건충족현황만. 수강/취득과목 쪽 `reviewIssues`는 같은 문제가 있을 수
+  있으나 아직 안 건드림. Document Parse 옵션 점검·few-shot 예시 추가는 사용자 요청으로 보류
+  (최후 수단으로 남겨둠).
+
+### 변경한 파일 목록
+
+- `web/src/lib/skku-departments.ts`, `web/src/components/StudentProfileForm.tsx`,
+  `web/src/lib/planning-profile.ts`, `web/src/app/api/skku-courses/route.ts`
+- `web/src/lib/academic-document.ts`, `web/src/lib/upstage.ts`
+
+### 실행한 명령어
+
+- `cd scraper && source .venv/Scripts/activate && python -c "...load_departments(2026, 20)..."`
+  — 실시간 학과 목록 재수집.
+- `cd web && npm run lint && npm run typecheck && npm run test -- --run` — 114개 전부 통과,
+  회귀 없음. `npm run build` 성공.
+- Solar 구조화 출력 지원 여부·재현 테스트는 `web/src/lib/_*.test.ts` 임시 파일을 만들어
+  실제 API로 검증 후 매번 삭제(저장소에 남기지 않음).
+
+### ⚠️ 남은 문제 / 막힌 곳
+
+- **`git push`가 이 세션 이전까지 단 한 번도 실행되지 않았다.** `origin/main`이
+  `6283a65`(초기 스캐폴딩 수준)에 멈춰 있고 로컬 `main`이 14커밋(학사문서 파이프라인·시간표
+  조합 엔진·AI 추천 전부 포함) 앞서 있었다 — 조원이 GitHub에서 clone/pull했을 때 AI 추천을
+  포함한 대부분의 기능이 아예 없었던 이유. 이번 세션에서 커밋 후 최초로 push 진행.
+- 수강/취득과목 쪽 `reviewIssues` 일관성은 미검증.
+
 ## ▶️ Recommended Next Step (다음 도구가 이어서 할 일)
 
-1. 시작 즉시 `git status --short`를 읽는다. 이 인수인계 시점 기준으로는 `CURRENT_STATE.md` 외
-   미커밋 변경은 없어야 한다(커밋 `b8e286e`, 배포 `dpl_7J8ucR8hyDNKGreYPUUR28Y3zqqg`까지 완료됨).
-   `docs/02`·`START_HERE.md`의 무관한 unstaged 변경은 예외 — 위 참조. 커밋·배포는 항상
-   사용자가 명시적으로 요청한 뒤에만 진행한다(하네스가 순서 안 지킨 배포를 막은 전례 있음).
-   배포는 저장소 **루트**에서 `npx vercel deploy --prod --yes`.
+1. 시작 즉시 `git status --short`를 읽는다. 이 인수인계 시점 기준으로는 미커밋 변경은 없어야
+   한다(커밋 `4b3246d`, 배포 `dpl_4bfrjDBeBoaZ4Jj11NqdzZJ2m8zs`까지 완료됨). `docs/2025학년도
+   학사별 교육과정 로드맵.pdf`는 여전히 의도적 untracked(학교 저작물 가능성, 커밋 금지)이니
+   예외로 둘 것. 커밋·배포는 항상 사용자가 명시적으로 요청한 뒤에만 진행한다(하네스가 순서
+   안 지킨 배포를 막은 전례 있음). 배포는 저장소 **루트**에서 `npx vercel deploy --prod --yes`.
 0. **(신규) 조원 위임 워크플로우가 실제로 굴러가기 시작하면**, 사용자가 "이 작업 위임용
    컨텍스트 팩 만들어줘"라고 요청할 수 있다 — 그 작업에 필요한 파일 경로·인터페이스·
    `AGENTS.md` 발췌·`CURRENT_STATE.md` 관련 부분만 짧게 추려서 제공할 것(전체 히스토리

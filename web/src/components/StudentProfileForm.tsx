@@ -96,7 +96,7 @@ export function StudentProfileForm({ profile, appliedProfile, onChange, onApply 
     );
     onChange({
       ...profile,
-      departmentCode: selected?.code ?? (/^\d{6}$/.test(normalized) ? normalized : ""),
+      departmentCode: selected?.code ?? (/^\d{4,8}$/.test(normalized) ? normalized : ""),
     });
   }
 
