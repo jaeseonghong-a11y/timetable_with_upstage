@@ -1001,13 +1001,109 @@ Solar가 붙이는 `reviewReasons`가 매번 달랐고**, 한 번은 `["string"]
   포함한 대부분의 기능이 아예 없었던 이유. 이번 세션에서 커밋 후 최초로 push 진행.
 - 수강/취득과목 쪽 `reviewIssues` 일관성은 미검증.
 
+## ⏸️ 2026-07-18 Claude Code — GitHub push, 브랜치 보호, 수강/취득과목 Solar 정확도, 발표용 기록
+
+> 이 섹션이 지금 이 저장소의 최신 상태다. 위쪽 섹션들은 그 시점까지의 이력이다.
+> 사용자가 "여기서 멈춰, CURRENT_STATE.md만 갱신하고 코드는 더 건드리지 마"라고 명시적으로
+> 요청함 — 이번 섹션 작성 후 실제로 멈춤(아래 "변경한 파일 목록" 중 미커밋 항목 있음, 커밋
+> 여부는 다음 세션에서 사용자 확인 후 진행할 것).
+
+### 이번에 한 일
+
+**1. 최초 GitHub push**
+조원이 clone/pull했는데 AI 추천 기능이 안 보인다고 보고 → 원인 진단: `git fetch`로 확인해보니
+`origin/main`이 초기 스캐폴딩 커밋(`6283a65`)에 멈춰 있었고, 로컬 `main`은 그 이후 14커밋(학사
+문서 파이프라인·시간표 조합 엔진·AI 추천 전부 포함) 앞서 있었는데 **한 번도 push된 적이 없었음**
+(커밋과 푸시의 차이를 사용자에게 설명함). 이번 세션 시작한 학과 목록/Solar 정확도 수정을
+`870cf6d`로 커밋 후 `git push origin main`으로 최초 push. `origin/main`이 로컬과 완전히
+동기화됨(fast-forward, 충돌 없음).
+
+**2. GitHub 브랜치 보호(Rulesets) 설정 지원**
+조원이 브랜치에서 작업한 걸 검토 없이 마음대로 merge하지 못하게 막는 방법 안내: GitHub의
+"Rulesets"(신 UI, 예전 "Branch protection rule"의 후속) 설정법을 단계별로 안내(Require a pull
+request before merging + Required approvals 1). 진행 중 두 가지 이슈 발생·해결:
+- "Require review from Code Owners" 항목이 화면에 안 보임 → 대안으로 "PR 작성자는 자기 PR을
+  스스로 승인할 수 없다"는 GitHub 기본 동작만으로도 소규모 팀에선 실질적으로 동일한 효과가
+  있음을 설명.
+- "Your rulesets won't be enforced on this private repository until you move to GitHub Team
+  organization account" 경고 발생 → 조사 결과 GitHub 정책 확인(Rulesets/브랜치 보호는 Public
+  저장소는 무료, Private 저장소는 유료 플랜 필요). 사용자가 저장소를 Public으로 전환해 해결.
+- `.github/CODEOWNERS` 파일 신규 생성(`* @jaeseonghong-a11y`) — Rulesets의 코드오너 리뷰
+  요구와 함께 쓰도록 안내. **아직 커밋되지 않음.**
+
+**3. 수강/취득과목 Solar 추출 정확도 (`web/src/lib/academic-document.ts`)**
+사용자가 "졸업요건과 같은 문제가 수강/취득과목에도 있다, 같은 방법론(실측)으로 조사해달라,
+같은 해결책일 필요는 없다"고 요청. 실제 사용자 문서(개인정보는 제거하고 과목 데이터만 원문과
+학점 합계까지 일치하게 재구성, 33과목)로 API 3회 반복 재현:
+- 코드 재확인 결과 이 경로의 병합 로직(`supplementCompletedCoursesFromTable`)이 졸업요건과
+  **정반대 구조**(표가 아니라 Solar가 주인공)임을 먼저 확인.
+- 1차로 졸업요건과 같은 방식(표 파서 결과를 우선)으로 수정했으나 재실측해도 효과 없음.
+- 디버그 트레이싱으로 원인 재추적: **`parseCompletedCourseTable`이 마크다운 표만 파싱하고
+  HTML `<table>`은 아예 처리하지 못해 0행을 반환**하고 있었음 — 졸업요건 쪽 파서는 애초에
+  HTML/마크다운 둘 다 처리하도록 짜여 있었는데 이쪽만 빠져 있었던, 더 근본적인 버그.
+  `parseGraduationRequirementTable`과 동일한 이중 파싱(+ dedup) 패턴을 추가.
+- 이후 원래 처방(완료 상태·검토 이유·플래그는 표 파서 값을 신뢰)이 정상 작동 확인.
+- **검증(수정 전/후, 동일 문서로 API 3회 반복 호출)**: reviewReasons가 33과목 전부 3회 모두
+  완전히 빈 배열로 통일(수정 전엔 매번 다른 내용: 빈 비고를 오류로 판단 → 성적을 이유라 반복
+  → 프롬프트 문구 echo). 0학점 P등급 과목의 이수 상태가 "이수완료"↔"검토필요"로 흔들리던 것도
+  3회 모두 "이수완료"로 안정화.
+
+**4. 발표용 시행착오 기록 신규 (`docs/14_시행착오_기록_발표용.md`)**
+사용자가 "우리 대화를 시행착오-해결-효과로 정리해서 발표 때 참고할 수 있게 기록하고 있냐"고
+질문 → 기존 `CURRENT_STATE.md`는 다음 AI 도구 인수인계용 기술 로그라 발표 자료로 바로 쓰기엔
+코드 위주였음을 인정하고, 이번 세션의 세 가지 사례(졸업요건 Solar 비일관성, 수강/취득과목
+Solar 비일관성, 학과 목록 부정확)를 문제상황·시행착오·효과(수치 근거) 구조로 정리한 신규 문서
+작성. 사용자가 "슬라이드로 바로 쓰라는 게 아니라 나중에 발표자료 만들 때 참고할 기록"이라고
+명확히 해서, 그 용도에 맞게 유지(추가 손질 없음).
+
+### 변경한 파일 목록
+
+- **미커밋**: `web/src/lib/academic-document.ts`(수강/취득과목 HTML 표 파싱 수정),
+  `.github/CODEOWNERS`(신규)
+- **신규, 미커밋**: `docs/14_시행착오_기록_발표용.md`
+- 이번 섹션 자체(`CURRENT_STATE.md`)도 미커밋 상태로 둔다 — 사용자가 "코드는 추가로 수정하지
+  말고 업데이트만 하라"고 명시했으므로 커밋은 다음 세션에서 사용자 확인 후 진행.
+- 커밋·push 완료된 것(직전 섹션 참조): 학과 목록 갱신 + 졸업요건 Solar 정확도 개선 =
+  `870cf6d`, `origin/main`까지 push 완료.
+
+### 실행한 명령어
+
+- `git fetch origin`, `git rev-list --left-right --count origin/main...main`,
+  `git log --oneline` — push 안 된 상태 진단.
+- `git push origin main` — 최초 push, fast-forward 성공 확인.
+- `cd web && npm run lint && npm run typecheck && npm run test -- --run` — 매 수정 단계마다
+  반복, 114개 전부 통과. `npm run build` 성공.
+- 수강/취득과목 재현·디버그 트레이싱은 `web/src/lib/_*.test.ts` 임시 파일로 실제 API 호출
+  후 매번 삭제(저장소에 안 남김). 원인 추적 시 임시로 소스에 `console`/파일 기록 코드를
+  잠깐 넣었다가 원인 확인 즉시 제거함(최종 커밋 후보 코드에는 디버그 코드 없음).
+
+### ⚠️ 남은 문제 / 막힌 곳
+
+- **`web/src/lib/academic-document.ts` 수정과 `.github/CODEOWNERS` 신규 파일이 아직
+  커밋되지 않았다.** 다음 세션 시작 시 `git status --short`로 확인하고, 사용자에게 커밋·push
+  여부 물어볼 것 — CODEOWNERS는 GitHub 기본 브랜치에 있어야 실제로 작동하므로 커밋·push해야
+  브랜치 보호 설정과 함께 의미가 있다.
+- GitHub 저장소는 이번 세션 중 Private → Public으로 전환됨(Rulesets 무료 사용을 위해). 커밋
+  기록에 민감정보가 없는지 전체 검색은 아직 실제로 수행하지 않았다(사용자에게 필요 여부만
+  물어본 상태).
+- 수강/취득과목 쪽 문서 단위 `reviewIssues`(졸업요건에서 했던 것과 같은 필터)는 이번엔 손대지
+  않았다 — 실측에서 이 문서 기준으로는 발생하지 않아서 범위에서 제외함. 나중에 다른 문서로
+  재현되면 졸업요건과 같은 방식(코드 생성 이슈만 남기고 Solar 원본 이슈 제거)을 적용할 것.
+- Document Parse 옵션 점검·few-shot 예시 추가는 여전히 보류(최후 수단).
+
 ## ▶️ Recommended Next Step (다음 도구가 이어서 할 일)
 
-1. 시작 즉시 `git status --short`를 읽는다. 이 인수인계 시점 기준으로는 미커밋 변경은 없어야
-   한다(커밋 `4b3246d`, 배포 `dpl_4bfrjDBeBoaZ4Jj11NqdzZJ2m8zs`까지 완료됨). `docs/2025학년도
-   학사별 교육과정 로드맵.pdf`는 여전히 의도적 untracked(학교 저작물 가능성, 커밋 금지)이니
-   예외로 둘 것. 커밋·배포는 항상 사용자가 명시적으로 요청한 뒤에만 진행한다(하네스가 순서
-   안 지킨 배포를 막은 전례 있음). 배포는 저장소 **루트**에서 `npx vercel deploy --prod --yes`.
+1. 시작 즉시 `git status --short`를 읽는다. GitHub에 push된 마지막 커밋은 `870cf6d`
+   (`origin/main`과 동기화 확인됨). **이 인수인계 시점 기준으로는 미커밋 변경이 실제로
+   남아있다** — `web/src/lib/academic-document.ts`(수강/취득과목 HTML 표 파싱 수정)와
+   `.github/CODEOWNERS`(신규), 그리고 `docs/14_시행착오_기록_발표용.md`(신규)와 이
+   `CURRENT_STATE.md` 자체. 사용자가 "코드는 추가로 수정하지 말고 CURRENT_STATE.md만
+   갱신하라"고 명시적으로 요청해서 커밋을 안 하고 멈춘 것이니, 다음 세션은 **먼저 사용자에게
+   커밋·push 여부를 확인**한 뒤 진행할 것. Vercel 배포는 이번 세션에서 안 함 — 프로덕션은
+   여전히 `4b3246d`/`dpl_4bfrjDBeBoaZ4Jj11NqdzZJ2m8zs` 기준. `docs/2025학년도 학사별
+   교육과정 로드맵.pdf`는 여전히 의도적 untracked(학교 저작물 가능성, 커밋 금지)이니 예외로
+   둘 것. 커밋·배포는 항상 사용자가 명시적으로 요청한 뒤에만 진행한다(하네스가 순서 안 지킨
+   배포를 막은 전례 있음). 배포는 저장소 **루트**에서 `npx vercel deploy --prod --yes`.
 0. **(신규) 조원 위임 워크플로우가 실제로 굴러가기 시작하면**, 사용자가 "이 작업 위임용
    컨텍스트 팩 만들어줘"라고 요청할 수 있다 — 그 작업에 필요한 파일 경로·인터페이스·
    `AGENTS.md` 발췌·`CURRENT_STATE.md` 관련 부분만 짧게 추려서 제공할 것(전체 히스토리

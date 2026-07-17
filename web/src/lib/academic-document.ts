@@ -339,6 +339,17 @@ ${markdown}
   return cleanCompletedCourseExtraction(mergedProfile, expectedCodes);
 }
 
+/**
+ * Live testing (2026-07-18, three identical calls) showed Solar invents a different
+ * "reviewReasons"/"flags" scheme every run for rows the table parser already extracted
+ * cleanly — once flagging every row with an empty 비고 cell as needing review, once
+ * restating the letter grade as a "reason", once echoing the prompt's term-conversion
+ * instruction back as a reason and stuffing the grade into flags. completionStatus also
+ * flipped between "earned" and "review" for the same 0-credit pass/fail row across runs.
+ * The table parser's own values for these three judgement fields are used instead, for the
+ * same reason as mergeSolarAndTableRequirement: Solar still contributes the fields it is
+ * genuinely better positioned to read (majorScope/classification/year/term/credits/area).
+ */
 function supplementCompletedCoursesFromTable(
   profile: AcademicProfile,
   tableCourses: CompletedCourse[],
@@ -363,6 +374,9 @@ function supplementCompletedCoursesFromTable(
             term: solarCourse.term ?? tableCourse.term,
             credits: solarCourse.credits || tableCourse.credits,
             area: solarCourse.area || tableCourse.area,
+            completionStatus: tableCourse.completionStatus,
+            flags: tableCourse.flags,
+            reviewReasons: tableCourse.reviewReasons,
           }
         : {
             ...tableCourse,
@@ -399,7 +413,22 @@ function parseCompletedCourseTable(
   let currentTerm: AcademicTerm | null = null;
   const courses: CompletedCourse[] = [];
 
-  parseMarkdownTableRows(markdown).forEach((cells) => {
+  // Document Parse emits an embedded <table> (not pipe-markdown) for some real GLS exports —
+  // live-verified 2026-07-18 that a course-history table rendered this way was silently
+  // skipped entirely (0 rows), leaving Solar's unstable raw output as the only source. Mirrors
+  // parseGraduationRequirementTable's dual-parse + dedup.
+  const htmlRows = parseHtmlTableRows(markdown);
+  const seenRows = new Set<string>();
+  const rows = [...htmlRows, ...parseMarkdownTableRows(markdown)].filter((cells) => {
+    const key = cells.join("");
+    if (seenRows.has(key)) {
+      return false;
+    }
+    seenRows.add(key);
+    return true;
+  });
+
+  rows.forEach((cells) => {
     const codeCellIndex = cells.findIndex(
       (cell) => (cell.match(COURSE_CODE_SCAN_PATTERN) ?? []).length > 0,
     );
