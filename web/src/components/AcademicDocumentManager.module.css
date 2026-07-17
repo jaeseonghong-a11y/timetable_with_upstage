@@ -73,6 +73,51 @@
   color: var(--accent-strong);
 }
 
+.privacyNotice {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-warning);
+  border-radius: 12px;
+  background: var(--surface-warning-subtle);
+}
+
+.privacyNotice p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.privacyNotice p strong {
+  color: var(--text-primary);
+}
+
+.privacyNotice label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.privacyNotice input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: var(--accent-strong);
+}
+
+.consentHint {
+  margin: 0;
+  color: var(--text-warning);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .allReviewConsent {
   display: flex;
   align-items: center;

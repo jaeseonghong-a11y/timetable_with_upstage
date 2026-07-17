@@ -65,6 +65,7 @@ export function AcademicDocumentManager({
   const [kind, setKind] = useState<AcademicDocumentKind>("course_history");
   const [file, setFile] = useState<File>();
   const [fileInputMethod, setFileInputMethod] = useState<FileInputMethod>();
+  const [hasConsented, setHasConsented] = useState(false);
   const [profiles, setProfiles] = useState<ProfilesByKind>({});
   const [acknowledgements, setAcknowledgements] = useState<AcknowledgementsByKind>({});
   const [collapsedResults, setCollapsedResults] = useState<Partial<Record<AcademicDocumentKind, boolean>>>({});
@@ -141,7 +142,7 @@ export function AcademicDocumentManager({
   }, [kind, selectFile]);
 
   async function analyzeDocument(): Promise<void> {
-    if (!file) {
+    if (!file || !hasConsented) {
       return;
     }
     setIsAnalyzing(true);
@@ -264,6 +265,23 @@ export function AcademicDocumentManager({
         </p>
       </div>
 
+      <div className={styles.privacyNotice}>
+        <p>
+          업로드한 파일은 분석을 위해 <strong>외부 API(Upstage)</strong>로 전송됩니다.
+          분석이 끝나면 원본 파일과 전체 분석 결과는 <strong>우리 서버에 저장하지
+          않으며</strong>, 구조화된 데이터만 이 브라우저 화면에 남습니다(새로고침하면
+          사라집니다).
+        </p>
+        <label>
+          <input
+            checked={hasConsented}
+            type="checkbox"
+            onChange={(event) => setHasConsented(event.target.checked)}
+          />
+          <span>위 내용을 확인했으며, 파일을 외부 API로 전송하는 데 동의합니다.</span>
+        </label>
+      </div>
+
       <div className={styles.kindTabs} role="tablist" aria-label="학사문서 종류">
         {(Object.keys(KIND_DETAILS) as AcademicDocumentKind[]).map((documentKind) => (
           <button
@@ -346,10 +364,19 @@ export function AcademicDocumentManager({
             }}
           />
         </label>
-        <button disabled={!file || isAnalyzing} type="button" onClick={() => void analyzeDocument()}>
+        <button
+          disabled={!file || isAnalyzing || !hasConsented}
+          type="button"
+          onClick={() => void analyzeDocument()}
+        >
           {isAnalyzing ? "Parse + Solar 분석 중…" : profile ? "다시 분석하기" : "문서 분석하기"}
         </button>
       </div>
+      {file && !hasConsented ? (
+        <p className={styles.consentHint}>
+          외부 전송 동의에 체크해야 분석을 시작할 수 있습니다.
+        </p>
+      ) : null}
       {kind === "graduation_requirements" ? (
         <button className={styles.pasteZone} type="button">
           <span>캡처를 복사한 뒤 여기에서 <kbd>Ctrl</kbd> + <kbd>V</kbd></span>
