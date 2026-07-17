@@ -1,6 +1,5 @@
 "use client";
 
-import { toPng } from "html-to-image";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import type { Requirement } from "@/lib/academic-profile";
@@ -30,8 +29,6 @@ import {
 } from "@/lib/selection-plan";
 import {
   CombinationLimitError,
-  mergeMeetingsForDisplay,
-  parseSchedule,
   type CourseCandidate,
   type Timetable,
   type Weekday,
@@ -45,6 +42,7 @@ import {
   type WeightImportance,
 } from "@/lib/timetable-scoring";
 
+import { DAYS, formatCredits, TimetableCard, type TimetableExtra } from "./TimetableCard";
 import styles from "./TimetablePlanner.module.css";
 
 interface Props {
@@ -74,14 +72,6 @@ interface TimetableRecommendationItem {
   requirementContribution: string | null;
   customPreferenceNote: string | null;
 }
-
-const DAYS: ReadonlyArray<{ id: Weekday; label: string }> = [
-  { id: "mon", label: "월" },
-  { id: "tue", label: "화" },
-  { id: "wed", label: "수" },
-  { id: "thu", label: "목" },
-  { id: "fri", label: "금" },
-];
 
 const START_OPTIONS = [
   { value: "", label: "상관없음" },
@@ -124,10 +114,6 @@ const CAMPUS_OPTIONS: ReadonlyArray<{
   { value: 2, label: "자연과학캠퍼스", shortLabel: "자과캠" },
   { value: 3, label: "I-CAMPUS", shortLabel: "I-CAMPUS" },
 ];
-
-const TIMETABLE_START_MINUTES = 8 * 60;
-const TIMETABLE_END_MINUTES = 22 * 60;
-const PIXELS_PER_MINUTE = 0.8;
 
 const ELECTIVE_PREVIEW_CONCURRENCY = 3;
 
@@ -176,6 +162,7 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
   const electivePreviewLanes = useRef<Promise<void>[]>(createElectivePreviewLanes());
   const electivePreviewLaneCursor = useRef(0);
   const electivePreviewGeneration = useRef(0);
+  const electivePrefetchAttempted = useRef(new Set<string>());
 
   useEffect(() => {
     if (!query) {
@@ -223,6 +210,45 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
     }
     void loadCourses();
     return () => controller.abort();
+  }, [query]);
+
+  /**
+   * The elective catalog fetch is slow on a cold cache (session login + up to 14 sequential
+   * SKKU requests, ~10s) — see cache-store.ts. Firing it silently in the background as soon as
+   * the department/year query is known, instead of waiting for the user to click the "교양"
+   * tab, means the server-side TTL cache is usually already warm by the time they do, so the
+   * on-demand fetch in loadAllElectives resolves instantly. Errors are swallowed here on purpose:
+   * this is a best-effort head start, not a user-facing action, and loadAllElectives still runs
+   * (and shows a visible error) whenever the user actually opens the tab.
+   */
+  useEffect(() => {
+    if (!query) {
+      return;
+    }
+    const activeQuery = query;
+    CAMPUS_OPTIONS.forEach(({ value: campus }) => {
+      const catalogKey = getElectiveCatalogKey(activeQuery, campus);
+      if (electivePrefetchAttempted.current.has(catalogKey)) {
+        return;
+      }
+      electivePrefetchAttempted.current.add(catalogKey);
+      void (async () => {
+        try {
+          const payload = await postJson("/api/skku-electives", {
+            year: activeQuery.year,
+            term: activeQuery.term,
+            campus,
+            mode: "all_subjects",
+          });
+          const catalog = readElectiveCatalog(payload);
+          setElectiveCatalogs((catalogs) =>
+            catalogs[catalogKey] ? catalogs : { ...catalogs, [catalogKey]: catalog },
+          );
+        } catch {
+          // Best-effort prefetch; loadAllElectives retries on demand and surfaces errors there.
+        }
+      })();
+    });
   }, [query]);
 
   function selectCourseGroup(
@@ -932,7 +958,11 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
           </span>
         </div>
         {isLoading || isElectiveLoading ? (
-          <span className={styles.loadingBadge}>성대 강좌 조회 중…</span>
+          <span className={styles.loadingBadge}>
+            {isElectiveLoading
+              ? "교양 강좌 조회 중… (처음 조회는 최대 10초 정도 걸릴 수 있어요)"
+              : "성대 강좌 조회 중…"}
+          </span>
         ) : null}
       </div>
       {collectionError ? <p className={styles.collectionError} role="alert">{collectionError}</p> : null}
@@ -1765,156 +1795,6 @@ function CourseSectionMetadata({ candidate }: { candidate: CourseCandidate }) {
   );
 }
 
-function TimetableCard({
-  extras,
-  footer,
-  heading,
-  index,
-  timetable,
-}: {
-  extras: readonly TimetableExtra[];
-  footer?: ReactNode;
-  heading?: string;
-  index: number;
-  timetable: Timetable;
-}) {
-  const scheduledCourses = timetable.courses.flatMap((course, courseIndex) =>
-    mergeMeetingsForDisplay(parseSchedule(course.schedule)).map((meeting) => ({
-      course,
-      courseIndex,
-      meeting,
-    })),
-  );
-  const unscheduledCourses = timetable.courses.filter(
-    (course) => parseSchedule(course.schedule).length === 0,
-  );
-  const totalCredits = timetable.courses.reduce(
-    (credits, course) => credits + (course.credits ?? 0),
-    0,
-  );
-  const versionLabel = describeTimetableVersion(extras);
-  const gridRef = useRef<HTMLDivElement>(null);
-  const [isSavingImage, setIsSavingImage] = useState(false);
-  const [saveImageError, setSaveImageError] = useState("");
-
-  async function handleSaveImage(): Promise<void> {
-    if (!gridRef.current || isSavingImage) {
-      return;
-    }
-    setIsSavingImage(true);
-    setSaveImageError("");
-    try {
-      const dataUrl = await toPng(gridRef.current, { backgroundColor: "#ffffff", pixelRatio: 2 });
-      const link = document.createElement("a");
-      link.href = dataUrl;
-      link.download = `${sanitizeFileName(heading ?? `시간표-조합${index + 1}`)}.png`;
-      link.click();
-    } catch {
-      setSaveImageError("이미지 저장에 실패했습니다. 다시 시도해 주세요.");
-    } finally {
-      setIsSavingImage(false);
-    }
-  }
-
-  return (
-    <li className={styles.timetableCard}>
-      <details open={index === 0}>
-        <summary>
-          <span>
-            {heading ?? `조합 ${index + 1}`}
-            {versionLabel ? <small className={styles.timetableVersion}>{versionLabel}</small> : null}
-          </span>
-          <small>
-            {timetable.courses.length}과목 · {formatCredits(totalCredits)}학점 · 눌러서 시간표{" "}
-            {index === 0 ? "접기" : "보기"}
-          </small>
-        </summary>
-        {extras.length > 0 ? (
-          <p className={styles.timetableExtras}>
-            추가 과목:{" "}
-            {extras
-              .map((extra) => `${extra.groupTitle} · ${extra.title}(${extra.classification})`)
-              .join(", ")}
-          </p>
-        ) : null}
-        <div className={styles.weeklyViewport}>
-          <div className={styles.weeklyTimetable} ref={gridRef}>
-            <div className={styles.weekHeader}>
-              <span aria-hidden="true" />
-              {DAYS.map((day) => <strong key={day.id}>{day.label}</strong>)}
-            </div>
-            <div
-              className={styles.weekBody}
-              style={{
-                height: (TIMETABLE_END_MINUTES - TIMETABLE_START_MINUTES) * PIXELS_PER_MINUTE,
-              }}
-            >
-              {Array.from(
-                { length: (TIMETABLE_END_MINUTES - TIMETABLE_START_MINUTES) / 60 + 1 },
-                (_, hourIndex) => {
-                  const minutes = TIMETABLE_START_MINUTES + hourIndex * 60;
-                  const top = (minutes - TIMETABLE_START_MINUTES) * PIXELS_PER_MINUTE;
-                  return (
-                    <div className={styles.hourLine} key={minutes} style={{ top }}>
-                      <span>{formatMinutes(minutes)}</span>
-                    </div>
-                  );
-                },
-              )}
-              <div className={styles.dayColumns}>
-                {DAYS.map((day) => (
-                  <div className={styles.dayColumn} key={day.id}>
-                    {scheduledCourses
-                      .filter(({ meeting }) => meeting.day === day.id)
-                      .map(({ course, courseIndex, meeting }) => {
-                        const visibleStart = Math.max(meeting.startMinutes, TIMETABLE_START_MINUTES);
-                        const visibleEnd = Math.min(meeting.endMinutes, TIMETABLE_END_MINUTES);
-                        if (visibleStart >= visibleEnd) {
-                          return null;
-                        }
-                        return (
-                          <div
-                            className={styles.courseBlock}
-                            data-color={courseIndex % 6}
-                            key={`${course.id}-${meeting.startMinutes}`}
-                            style={{
-                              top: (visibleStart - TIMETABLE_START_MINUTES) * PIXELS_PER_MINUTE,
-                              height: Math.max(28, (visibleEnd - visibleStart) * PIXELS_PER_MINUTE),
-                            }}
-                            title={`${course.title} · ${formatMinutes(meeting.startMinutes)}-${formatMinutes(meeting.endMinutes)}`}
-                          >
-                            <strong>{course.title}</strong>
-                            <small>{formatMinutes(meeting.startMinutes)}-{formatMinutes(meeting.endMinutes)}</small>
-                          </div>
-                        );
-                      })}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-        {unscheduledCourses.length > 0 ? (
-          <p className={styles.unscheduledNotice}>
-            시간 미정/온라인: {unscheduledCourses.map((course) => course.title).join(", ")}
-          </p>
-        ) : null}
-        <div className={styles.saveImageRow}>
-          <button disabled={isSavingImage} onClick={() => void handleSaveImage()} type="button">
-            {isSavingImage ? "저장 중…" : "이미지로 저장"}
-          </button>
-          {saveImageError ? <span className={styles.saveImageError}>{saveImageError}</span> : null}
-        </div>
-        {footer}
-      </details>
-    </li>
-  );
-}
-
-function sanitizeFileName(name: string): string {
-  return name.replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, "-").trim() || "timetable";
-}
-
 async function postJson(url: string, body: unknown, signal?: AbortSignal): Promise<unknown> {
   const response = await fetch(url, {
     method: "POST",
@@ -1927,12 +1807,6 @@ async function postJson(url: string, body: unknown, signal?: AbortSignal): Promi
     throw new Error(readCourseApiError(payload));
   }
   return payload;
-}
-
-interface TimetableExtra {
-  groupTitle: string;
-  title: string;
-  classification: string;
 }
 
 /** Lists the non-required subjects a generated timetable drew from each choice group. */
@@ -1973,14 +1847,6 @@ function describeTimetableExtras(
 
 function isDayFree(timetable: Timetable, day: Weekday): boolean {
   return !timetable.meetings.some((meeting) => meeting.day === day);
-}
-
-/** Short label distinguishing which choice-group selection produced this timetable. */
-function describeTimetableVersion(extras: readonly TimetableExtra[]): string {
-  if (extras.length === 0) {
-    return "";
-  }
-  return [...new Set(extras.map((extra) => `${extra.groupTitle}: ${extra.title}`))].join(" · ");
 }
 
 async function fetchElectivePlannerGroup(
@@ -2046,10 +1912,6 @@ function filterGroupCandidatesByFormat<G extends { candidates: CourseCandidate[]
       (candidate) => !disabledCourseTypes.has(getCourseTypeLabel(candidate)),
     ),
   };
-}
-
-function formatCredits(credits: number): string {
-  return Number.isInteger(credits) ? String(credits) : String(Number(credits.toFixed(1)));
 }
 
 function getDestinationLabel(
@@ -2123,12 +1985,6 @@ function readElectiveSubjects(value: unknown): SkkuElectiveSubject[] {
       name: subject.name,
     }];
   });
-}
-
-function formatMinutes(minutes: number): string {
-  const hour = Math.floor(minutes / 60);
-  const minute = minutes % 60;
-  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
 function isAbortError(error: unknown): boolean {
