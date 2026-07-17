@@ -1,5 +1,6 @@
 "use client";
 
+import { toPng } from "html-to-image";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import type { Requirement } from "@/lib/academic-profile";
@@ -1792,6 +1793,28 @@ function TimetableCard({
     0,
   );
   const versionLabel = describeTimetableVersion(extras);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [isSavingImage, setIsSavingImage] = useState(false);
+  const [saveImageError, setSaveImageError] = useState("");
+
+  async function handleSaveImage(): Promise<void> {
+    if (!gridRef.current || isSavingImage) {
+      return;
+    }
+    setIsSavingImage(true);
+    setSaveImageError("");
+    try {
+      const dataUrl = await toPng(gridRef.current, { backgroundColor: "#ffffff", pixelRatio: 2 });
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = `${sanitizeFileName(heading ?? `시간표-조합${index + 1}`)}.png`;
+      link.click();
+    } catch {
+      setSaveImageError("이미지 저장에 실패했습니다. 다시 시도해 주세요.");
+    } finally {
+      setIsSavingImage(false);
+    }
+  }
 
   return (
     <li className={styles.timetableCard}>
@@ -1815,7 +1838,7 @@ function TimetableCard({
           </p>
         ) : null}
         <div className={styles.weeklyViewport}>
-          <div className={styles.weeklyTimetable}>
+          <div className={styles.weeklyTimetable} ref={gridRef}>
             <div className={styles.weekHeader}>
               <span aria-hidden="true" />
               {DAYS.map((day) => <strong key={day.id}>{day.label}</strong>)}
@@ -1876,10 +1899,20 @@ function TimetableCard({
             시간 미정/온라인: {unscheduledCourses.map((course) => course.title).join(", ")}
           </p>
         ) : null}
+        <div className={styles.saveImageRow}>
+          <button disabled={isSavingImage} onClick={() => void handleSaveImage()} type="button">
+            {isSavingImage ? "저장 중…" : "이미지로 저장"}
+          </button>
+          {saveImageError ? <span className={styles.saveImageError}>{saveImageError}</span> : null}
+        </div>
         {footer}
       </details>
     </li>
   );
+}
+
+function sanitizeFileName(name: string): string {
+  return name.replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, "-").trim() || "timetable";
 }
 
 async function postJson(url: string, body: unknown, signal?: AbortSignal): Promise<unknown> {

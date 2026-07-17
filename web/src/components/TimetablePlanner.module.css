@@ -1050,6 +1050,34 @@
   line-height: 1.5;
 }
 
+.saveImageRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 14px 14px;
+}
+
+.saveImageRow button {
+  padding: 7px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-card);
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.saveImageRow button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.saveImageError {
+  color: var(--text-error);
+  font-size: 12px;
+}
+
 .empty,
 .error {
   padding: 18px;
