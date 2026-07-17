@@ -208,6 +208,20 @@ const ACADEMIC_EXTRACTION_SCHEMA: SolarJsonSchema = {
   },
 };
 
+/**
+ * Appended to the extraction prompt whenever the deterministic table parser has already found
+ * real rows for this document. It costs nothing to skip: DETERMINISTIC_REVIEW_ISSUE_CODES /
+ * DETERMINISTIC_COURSE_REVIEW_ISSUE_CODES already discard everything Solar puts in reviewIssues
+ * for such documents downstream (those two codes are only ever added by our own code, never by
+ * Solar), so telling Solar not to generate them in the first place changes zero output — it only
+ * saves the output tokens and latency Solar would otherwise spend inventing commentary that gets
+ * thrown away. Shared as one constant (rather than inlined twice) for the same reason
+ * isDeterministicNoticeMessage was consolidated: two independent copies of the same instruction
+ * text risk drifting apart.
+ */
+const TABLE_PARSED_REVIEW_ISSUES_INSTRUCTION =
+  " This document's table has already been parsed deterministically by code, so its structure is fully accounted for: always return reviewIssues as an empty array and do not describe row- or cell-level ambiguities.";
+
 export async function extractAcademicProfile(
   markdown: string,
   kind: AcademicDocumentKind,
@@ -216,6 +230,10 @@ export async function extractAcademicProfile(
 ): Promise<AcademicProfile> {
   const truncated = markdown.length > MAX_SOLAR_MARKDOWN_CHARACTERS;
   const input = markdown.slice(0, MAX_SOLAR_MARKDOWN_CHARACTERS);
+  const tableParsingSucceeded =
+    kind === "graduation_requirements"
+      ? parseGraduationRequirementTable(markdown, sourceDocumentId).length > 0
+      : parseCompletedCourseTable(input, sourceDocumentId).length > 0;
   const kindInstruction =
     kind === "course_history"
       ? "Extract only completed course rows. requirements must be an empty array. SKKU course codes can end in three or four digits. Convert 1학기/2학기/여름학/겨울학 to spring/fall/summer/winter. Exclude subtotal and total rows. If one parsed row contains multiple course codes, split it into separate course results; successful splitting is not a review issue."
@@ -223,7 +241,7 @@ export async function extractAcademicProfile(
 
   const profile = await requestAndParseWithRetry(
     SYSTEM_PROMPT,
-    `${kindInstruction}\n\n${OUTPUT_CONTRACT}\n\n<document>\n${input}\n</document>`,
+    `${kindInstruction}${tableParsingSucceeded ? TABLE_PARSED_REVIEW_ISSUES_INSTRUCTION : ""}\n\n${OUTPUT_CONTRACT}\n\n<document>\n${input}\n</document>`,
     apiKey,
     kind,
     sourceDocumentId,
@@ -289,10 +307,11 @@ async function supplementCompletedCoursesWithRetry(
     ]),
   ];
   profile = supplementCompletedCoursesFromTable(profile, tableCourses, expectedCodes);
+  const tableParsingSucceeded = tableCourses.length > 0;
   const extractedCodes = new Set(profile.completedCourses.map((course) => course.courseCode));
   const missingCodes = expectedCodes.filter((code) => !extractedCodes.has(code));
   if (expectedCodes.length === 0 || missingCodes.length === 0) {
-    return cleanCompletedCourseExtraction(profile, expectedCodes);
+    return cleanCompletedCourseExtraction(profile, expectedCodes, tableParsingSucceeded);
   }
 
   let retryProfile: AcademicProfile;
@@ -301,7 +320,7 @@ async function supplementCompletedCoursesWithRetry(
       SYSTEM_PROMPT,
       `Retry the completed-course extraction because the first pass omitted ${missingCodes.length} of ${expectedCodes.length} distinct course codes present in the document.
 The omitted course codes are: ${missingCodes.join(", ")}.
-Extract every completed course exactly once. SKKU course codes end in three or four digits. Convert 1학기/2학기/여름학/겨울학 to spring/fall/summer/winter. Split merged rows into separate courses. requirements must be empty.
+Extract every completed course exactly once. SKKU course codes end in three or four digits. Convert 1학기/2학기/여름학/겨울학 to spring/fall/summer/winter. Split merged rows into separate courses. requirements must be empty.${tableParsingSucceeded ? TABLE_PARSED_REVIEW_ISSUES_INSTRUCTION : ""}
 
 ${OUTPUT_CONTRACT}
 
@@ -318,7 +337,7 @@ ${markdown}
     );
   } catch (error) {
     if (error instanceof AcademicExtractionError || error instanceof UpstageApiError) {
-      return cleanCompletedCourseExtraction(profile, expectedCodes);
+      return cleanCompletedCourseExtraction(profile, expectedCodes, tableParsingSucceeded);
     }
     throw error;
   }
@@ -336,7 +355,7 @@ ${markdown}
     }),
     reviewIssues: [...profile.reviewIssues, ...retryProfile.reviewIssues],
   };
-  return cleanCompletedCourseExtraction(mergedProfile, expectedCodes);
+  return cleanCompletedCourseExtraction(mergedProfile, expectedCodes, tableParsingSucceeded);
 }
 
 /**
@@ -509,20 +528,37 @@ function indexedMergedValue<T>(
   return fallback;
 }
 
-function cleanCompletedCourseExtraction(
+/**
+ * reviewIssues codes the deterministic course-history pipeline itself generates. Once the table
+ * parser has found real rows (tableParsingSucceeded), it is authoritative for this document the
+ * same way it is for graduation requirements (see DETERMINISTIC_REVIEW_ISSUE_CODES): Solar's own
+ * document-level "reviewIssues" for course-history are dropped rather than surfaced, because they
+ * are freeform per-run commentary on cells the table parser already extracted deterministically
+ * (live-verified 2026-07-18 — Solar produced a different, often templated-sounding critique of
+ * the same table on every call, e.g. restating the column list as if it were an ambiguity).
+ */
+const DETERMINISTIC_COURSE_REVIEW_ISSUE_CODES = new Set([
+  "document_truncated",
+  "missing_completed_courses",
+]);
+
+export function cleanCompletedCourseExtraction(
   profile: AcademicProfile,
   expectedCodes: string[],
+  tableParsingSucceeded: boolean,
 ): AcademicProfile {
   if (expectedCodes.length === 0) {
     return profile;
   }
   const extractedCodes = new Set(profile.completedCourses.map((course) => course.courseCode));
   const missingCount = expectedCodes.filter((code) => !extractedCodes.has(code)).length;
-  const actionableIssues = profile.reviewIssues.filter(
-    (issue) =>
-      issue.code !== "invalid_completed_course" &&
-      issue.code !== "unexpected_document_rows",
-  );
+  const actionableIssues = tableParsingSucceeded
+    ? profile.reviewIssues.filter((issue) => DETERMINISTIC_COURSE_REVIEW_ISSUE_CODES.has(issue.code))
+    : profile.reviewIssues.filter(
+        (issue) =>
+          issue.code !== "invalid_completed_course" &&
+          issue.code !== "unexpected_document_rows",
+      );
   if (missingCount > 0) {
     actionableIssues.push({
       code: "missing_completed_courses",
@@ -675,7 +711,7 @@ function canonicalizeBalancedGeneralRequirements(
         !reason.includes("요건 규칙을 자동으로 확정") &&
         !reason.includes("기준학점이 문장 형식") &&
         !reason.includes("취득학점 값이 복합 형식") &&
-        !isDeterministicRequirementNotice(reason),
+        !isDeterministicNoticeMessage(reason),
     );
     return {
       ...requirement,
@@ -1052,24 +1088,8 @@ function isNonBlockingRequirementReason(
     reason.includes("수강학점 세부값이 없어 0으로 표시") ||
     reason.includes("기준학점 미달") ||
     reason.includes("취득학점 미달") ||
-    isDeterministicRequirementNotice(reason) ||
+    isDeterministicNoticeMessage(reason) ||
     (rule.kind !== "manual" && reason.includes("졸업요건 규칙을 자동으로 확정하지 못해"))
-  );
-}
-
-function isDeterministicRequirementNotice(reason: string): boolean {
-  const normalized = reason.replace(/\s+/g, " ").trim();
-  return (
-    normalized === "중복 표시 주의" ||
-    (normalized.includes("C/L 과목") && normalized.includes("중복")) ||
-    normalized.includes("중복 표시됨") ||
-    /취득학점.*기준(?:학점)?.*초과/.test(normalized) ||
-    normalized.includes("동일 분포 규칙을 공유") ||
-    normalized.includes("그룹 ID='balanced-area'") ||
-    normalized.includes("일반 교양에 해당") ||
-    normalized.includes("DS 교양에 해당") ||
-    normalized.includes("혼합값은 status review로 처리") ||
-    normalized.includes("혼합값임")
   );
 }
 
@@ -1354,14 +1374,20 @@ function isNonBlockingReviewIssue(code: string, message: string): boolean {
     code === "unexpected_document_rows" ||
     code === "solar_requirement_rows_supplemented" ||
     (message.includes("중복 학점 표시 확인 필요") && message.includes("DS기반")) ||
-    isDeterministicReviewIssueMessage(message) ||
+    isDeterministicNoticeMessage(message) ||
     /^(제[0-9]+전공|전공|교양)$/.test(message.trim())
   );
 }
 
-function isDeterministicReviewIssueMessage(message: string): boolean {
+/**
+ * Shared by requirement-row reviewReasons and document-level reviewIssues: both call sites used
+ * to keep their own near-identical copy of this pattern list, which risked drifting out of sync
+ * whenever one side got a new pattern added and the other didn't. One definition now backs both.
+ */
+function isDeterministicNoticeMessage(message: string): boolean {
   const normalized = message.replace(/\s+/g, " ").trim();
   return (
+    normalized === "중복 표시 주의" ||
     (normalized.includes("C/L 과목") && normalized.includes("중복")) ||
     normalized.includes("중복 표시됨") ||
     /취득학점.*기준(?:학점)?.*초과/.test(normalized) ||

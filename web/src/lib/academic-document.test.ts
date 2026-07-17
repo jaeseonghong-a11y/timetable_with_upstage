@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   AcademicExtractionError,
+  cleanCompletedCourseExtraction,
   parseAcademicExtraction,
   supplementGraduationRequirementsFromMarkdown,
 } from "./academic-document";
@@ -517,5 +518,77 @@ ${JSON.stringify({
     expect(() =>
       parseAcademicExtraction('{"completedCourses":[]}', "course_history", "source-4"),
     ).toThrow(AcademicExtractionError);
+  });
+});
+
+describe("cleanCompletedCourseExtraction", () => {
+  const course = (courseCode: string) => ({
+    courseCode,
+    courseName: "테스트과목",
+    majorScope: "",
+    classification: "",
+    year: null,
+    term: null,
+    credits: 3,
+    area: "",
+    completionStatus: "earned" as const,
+    recommendationPolicy: "exclude" as const,
+    flags: [],
+    sourceDocumentId: "source-1",
+    reviewReasons: [],
+  });
+
+  const baseProfile = (reviewIssues: Array<{ code: string; message: string }>) => ({
+    schemaVersion: "1.0" as const,
+    profile: {
+      departmentCode: null,
+      majorCodes: [],
+      admissionYear: null,
+      currentGrade: null,
+      primaryCampus: null,
+    },
+    sourceDocuments: [{ id: "source-1", kind: "course_history" as const, status: "draft" as const }],
+    completedCourses: [course("ADD2013")],
+    requirements: [],
+    reviewIssues: reviewIssues.map((issue) => ({ ...issue, sourceDocumentId: "source-1" })),
+  });
+
+  it("drops Solar's freeform document-level reviewIssues once the table parser succeeded", () => {
+    const profile = baseProfile([
+      {
+        code: "unclear_classification",
+        message: "ADD2013 한국건축사: 전공 과목 이수 정보가 학수번호, 영역, 학점 등과 함께 표시되어 구체적인 이수구분이 명확히 구분되지 않음",
+      },
+      { code: "document_truncated", message: "문서가 길어 일부만 자동 추출했습니다." },
+    ]);
+
+    const cleaned = cleanCompletedCourseExtraction(profile, ["ADD2013"], true);
+
+    expect(cleaned.reviewIssues).toEqual([
+      expect.objectContaining({ code: "document_truncated" }),
+    ]);
+  });
+
+  it("keeps the narrower legacy filter when the table parser found no rows", () => {
+    const profile = baseProfile([
+      { code: "unclear_classification", message: "표에서 확인되지 않은 항목입니다." },
+      { code: "invalid_completed_course", message: "1번째 행은 형식을 만족하지 않습니다." },
+    ]);
+
+    const cleaned = cleanCompletedCourseExtraction(profile, ["ADD2013"], false);
+
+    expect(cleaned.reviewIssues).toEqual([
+      expect.objectContaining({ code: "unclear_classification" }),
+    ]);
+  });
+
+  it("still reports missing course codes regardless of table parsing outcome", () => {
+    const profile = baseProfile([]);
+
+    const cleaned = cleanCompletedCourseExtraction(profile, ["ADD2013", "ADD2029"], true);
+
+    expect(cleaned.reviewIssues).toEqual([
+      expect.objectContaining({ code: "missing_completed_courses", message: expect.stringContaining("1개") }),
+    ]);
   });
 });
