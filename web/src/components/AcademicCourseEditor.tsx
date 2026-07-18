@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import type { AcademicProfile, CompletedCourse } from "@/lib/academic-profile";
+import { groupCompletedCoursesForReview } from "@/lib/course-history-grouping";
 
 import styles from "./AcademicDocumentManager.module.css";
 
@@ -83,34 +84,10 @@ export function AcademicCourseEditor({ profile, onChange }: Props) {
     });
   }
 
-  return (
-    <div className={styles.dataSection}>
-      <div className={styles.sectionHeading}>
-        <div>
-          <p>기수강 과목</p>
-          <h3>{profile.completedCourses.length}개</h3>
-        </div>
-        <div className={styles.sectionControls}>
-          <button type="button" onClick={() => setAllCoursesOpen(false)}>
-            전체 접기
-          </button>
-          <button type="button" onClick={() => setAllCoursesOpen(true)}>
-            전체 펼치기
-          </button>
-          <button className={styles.secondaryButton} type="button" onClick={addCourse}>
-            + 과목 수동 추가
-          </button>
-        </div>
-      </div>
-
-      {profile.completedCourses.length === 0 ? (
-        <p className={styles.dataEmpty}>추출된 과목이 없습니다. 필요하면 수동으로 추가해 주세요.</p>
-      ) : (
-        <ol className={styles.cardList}>
-          {profile.completedCourses.map((course, index) => {
-            const isOpen = isCourseOpen(index);
-            const panelId = `course-panel-${index + 1}`;
-            return (
+  function renderCourseCard(course: CompletedCourse, index: number) {
+    const isOpen = isCourseOpen(index);
+    const panelId = `course-panel-${index + 1}`;
+    return (
             <li
               className={`${styles.dataCard} ${styles.requirementCard} ${isOpen ? "" : styles.collapsedCard}`}
               key={`${course.sourceDocumentId}-${index}`}
@@ -270,9 +247,56 @@ export function AcademicCourseEditor({ profile, onChange }: Props) {
               </div>
               ) : null}
             </li>
-            );
-          })}
-        </ol>
+    );
+  }
+
+  const groupedCourses = groupCompletedCoursesForReview(profile.completedCourses);
+
+  return (
+    <div className={styles.dataSection}>
+      <div className={styles.sectionHeading}>
+        <div>
+          <p>기수강 과목</p>
+          <h3>{profile.completedCourses.length}개</h3>
+        </div>
+        <div className={styles.sectionControls}>
+          <button type="button" onClick={() => setAllCoursesOpen(false)}>
+            전체 접기
+          </button>
+          <button type="button" onClick={() => setAllCoursesOpen(true)}>
+            전체 펼치기
+          </button>
+          <button className={styles.secondaryButton} type="button" onClick={addCourse}>
+            + 과목 수동 추가
+          </button>
+        </div>
+      </div>
+
+      {profile.completedCourses.length === 0 ? (
+        <p className={styles.dataEmpty}>추출된 과목이 없습니다. 필요하면 수동으로 추가해 주세요.</p>
+      ) : (
+        <div className={styles.cardList}>
+          {groupedCourses.map((group) => (
+            <section className={styles.courseGroupSection} key={group.classification}>
+              <h4 className={styles.courseGroupHeading}>
+                <span>{group.classification}</span>
+                <span>
+                  {group.yearGroups.reduce((total, yearGroup) => total + yearGroup.entries.length, 0)}개
+                </span>
+              </h4>
+              {group.yearGroups.map((yearGroup) => (
+                <div className={styles.courseYearGroup} key={yearGroup.year ?? "unknown"}>
+                  <p className={styles.courseYearHeading}>
+                    {yearGroup.year !== null ? `${yearGroup.year}년` : "연도 미상"}
+                  </p>
+                  <ol className={styles.cardList}>
+                    {yearGroup.entries.map(({ course, index }) => renderCourseCard(course, index))}
+                  </ol>
+                </div>
+              ))}
+            </section>
+          ))}
+        </div>
       )}
     </div>
   );

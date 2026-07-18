@@ -478,6 +478,42 @@
   list-style: none;
 }
 
+.courseGroupSection {
+  display: grid;
+  gap: 10px;
+}
+
+.courseGroupHeading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  padding-bottom: 6px;
+  border-bottom: 2px solid var(--border-subtle);
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.courseGroupHeading span:last-child {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.courseYearGroup {
+  display: grid;
+  gap: 8px;
+}
+
+.courseYearHeading {
+  margin: 0;
+  color: var(--accent-strong);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
 .dataCard {
   display: grid;
   gap: 10px;
