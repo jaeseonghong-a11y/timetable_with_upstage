@@ -157,6 +157,46 @@ export function findSkkuDepartment(code: string): SkkuDepartment | undefined {
   return SKKU_DEPARTMENTS.find((department) => department.code === code);
 }
 
+/**
+ * SKKU's own department API lists some interdisciplinary majors under multiple codes
+ * (e.g. 인공지능융합전공 exists as both a 성균융합원 code and a 소프트웨어융합대학 code) with
+ * overlapping but not identical course offerings — confirmed live: one code's course list was
+ * a strict subset of the other's. Resolving to every code sharing the exact same name, rather
+ * than just the one the student happened to click, means course search never silently misses
+ * sections offered only under the sibling code.
+ */
+export function getDepartmentAliasCodes(code: string): readonly string[] {
+  const department = findSkkuDepartment(code);
+  if (!department) {
+    return [code];
+  }
+  const aliases = SKKU_DEPARTMENTS.filter((candidate) => candidate.name === department.name).map(
+    (candidate) => candidate.code,
+  );
+  return aliases.length > 0 ? aliases : [code];
+}
+
+/**
+ * Collapses same-named duplicate entries (see getDepartmentAliasCodes) down to the
+ * first-listed code, so the department picker shows one row per major instead of one per
+ * administrative code. Which code ends up canonical only affects the displayed college label —
+ * course search still merges every alias regardless of which one the student picks.
+ */
+export function dedupeSkkuDepartmentsByName(
+  departments: readonly SkkuDepartment[],
+): readonly SkkuDepartment[] {
+  const seenNames = new Set<string>();
+  const result: SkkuDepartment[] = [];
+  for (const department of departments) {
+    if (seenNames.has(department.name)) {
+      continue;
+    }
+    seenNames.add(department.name);
+    result.push(department);
+  }
+  return result;
+}
+
 export function filterSkkuDepartments(
   query: string,
   departments: readonly SkkuDepartment[] = SKKU_DEPARTMENTS,

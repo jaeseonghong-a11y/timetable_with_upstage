@@ -16,6 +16,7 @@ import {
   type StudentPlanningProfile,
 } from "@/lib/planning-profile";
 import {
+  dedupeSkkuDepartmentsByName,
   filterSkkuDepartments,
   findSkkuDepartment,
   groupSkkuDepartments,
@@ -68,7 +69,7 @@ export function StudentProfileForm({ profile, appliedProfile, onChange, onApply 
   const [additionalDepartmentSearch, setAdditionalDepartmentSearch] = useState("");
   const [isAdditionalDepartmentListOpen, setIsAdditionalDepartmentListOpen] = useState(false);
   const visibleDepartments = useMemo(
-    () => filterSkkuDepartments(departmentFilter),
+    () => dedupeSkkuDepartmentsByName(filterSkkuDepartments(departmentFilter)),
     [departmentFilter],
   );
   const departmentGroups = useMemo(
@@ -78,7 +79,7 @@ export function StudentProfileForm({ profile, appliedProfile, onChange, onApply 
   const additionalDepartmentGroups = useMemo(
     () =>
       groupSkkuDepartments(
-        filterSkkuDepartments(additionalDepartmentSearch).filter(
+        dedupeSkkuDepartmentsByName(filterSkkuDepartments(additionalDepartmentSearch)).filter(
           (department) =>
             department.code !== profile.departmentCode &&
             !(profile.additionalDepartmentCodes ?? []).includes(department.code),
