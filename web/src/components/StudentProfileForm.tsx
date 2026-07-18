@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 
+import { trackFieldComplete, trackFieldFocus } from "@/lib/analytics";
 import {
   getCourseQueryLabel,
   getStudentProfileError,
@@ -106,6 +107,7 @@ export function StudentProfileForm({ profile, appliedProfile, onChange, onApply 
     setActiveDepartmentCode(department.code);
     setIsDepartmentListOpen(false);
     onChange({ ...profile, departmentCode: department.code });
+    trackFieldComplete("department", department.code);
   }
 
   function moveActiveDepartment(direction: 1 | -1): void {
@@ -158,6 +160,7 @@ export function StudentProfileForm({ profile, appliedProfile, onChange, onApply 
     if (!event.currentTarget.contains(event.relatedTarget)) {
       setIsDepartmentListOpen(false);
       setActiveDepartmentCode(null);
+      trackFieldComplete("department", profile.departmentCode);
     }
   }
 
@@ -199,6 +202,7 @@ export function StudentProfileForm({ profile, appliedProfile, onChange, onApply 
                   setIsDepartmentListOpen(true);
                 }}
                 onFocus={() => {
+                  trackFieldFocus("department");
                   if (selectedDepartment) {
                     setDepartmentFilter("");
                   }
@@ -382,6 +386,9 @@ function ProfileSelect({ id, label, value, options, onChange }: ProfileSelectPro
   }, [activeIndex, id, isOpen]);
 
   function openList(): void {
+    if (!isOpen) {
+      trackFieldFocus(id);
+    }
     setIsOpen(true);
     setActiveIndex(options.length === 0 ? -1 : selectedIndex >= 0 ? selectedIndex : 0);
   }
@@ -404,6 +411,7 @@ function ProfileSelect({ id, label, value, options, onChange }: ProfileSelectPro
 
   function selectOption(option: ProfileSelectOption): void {
     onChange(option.value);
+    trackFieldComplete(id, option.value);
     closeList();
   }
 
@@ -525,6 +533,9 @@ function YearCombobox({
   }, [activeIndex, id, isOpen]);
 
   function openList(): void {
+    if (!isOpen) {
+      trackFieldFocus(id);
+    }
     setIsOpen(true);
     setActiveIndex(options.length === 0 ? -1 : selectedIndex >= 0 ? selectedIndex : 0);
   }
@@ -532,6 +543,7 @@ function YearCombobox({
   function closeList(): void {
     setIsOpen(false);
     setActiveIndex(-1);
+    trackFieldComplete(id, value === null ? "" : String(value));
   }
 
   function moveActiveOption(direction: 1 | -1): void {

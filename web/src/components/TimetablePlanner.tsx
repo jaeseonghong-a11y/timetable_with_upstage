@@ -4,6 +4,7 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import type { Requirement } from "@/lib/academic-profile";
 import { selectAiFillerSubjects } from "@/lib/ai-filler-selection";
+import { markSessionCompleted, track } from "@/lib/analytics";
 import {
   courseGroupsFromCollection,
   shouldShowSectionDetails,
@@ -725,6 +726,32 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
   const [recommendationError, setRecommendationError] = useState("");
   const [aiExplanationFailed, setAiExplanationFailed] = useState(false);
 
+  const timetableListShownFired = useRef(false);
+  useEffect(() => {
+    if (timetableListShownFired.current || filteredEntries.length === 0) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      timetableListShownFired.current = true;
+      track("timetable_list_shown");
+      markSessionCompleted();
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [filteredEntries.length]);
+
+  const aiRecommendShownFired = useRef(false);
+  useEffect(() => {
+    if (aiRecommendShownFired.current || !recommendations || recommendations.length === 0) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      aiRecommendShownFired.current = true;
+      track("ai_recommend_shown");
+      markSessionCompleted();
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [recommendations]);
+
   const [previousManualPlanSubjects, setPreviousManualPlanSubjects] = useState(
     manualSelectionPlanSubjects,
   );
@@ -736,6 +763,7 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
   }
 
   function toggleRecommendationWeight(id: WeightId): void {
+    track("weight_adjust", { weight_type: id });
     setRecommendationWeights((weights) => {
       const nextEnabled = !(weights.find((weight) => weight.id === id)?.enabled ?? false);
       return weights.map((weight) => {
@@ -875,6 +903,8 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
       setRecommendationError("왼쪽에서 필수 과목이나 선택 그룹 후보를 먼저 추가해 주세요.");
       return;
     }
+    track("ai_recommend_click");
+    const startedAt = performance.now();
     setIsRecommending(true);
     setRecommendationError("");
     try {
@@ -940,6 +970,7 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
       setRecommendationError(readThrownMessage(error));
       setRecommendations(null);
     } finally {
+      track("ai_recommend_done", { duration_ms: Math.round(performance.now() - startedAt) });
       setIsRecommending(false);
     }
   }

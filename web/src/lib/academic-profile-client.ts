@@ -62,6 +62,20 @@ export function getAcademicDocumentApiError(payload: unknown): string {
   return "학사문서 분석을 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 }
 
+/** The API's own error code (e.g. "upstage_not_configured"), for analytics error_type — never
+ * the free-text Korean message, which could in principle echo back user-controlled content. */
+export function getAcademicDocumentApiErrorCode(payload: unknown): string {
+  if (
+    isRecord(payload) &&
+    isRecord(payload.error) &&
+    typeof payload.error.code === "string" &&
+    payload.error.code.trim()
+  ) {
+    return payload.error.code;
+  }
+  return "unknown_error";
+}
+
 export function getReviewChecklist(profile: AcademicProfile): ReviewChecklistItem[] {
   const items: ReviewChecklistItem[] = profile.reviewIssues.flatMap((issue, index) =>
     isNonBlockingReviewMessage(issue.code, issue.message)

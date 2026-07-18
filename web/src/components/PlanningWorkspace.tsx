@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { AcademicDocumentKind, AcademicProfile, Requirement } from "@/lib/academic-profile";
+import { initAbandonTracking, track } from "@/lib/analytics";
 import {
   getExcludedCourseNumbers,
   getCourseQueryLabel,
@@ -44,6 +45,8 @@ export function PlanningWorkspace() {
     [confirmedProfiles.graduation_requirements, workingProfiles.graduation_requirements],
   );
 
+  useEffect(() => initAbandonTracking(), []);
+
   function updateWorkingProfile(
     kind: AcademicDocumentKind,
     profile: AcademicProfile | undefined,
@@ -63,7 +66,10 @@ export function PlanningWorkspace() {
       <StudentProfileForm
         appliedProfile={appliedProfile}
         profile={studentProfile}
-        onApply={(profile) => setAppliedProfile({ ...profile })}
+        onApply={(profile) => {
+          setAppliedProfile({ ...profile });
+          track("profile_applied");
+        }}
         onChange={setStudentProfile}
       />
       <AcademicDocumentManager

@@ -4,6 +4,7 @@ import { toPng } from "html-to-image";
 import { type ReactNode, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 
+import { track } from "@/lib/analytics";
 import { SITE_URL } from "@/lib/site-config";
 import { mergeMeetingsForDisplay, parseSchedule, type Timetable, type Weekday } from "@/lib/timetable";
 import { encodeShareableTimetable } from "@/lib/timetable-share";
@@ -75,6 +76,7 @@ export function TimetableCard({
       link.href = dataUrl;
       link.download = `${sanitizeFileName(heading ?? `시간표-조합${index + 1}`)}.png`;
       link.click();
+      track("timetable_save");
     } catch {
       setSaveImageError("이미지 저장에 실패했습니다. 다시 시도해 주세요.");
     } finally {
@@ -86,6 +88,7 @@ export function TimetableCard({
     if (!shareUrl) {
       const encoded = encodeShareableTimetable(timetable);
       setShareUrl(`${SITE_URL}/share/${encoded}`);
+      track("share_link_created");
     }
     setIsShareOpen((open) => !open);
     setShareCopied(false);

@@ -10,11 +10,13 @@ import {
 import {
   confirmAcademicProfile,
   getAcademicDocumentApiError,
+  getAcademicDocumentApiErrorCode,
   getReviewChecklist,
   isAcademicProfileConfirmed,
   markAcademicProfileDraft,
   parseAcademicProfileResponse,
 } from "@/lib/academic-profile-client";
+import { track } from "@/lib/analytics";
 import { MAX_DOCUMENT_SIZE_LABEL } from "@/lib/document-limits";
 
 import { AcademicCourseEditor } from "./AcademicCourseEditor";
@@ -147,6 +149,17 @@ export function AcademicDocumentManager({
     }
     setIsAnalyzing(true);
     setError("");
+    track("document_upload_start", { doc_type: kind });
+    const startedAt = performance.now();
+    let failureTracked = false;
+    const trackFailure = (errorType: string): void => {
+      failureTracked = true;
+      track("document_parse_fail", {
+        doc_type: kind,
+        duration_ms: Math.round(performance.now() - startedAt),
+        error_type: errorType,
+      });
+    };
     try {
       const formData = new FormData();
       formData.set("kind", kind);
@@ -157,10 +170,12 @@ export function AcademicDocumentManager({
       });
       const payload: unknown = await response.json();
       if (!response.ok) {
+        trackFailure(getAcademicDocumentApiErrorCode(payload));
         throw new Error(getAcademicDocumentApiError(payload));
       }
       const nextProfile = parseAcademicProfileResponse(payload);
       if (!nextProfile.sourceDocuments.some((document) => document.kind === kind)) {
+        trackFailure("kind_mismatch");
         throw new Error("선택한 문서 종류와 분석 결과가 다릅니다. 다시 시도해 주세요.");
       }
       setProfiles((current) => ({ ...current, [kind]: nextProfile }));
@@ -170,7 +185,14 @@ export function AcademicDocumentManager({
       setCollapsedResults((current) => ({ ...current, [kind]: false }));
       setFile(undefined);
       setFileInputMethod(undefined);
+      track("document_parse_success", {
+        doc_type: kind,
+        duration_ms: Math.round(performance.now() - startedAt),
+      });
     } catch (caughtError) {
+      if (!failureTracked) {
+        trackFailure("network_error");
+      }
       setError(
         caughtError instanceof Error
           ? caughtError.message
