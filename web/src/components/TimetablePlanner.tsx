@@ -1131,7 +1131,7 @@ export function TimetablePlanner({
         {showSelect ? (
         <aside className={styles.controls}>
           <fieldset>
-            <legend>넣을 과목</legend>
+            <legend>과목 담기</legend>
             <div className={styles.sourceTabs} role="tablist" aria-label="과목 분류">
               <button
                 aria-selected={courseSource === "major"}
@@ -1420,10 +1420,10 @@ export function TimetablePlanner({
               {!query ? <p className={styles.courseEmpty}>먼저 기본정보를 입력해 주세요.</p> : null}
             </div>
 
-            <section className={styles.selectionPlanEditor} aria-label="과목 조합 설정">
+            <section className={styles.selectionPlanEditor} aria-label="담은 과목 정리">
               <div className={styles.selectionPlanHeading}>
                 <div>
-                  <strong>과목 조합 설정</strong>
+                  <strong>담은 과목 정리</strong>
                   <small>각 선택 그룹에서 몇 과목을 고를지 정합니다.</small>
                 </div>
                 <button type="button" onClick={addChoiceGroup}>+ 선택 그룹 추가</button>
@@ -1453,35 +1453,46 @@ export function TimetablePlanner({
                       />
                     </label>
                     <div className={styles.cardinalityInputs}>
-                      <label>
-                        <span>최소</span>
-                        <input
-                          min="0"
-                          max="20"
-                          type="number"
-                          value={choiceGroup.minSubjects}
-                          onChange={(event) =>
-                            updateChoiceGroup(choiceGroup.id, {
-                              minSubjects: Number(event.target.value),
-                            })
-                          }
-                        />
-                      </label>
-                      <span>~</span>
-                      <label>
-                        <span>최대</span>
-                        <input
-                          min="0"
-                          max="20"
-                          type="number"
-                          value={choiceGroup.maxSubjects}
-                          onChange={(event) =>
-                            updateChoiceGroup(choiceGroup.id, {
-                              maxSubjects: Number(event.target.value),
-                            })
-                          }
-                        />
-                      </label>
+                      <p className={styles.cardinalityLabel}>
+                        시간표에 넣을 과목 수
+                      </p>
+                      <div className={styles.cardinalityFields}>
+                        <label>
+                          <span className={styles.srOnly}>최소 과목 수</span>
+                          <span className={styles.cardinalityField}>
+                            <input
+                              min="0"
+                              max="20"
+                              type="number"
+                              value={choiceGroup.minSubjects}
+                              onChange={(event) =>
+                                updateChoiceGroup(choiceGroup.id, {
+                                  minSubjects: Number(event.target.value),
+                                })
+                              }
+                            />
+                            <span aria-hidden="true">개</span>
+                          </span>
+                        </label>
+                        <span aria-hidden="true">~</span>
+                        <label>
+                          <span className={styles.srOnly}>최대 과목 수</span>
+                          <span className={styles.cardinalityField}>
+                            <input
+                              min="0"
+                              max="20"
+                              type="number"
+                              value={choiceGroup.maxSubjects}
+                              onChange={(event) =>
+                                updateChoiceGroup(choiceGroup.id, {
+                                  maxSubjects: Number(event.target.value),
+                                })
+                              }
+                            />
+                            <span aria-hidden="true">개</span>
+                          </span>
+                        </label>
+                      </div>
                     </div>
                     <small>{choiceGroupSubjectCounts.get(choiceGroup.id) ?? 0}개 후보</small>
                     <button

@@ -464,9 +464,9 @@
 .selectionPlanEditor {
   display: grid;
   gap: 10px;
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border-subtle);
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 3px solid var(--border-subtle);
 }
 
 .selectionPlanHeading {
@@ -483,7 +483,8 @@
 
 .selectionPlanHeading strong {
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 15px;
+  font-weight: 700;
 }
 
 .selectionPlanHeading small,
@@ -559,24 +560,48 @@
 }
 
 .cardinalityInputs {
-  display: flex;
-  align-items: end;
+  display: grid;
   gap: 6px;
 }
 
-.cardinalityInputs label {
-  display: grid;
-  flex: 1;
-  gap: 3px;
+.cardinalityLabel {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
-.cardinalityInputs label span,
+.cardinalityFields {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cardinalityFields > label {
+  flex: 1;
+  min-width: 0;
+}
+
+.cardinalityField {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cardinalityField > span {
+  flex: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .choiceGroupRule > small {
   color: var(--text-secondary);
   font-size: 10px;
 }
 
-.cardinalityInputs input {
+.cardinalityField input {
   width: 100%;
   min-width: 0;
   padding: 6px;
