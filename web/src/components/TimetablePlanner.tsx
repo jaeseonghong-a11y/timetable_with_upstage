@@ -10,6 +10,7 @@ import {
   shouldShowSectionDetails,
   type CourseCandidateGroup,
 } from "@/lib/course-candidates";
+import { findSkkuDepartment } from "@/lib/skku-departments";
 import {
   SKKU_ELECTIVE_AREA_DEFINITIONS,
   type SkkuCourseQuery,
@@ -178,6 +179,7 @@ export function TimetablePlanner({
     SkkuElectiveAreaCode | "all"
   >("all");
   const [courseSource, setCourseSource] = useState<CourseSource>("major");
+  const [selectedMajorProgramCode, setSelectedMajorProgramCode] = useState<string>("all");
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const [choiceGroups, setChoiceGroups] = useState<ChoiceGroupConfig[]>(INITIAL_CHOICE_GROUPS);
   const [activeDestination, setActiveDestination] = useState<CourseDestination>("required");
@@ -230,6 +232,7 @@ export function TimetablePlanner({
       setElectiveCampus(activeQuery.campus);
       setSelectedElectiveArea("all");
       setCourseSource("major");
+      setSelectedMajorProgramCode("all");
       setSelectedGroupIds([]);
       setChoiceGroups(INITIAL_CHOICE_GROUPS);
       setActiveDestination("required");
@@ -448,6 +451,17 @@ export function TimetablePlanner({
     setEnabledSectionIds((current) => ({
       ...current,
       [group.selectionId]: sectionIds,
+    }));
+  }
+
+  /** Reverts a "분반 전체 선택" back to the single default section (mirrors the initial pick). */
+  function deselectAllSections(
+    group: PlannerCourseGroup,
+    sections: readonly Pick<CourseCandidate, "id">[] = group.candidates,
+  ): void {
+    setEnabledSectionIds((current) => ({
+      ...current,
+      [group.selectionId]: getInitialSectionIds(sections),
     }));
   }
 
@@ -692,9 +706,27 @@ export function TimetablePlanner({
       `${group.id} ${group.title} ${group.classification}`.toLowerCase().includes(keyword),
     );
   }, [courseSearch, formatFilteredCourseGroups]);
-  const visibleMajorCourseGroups = useMemo(
+  const majorCourseGroupsBySource = useMemo(
     () => visibleCourseGroups.filter((group) => group.source === "major"),
     [visibleCourseGroups],
+  );
+  const majorProgramTabs = useMemo(
+    () =>
+      roadmapProgramCodes.map((code) => ({
+        code,
+        label: findSkkuDepartment(code)?.name ?? code,
+        count: majorCourseGroupsBySource.filter((group) => group.programCodes?.includes(code)).length,
+      })),
+    [majorCourseGroupsBySource, roadmapProgramCodes],
+  );
+  const visibleMajorCourseGroups = useMemo(
+    () =>
+      selectedMajorProgramCode === "all"
+        ? majorCourseGroupsBySource
+        : majorCourseGroupsBySource.filter((group) =>
+            group.programCodes?.includes(selectedMajorProgramCode),
+          ),
+    [majorCourseGroupsBySource, selectedMajorProgramCode],
   );
   const visibleElectiveSubjects = useMemo(() => {
     const availableSubjects = electiveSubjects.filter(
@@ -1264,6 +1296,40 @@ export function TimetablePlanner({
                 교양 과목
               </button>
             </div>
+            {courseSource === "major" && majorProgramTabs.length > 1 ? (
+              <div className={styles.electiveAreaFilter}>
+                <span>전공</span>
+                <div className={styles.areaChoices} aria-label="전공 선택">
+                  <button
+                    aria-pressed={selectedMajorProgramCode === "all"}
+                    className={selectedMajorProgramCode === "all" ? styles.activeArea : undefined}
+                    type="button"
+                    onClick={() => {
+                      setSelectedMajorProgramCode("all");
+                      setCourseSearch("");
+                    }}
+                  >
+                    <span>전체</span>
+                    <small>{majorCourseGroupsBySource.length}</small>
+                  </button>
+                  {majorProgramTabs.map((tab) => (
+                    <button
+                      aria-pressed={selectedMajorProgramCode === tab.code}
+                      className={selectedMajorProgramCode === tab.code ? styles.activeArea : undefined}
+                      key={tab.code}
+                      type="button"
+                      onClick={() => {
+                        setSelectedMajorProgramCode(tab.code);
+                        setCourseSearch("");
+                      }}
+                    >
+                      <span>{tab.label}</span>
+                      <small>{tab.count}</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             {courseSource === "elective" ? (
               <div className={styles.electiveCampusPicker}>
                 <span>교양 캠퍼스</span>
@@ -1425,6 +1491,7 @@ export function TimetablePlanner({
                         <CourseSectionDetails
                           group={group}
                           selectedSectionIds={selectedSections}
+                          onDeselectAllSections={() => deselectAllSections(group)}
                           onSelectAllSections={() => selectAllCatalogSections(group)}
                           onToggleSection={(sectionId) => toggleCatalogSection(group, sectionId)}
                         />
@@ -1491,6 +1558,9 @@ export function TimetablePlanner({
                         <CourseSectionDetails
                           group={filteredDisplayedGroup}
                           selectedSectionIds={selectedSections}
+                          onDeselectAllSections={() =>
+                            deselectAllSections(displayedGroup!, filteredDisplayedGroup.candidates)
+                          }
                           onSelectAllSections={() =>
                             selectAllCatalogSections(displayedGroup!, filteredDisplayedGroup.candidates)
                           }
@@ -1663,11 +1733,16 @@ export function TimetablePlanner({
                           {group.candidates.length > 1 ? (
                             <button
                               className={styles.selectAllSections}
-                              disabled={selectedSections.length === group.candidates.length}
                               type="button"
-                              onClick={() => selectAllSections(group)}
+                              onClick={() =>
+                                selectedSections.length === group.candidates.length
+                                  ? deselectAllSections(group)
+                                  : selectAllSections(group)
+                              }
                             >
-                              분반 전체 선택
+                              {selectedSections.length === group.candidates.length
+                                ? "분반 전체 선택 해제"
+                                : "분반 전체 선택"}
                             </button>
                           ) : null}
                           <div className={styles.sectionChoices}>
@@ -2097,11 +2172,13 @@ function CourseSectionDetails({
   group,
   selectedSectionIds,
   onSelectAllSections,
+  onDeselectAllSections,
   onToggleSection,
 }: {
   group: CourseCandidateGroup;
   selectedSectionIds: readonly string[];
   onSelectAllSections: () => void;
+  onDeselectAllSections: () => void;
   onToggleSection: (sectionId: string) => void;
 }) {
   if (group.candidates.length === 1) {
@@ -2127,8 +2204,11 @@ function CourseSectionDetails({
         </small>
       </summary>
       <div className={styles.sectionBulkActions}>
-        <button disabled={allSelected} type="button" onClick={onSelectAllSections}>
-          분반 전체 선택
+        <button
+          type="button"
+          onClick={allSelected ? onDeselectAllSections : onSelectAllSections}
+        >
+          {allSelected ? "분반 전체 선택 해제" : "분반 전체 선택"}
         </button>
       </div>
       <div className={styles.courseSectionRows}>
