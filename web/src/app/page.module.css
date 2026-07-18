@@ -8,30 +8,17 @@
 }
 
 .hero {
-  max-width: 720px;
-  margin: 0 auto 48px;
-}
-
-.eyebrow {
-  margin-bottom: 14px;
-  color: var(--accent-strong);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
+  max-width: 1120px;
+  margin: 0 auto 40px;
 }
 
 .hero h1 {
-  margin-bottom: 16px;
-  font-size: clamp(36px, 5vw, 58px);
-  line-height: 1.12;
-  letter-spacing: -0.06em;
-}
-
-.hero p:last-child {
-  max-width: 560px;
-  color: var(--text-secondary);
-  font-size: 18px;
-  line-height: 1.65;
+  margin: 0;
+  color: var(--accent-strong);
+  font-size: clamp(40px, 6vw, 64px);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
 }
 
 @media (max-width: 640px) {
@@ -40,6 +27,6 @@
   }
 
   .hero {
-    margin-bottom: 32px;
+    margin-bottom: 28px;
   }
 }

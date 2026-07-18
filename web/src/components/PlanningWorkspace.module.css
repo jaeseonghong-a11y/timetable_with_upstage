@@ -8,88 +8,156 @@
 
 .progress {
   display: grid;
-  gap: 14px;
-  padding: 18px 20px;
+  gap: 22px;
+  padding: 24px 28px;
   border: 1px solid var(--border-subtle);
-  border-radius: 20px;
+  border-radius: 24px;
   background: var(--surface-card);
+  box-shadow: 0 18px 50px rgb(32 63 67 / 8%);
 }
 
 .progressHeader {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 8px 16px;
+  gap: 12px 16px;
+}
+
+.progressEyebrow {
+  margin: 0 0 6px;
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
 }
 
 .progressHeader strong {
+  display: block;
   color: var(--text-primary);
-  font-size: 16px;
-  letter-spacing: -0.03em;
+  font-size: clamp(18px, 2.4vw, 22px);
+  letter-spacing: -0.04em;
+  line-height: 1.25;
 }
 
-.progressHeader span {
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.progressTrack {
-  height: 8px;
-  overflow: hidden;
+.progressCount {
+  padding: 7px 12px;
   border-radius: 999px;
-  background: var(--surface-page);
-}
-
-.progressFill {
-  height: 100%;
-  border-radius: inherit;
-  background: var(--accent-strong);
-  transition: width 220ms ease;
+  background: var(--surface-note);
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .stepList {
+  --connector-progress: 0;
+  position: relative;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  padding: 0;
   list-style: none;
+}
+
+.stepList::before,
+.stepList::after {
+  content: "";
+  position: absolute;
+  top: 15px;
+  left: 12.5%;
+  height: 2px;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.stepList::before {
+  right: 12.5%;
+  background: var(--border-subtle);
+  z-index: 0;
+}
+
+.stepList::after {
+  width: calc((100% - 25%) * var(--connector-progress) / 100);
+  background: var(--accent-strong);
+  z-index: 0;
+  transition: width 220ms ease;
+}
+
+.stepList li {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
 }
 
 .stepList button {
   width: 100%;
-  min-height: 64px;
   display: grid;
-  gap: 4px;
-  align-content: start;
-  padding: 10px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 14px;
-  background: var(--surface-page);
-  color: var(--text-secondary);
+  justify-items: center;
+  gap: 10px;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
   font: inherit;
-  text-align: left;
+  text-align: center;
   cursor: pointer;
 }
 
-.stepList button[data-active="true"] {
-  border-color: var(--accent-strong);
-  background: var(--surface-note);
-  color: var(--text-primary);
+.stepIndex {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 2px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    color 160ms ease;
 }
 
-.stepList button[data-done="true"]:not([data-active="true"]) {
+.stepLabel {
+  max-width: 100%;
+  overflow: hidden;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stepList button[data-done="true"] {
   color: var(--accent-strong);
 }
 
-.stepList strong {
-  font-size: 12px;
-  font-weight: 800;
+.stepList button[data-done="true"] .stepIndex {
+  border-color: var(--accent-strong);
+  background: var(--surface-note);
+  color: var(--accent-strong);
 }
 
-.stepList span {
-  font-size: 11px;
-  line-height: 1.35;
+.stepList button[data-active="true"] {
+  color: var(--text-primary);
+}
+
+.stepList button[data-active="true"] .stepIndex {
+  border-color: var(--accent-strong);
+  background: var(--accent-strong);
+  color: #fff;
+  box-shadow: 0 0 0 4px rgb(23 106 76 / 12%);
+}
+
+.stepList button[data-active="true"] .stepLabel {
+  font-weight: 800;
 }
 
 .stepPanel {
@@ -148,14 +216,13 @@
   font-size: 13px;
 }
 
-@media (max-width: 800px) {
-  .stepList {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+@media (max-width: 640px) {
+  .progress {
+    padding: 20px;
+    gap: 18px;
   }
-}
 
-@media (max-width: 520px) {
-  .stepList {
-    grid-template-columns: 1fr;
+  .stepLabel {
+    font-size: 12px;
   }
 }

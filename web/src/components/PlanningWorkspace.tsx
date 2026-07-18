@@ -19,20 +19,23 @@ import { TimetablePlanner } from "./TimetablePlanner";
 import styles from "./PlanningWorkspace.module.css";
 
 const STEPS = [
-  { id: 1, title: "기본 정보 입력", short: "소속·학기 설정" },
-  { id: 2, title: "학사문서 읽기 (skip 가능)", short: "skip 가능" },
-  { id: 3, title: "과목 담기", short: "담기 → 유효 시간표" },
-  { id: 4, title: "AI 시간표 추천", short: "조건 → 결과" },
+  { id: 1, title: "기본 정보 입력", short: "기본 정보 입력" },
+  { id: 2, title: "내 기록 적용하기 (skip 가능)", short: "내 기록 적용하기" },
+  { id: 3, title: "과목 담기", short: "과목 담기" },
+  { id: 4, title: "AI 시간표 추천", short: "AI 추천" },
 ] as const;
 
 type StepId = (typeof STEPS)[number]["id"];
+type DocSubstep = "course_history" | "graduation_requirements";
 type PlanSubstep = "select" | "results";
 type AiSubstep = "setup" | "results";
 
 export function PlanningWorkspace() {
   const [step, setStep] = useState<StepId>(1);
+  const [docSubstep, setDocSubstep] = useState<DocSubstep>("course_history");
   const [planSubstep, setPlanSubstep] = useState<PlanSubstep>("select");
   const [aiSubstep, setAiSubstep] = useState<AiSubstep>("setup");
+  const [hasEnteredDocuments, setHasEnteredDocuments] = useState(false);
   const [aiRecommendRequestId, setAiRecommendRequestId] = useState(0);
   const [aiRecommendAction, setAiRecommendAction] = useState({
     canRun: false,
@@ -87,11 +90,11 @@ export function PlanningWorkspace() {
     setConfirmedProfiles((current) => updateProfileMap(current, kind, profile));
   }
 
-  function goToStep(nextStep: StepId): void {
-    if (nextStep !== 1 && !appliedProfile && nextStep > 1) {
-      return;
-    }
+  function enterStep(nextStep: StepId): void {
     setStep(nextStep);
+    if (nextStep === 2) {
+      setHasEnteredDocuments(true);
+    }
     if (nextStep >= 3) {
       setHasEnteredPlanner(true);
     }
@@ -103,7 +106,29 @@ export function PlanningWorkspace() {
     }
   }
 
+  function goToStep(nextStep: StepId): void {
+    if (nextStep !== 1 && !appliedProfile && nextStep > 1) {
+      return;
+    }
+    if (nextStep === 2) {
+      setDocSubstep("course_history");
+    }
+    enterStep(nextStep);
+  }
+
+  function skipCurrentDocument(): void {
+    if (docSubstep === "course_history") {
+      setDocSubstep("graduation_requirements");
+      return;
+    }
+    enterStep(3);
+  }
+
   function goNext(): void {
+    if (step === 2 && docSubstep === "course_history") {
+      setDocSubstep("graduation_requirements");
+      return;
+    }
     if (step === 3 && planSubstep === "select") {
       setPlanSubstep("results");
       return;
@@ -120,20 +145,17 @@ export function PlanningWorkspace() {
     if (step >= STEPS.length) {
       return;
     }
-    const nextStep = (step + 1) as StepId;
-    setStep(nextStep);
-    if (nextStep >= 3) {
-      setHasEnteredPlanner(true);
+    if (step === 1) {
+      setDocSubstep("course_history");
     }
-    if (nextStep === 3) {
-      setPlanSubstep("select");
-    }
-    if (nextStep === 4) {
-      setAiSubstep("setup");
-    }
+    enterStep((step + 1) as StepId);
   }
 
   function goPrev(): void {
+    if (step === 2 && docSubstep === "graduation_requirements") {
+      setDocSubstep("course_history");
+      return;
+    }
     if (step === 3 && planSubstep === "results") {
       setPlanSubstep("select");
       return;
@@ -146,37 +168,44 @@ export function PlanningWorkspace() {
       return;
     }
     const prevStep = (step - 1) as StepId;
-    setStep(prevStep);
+    if (prevStep === 2) {
+      setDocSubstep("graduation_requirements");
+    }
     if (prevStep === 3) {
       setPlanSubstep("results");
     }
     if (prevStep === 4) {
       setAiSubstep("results");
     }
+    setStep(prevStep);
   }
 
   const current = STEPS[step - 1]!;
-  const progressPercent = (step / STEPS.length) * 100;
-  const hasDocumentAnalysis =
-    documentAnalysisState.hasAnalyzedDocument ||
-    Object.keys(workingProfiles).length > 0 ||
-    Object.keys(confirmedProfiles).length > 0;
+  /** 0–100 along the connector between first and last step centers. */
+  const connectorProgress =
+    STEPS.length <= 1 ? 0 : ((step - 1) / (STEPS.length - 1)) * 100;
+  const currentDocumentConfirmed = Boolean(confirmedProfiles[docSubstep]);
   const nextBlocked =
     (step === 1 && !appliedProfile) ||
-    (step === 2 && (documentAnalysisState.isAnalyzing || !hasDocumentAnalysis)) ||
+    (step === 2 &&
+      (documentAnalysisState.isAnalyzing || !currentDocumentConfirmed)) ||
     (step === 4 &&
       aiSubstep === "setup" &&
       (!aiRecommendAction.canRun || aiRecommendAction.isRunning));
   const stepTitle =
-    step === 3
-      ? planSubstep === "select"
-        ? "과목 담기 (1/2)"
-        : "유효 시간표 확인 (2/2)"
-      : step === 4
-        ? aiSubstep === "setup"
-          ? "AI 추천 조건 (1/2)"
-          : "AI 추천 결과 (2/2)"
-        : current.title;
+    step === 2
+      ? docSubstep === "course_history"
+        ? "수강/취득과목 (1/2)"
+        : "졸업요건 충족현황 (2/2)"
+      : step === 3
+        ? planSubstep === "select"
+          ? "과목 담기 (1/2)"
+          : "유효 시간표 확인 (2/2)"
+        : step === 4
+          ? aiSubstep === "setup"
+            ? "AI 추천 조건 (1/2)"
+            : "AI 추천 결과 (2/2)"
+          : current.title;
   const plannerView =
     step === 4
       ? aiSubstep === "results"
@@ -187,6 +216,7 @@ export function PlanningWorkspace() {
         : "select";
   const showNextButton =
     step < STEPS.length ||
+    (step === 2 && docSubstep === "course_history") ||
     (step === 3 && planSubstep === "select") ||
     (step === 4 && aiSubstep === "setup");
   const nextLabel =
@@ -202,33 +232,33 @@ export function PlanningWorkspace() {
     <div className={styles.workspace}>
       <div className={styles.progress} aria-label="진행 단계">
         <div className={styles.progressHeader}>
-          <strong>
-            {step}단계 · {stepTitle}
-          </strong>
-          <span>
-            {step}/{STEPS.length}
+          <div>
+            <p className={styles.progressEyebrow}>진행 단계</p>
+            <strong>
+              {step}단계 · {stepTitle}
+            </strong>
+          </div>
+          <span className={styles.progressCount}>
+            {step} / {STEPS.length}
           </span>
         </div>
-        <div
-          aria-valuemax={STEPS.length}
-          aria-valuemin={1}
-          aria-valuenow={step}
-          className={styles.progressTrack}
-          role="progressbar"
+        <ol
+          className={styles.stepList}
+          style={{ ["--connector-progress" as string]: String(connectorProgress) }}
         >
-          <div className={styles.progressFill} style={{ width: `${progressPercent}%` }} />
-        </div>
-        <ol className={styles.stepList}>
           {STEPS.map((item) => (
             <li key={item.id}>
               <button
+                aria-current={item.id === step ? "step" : undefined}
                 data-active={item.id === step}
                 data-done={item.id < step}
                 type="button"
                 onClick={() => goToStep(item.id)}
               >
-                <strong>{item.id}단계</strong>
-                <span>{item.title}</span>
+                <span className={styles.stepIndex} aria-hidden="true">
+                  {item.id}
+                </span>
+                <span className={styles.stepLabel}>{item.short}</span>
               </button>
             </li>
           ))}
@@ -252,13 +282,16 @@ export function PlanningWorkspace() {
           />
         ) : null}
 
-        {step === 2 ? (
-          <AcademicDocumentManager
-            profileDetails={toAcademicProfileDetails(studentProfile)}
-            onAnalysisStateChange={setDocumentAnalysisState}
-            onWorkingProfileChange={updateWorkingProfile}
-            onConfirmedProfileChange={updateConfirmedProfile}
-          />
+        {hasEnteredDocuments ? (
+          <div className={step === 2 ? undefined : styles.hiddenStep}>
+            <AcademicDocumentManager
+              activeKind={docSubstep}
+              profileDetails={toAcademicProfileDetails(studentProfile)}
+              onAnalysisStateChange={setDocumentAnalysisState}
+              onWorkingProfileChange={updateWorkingProfile}
+              onConfirmedProfileChange={updateConfirmedProfile}
+            />
+          </div>
         ) : null}
 
         {hasEnteredPlanner ? (
@@ -288,7 +321,7 @@ export function PlanningWorkspace() {
         </button>
         <div className={styles.navActions}>
           {step === 2 ? (
-            <button type="button" onClick={goNext}>
+            <button type="button" onClick={skipCurrentDocument}>
               건너뛰기
             </button>
           ) : null}
@@ -304,10 +337,10 @@ export function PlanningWorkspace() {
         {step === 2 ? (
           <p className={styles.navHint}>
             {documentAnalysisState.isAnalyzing
-              ? "문서 분석이 끝나면 다음으로 갈 수 있습니다. 지금은 건너뛰기도 가능합니다."
-              : hasDocumentAnalysis
-                ? "문서 분석이 완료되었습니다. 다음으로 가거나, 원하면 다른 문서도 이어서 분석할 수 있습니다."
-                : "문서 분석이 끝나야 다음으로 갈 수 있습니다. 원하지 않으면 지금 건너뛰어도 됩니다."}
+              ? "문서 분석 중에는 잠시만 기다려 주세요."
+              : currentDocumentConfirmed
+                ? "검토 내용을 확정했습니다. 다음으로 갈 수 있습니다."
+                : "문서 분석 후 「검토한 내용 확정하기」까지 해야 다음으로 갈 수 있습니다. 원하지 않으면 건너뛰세요."}
           </p>
         ) : null}
         {step === 3 && planSubstep === "select" ? (

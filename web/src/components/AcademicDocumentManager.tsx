@@ -63,6 +63,8 @@ const ANALYSIS_STAGE_INTERVAL_MS = 2400;
 
 interface Props {
   profileDetails?: AcademicProfile["profile"];
+  /** When set by the wizard, locks the visible document kind and hides the kind tabs. */
+  activeKind?: AcademicDocumentKind;
   onWorkingProfileChange?: (
     kind: AcademicDocumentKind,
     profile: AcademicProfile | undefined,
@@ -80,11 +82,12 @@ interface Props {
 
 export function AcademicDocumentManager({
   profileDetails,
+  activeKind,
   onWorkingProfileChange,
   onConfirmedProfileChange,
   onAnalysisStateChange,
 }: Props = {}) {
-  const [kind, setKind] = useState<AcademicDocumentKind>("course_history");
+  const [internalKind, setInternalKind] = useState<AcademicDocumentKind>("course_history");
   const [file, setFile] = useState<File>();
   const [fileInputMethod, setFileInputMethod] = useState<FileInputMethod>();
   const [hasConsented, setHasConsented] = useState(false);
@@ -94,6 +97,18 @@ export function AcademicDocumentManager({
   const [error, setError] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStageIndex, setAnalysisStageIndex] = useState(0);
+
+  const kind = activeKind ?? internalKind;
+  const kindControlled = activeKind !== undefined;
+  const [previousActiveKind, setPreviousActiveKind] = useState(activeKind);
+  if (previousActiveKind !== activeKind) {
+    setPreviousActiveKind(activeKind);
+    if (activeKind !== undefined) {
+      setFile(undefined);
+      setFileInputMethod(undefined);
+      setError("");
+    }
+  }
 
   const profile = profiles[kind];
   const reviewChecklist = profile ? getReviewChecklist(profile) : [];
@@ -118,7 +133,10 @@ export function AcademicDocumentManager({
   );
 
   function changeKind(nextKind: AcademicDocumentKind): void {
-    setKind(nextKind);
+    if (kindControlled) {
+      return;
+    }
+    setInternalKind(nextKind);
     setFile(undefined);
     setFileInputMethod(undefined);
     setError("");
@@ -320,12 +338,16 @@ export function AcademicDocumentManager({
   return (
     <section className={styles.panel} aria-labelledby="academic-document-heading">
       <div className={styles.intro}>
-        <p className={styles.eyebrow}>UPSTAGE DOCUMENT PARSE + SOLAR</p>
-        <h2 id="academic-document-heading">학사문서를 읽고, 반드시 본인이 확인합니다.</h2>
-        <p>
-          원본과 전체 Parse 결과는 저장하지 않으며, 자동 추출은 확정 전까지 추천에
-          사용되지 않습니다.
+        <div className={styles.heading}>
+          <h2 id="academic-document-heading">STEP 2 · 내 기록 적용하기</h2>
+        </div>
+        <p className={styles.lead}>
+          수강·취득 과목과 졸업요건을 올리면, 이미 들은 과목은 빼고 남은 요건에 맞춰
+          시간표를 짜는 데 씁니다. 분석 결과는 직접 확인한 뒤 확정해야 다음으로 갈 수
+          있고, 원하지 않으면 건너뛸 수 있습니다. 원본 파일과 전체 분석 결과는 서버에
+          저장하지 않습니다.
         </p>
+        <p className={styles.upstageBadge}>with Upstage Document Parse + Solar</p>
       </div>
 
       <div className={styles.privacyNotice}>
@@ -345,25 +367,27 @@ export function AcademicDocumentManager({
         </label>
       </div>
 
-      <div className={styles.kindTabs} role="tablist" aria-label="학사문서 종류">
-        {(Object.keys(KIND_DETAILS) as AcademicDocumentKind[]).map((documentKind) => (
-          <button
-            aria-selected={kind === documentKind}
-            className={kind === documentKind ? styles.activeTab : undefined}
-            key={documentKind}
-            role="tab"
-            type="button"
-            onClick={() => changeKind(documentKind)}
-          >
-            {KIND_DETAILS[documentKind].label}
-            {profiles[documentKind] ? (
-              <small>
-                {isAcademicProfileConfirmed(profiles[documentKind]!) ? "확정됨" : "초안"}
-              </small>
-            ) : null}
-          </button>
-        ))}
-      </div>
+      {kindControlled ? null : (
+        <div className={styles.kindTabs} role="tablist" aria-label="학사문서 종류">
+          {(Object.keys(KIND_DETAILS) as AcademicDocumentKind[]).map((documentKind) => (
+            <button
+              aria-selected={kind === documentKind}
+              className={kind === documentKind ? styles.activeTab : undefined}
+              key={documentKind}
+              role="tab"
+              type="button"
+              onClick={() => changeKind(documentKind)}
+            >
+              {KIND_DETAILS[documentKind].label}
+              {profiles[documentKind] ? (
+                <small>
+                  {isAcademicProfileConfirmed(profiles[documentKind]!) ? "확정됨" : "초안"}
+                </small>
+              ) : null}
+            </button>
+          ))}
+        </div>
+      )}
 
       {allDocumentReviewCount > 0 ? (
         <div className={styles.allReviewConsent}>
