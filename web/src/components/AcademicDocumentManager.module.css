@@ -511,17 +511,15 @@
   font-weight: 700;
 }
 
-.courseYearGroup {
-  display: grid;
-  gap: 8px;
-}
-
-.courseYearHeading {
-  margin: 0;
-  color: var(--accent-strong);
-  font-size: 11px;
+.cardIdentity .courseYearBadge {
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--surface-note);
+  color: var(--text-secondary);
+  font-size: 10px;
   font-weight: 800;
-  letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 
 .dataCard {
