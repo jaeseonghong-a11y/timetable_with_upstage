@@ -52,6 +52,8 @@ interface Props {
   queryLabel: string;
   excludedCourseNumbers: readonly string[];
   requirements: readonly Requirement[];
+  /** UI-only: which planner pane to show in the step wizard. */
+  view?: "plan" | "ai";
 }
 
 const WEIGHT_LABELS: Record<WeightId, string> = {
@@ -129,7 +131,15 @@ const MAX_FILLER_SUBJECTS = 5;
 const AI_FILLER_BAG_ID = "ai-filler";
 const AI_FILLER_GROUP_TITLE = "AI 추천 보충 교양";
 
-export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, requirements }: Props) {
+export function TimetablePlanner({
+  query,
+  queryLabel,
+  excludedCourseNumbers,
+  requirements,
+  view = "plan",
+}: Props) {
+  const showPlan = view === "plan";
+  const showAi = view === "ai";
   const [majorCourseGroups, setMajorCourseGroups] = useState<CourseCandidateGroup[]>([]);
   const [electiveCourseGroups, setElectiveCourseGroups] = useState<PlannerCourseGroup[]>([]);
   const [electivePreviewGroups, setElectivePreviewGroups] = useState<
@@ -1016,27 +1026,41 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
 
   return (
     <section className={styles.planner} aria-label="시간표 조합">
-      <div className={styles.notice}>
-        <div>
-          <strong>{query ? queryLabel : "개설강좌 조회 전"}</strong>
-          <span>
-            {query
-              ? "선택한 소속 범위의 공개 개설강좌를 서버에서 직접 조회합니다."
-              : "위 기본정보를 입력하면 해당 소속의 실제 개설강좌가 여기에 표시됩니다."}
-          </span>
+      {showPlan ? (
+        <div className={styles.notice}>
+          <div>
+            <strong>{query ? queryLabel : "개설강좌 조회 전"}</strong>
+            <span>
+              {query
+                ? "선택한 소속 범위의 공개 개설강좌를 서버에서 직접 조회합니다."
+                : "위 기본정보를 입력하면 해당 소속의 실제 개설강좌가 여기에 표시됩니다."}
+            </span>
+          </div>
+          {isLoading || isElectiveLoading ? (
+            <span className={styles.loadingBadge}>
+              {isElectiveLoading
+                ? "교양 강좌 조회 중… (처음 조회는 최대 10초 정도 걸릴 수 있어요)"
+                : "성대 강좌 조회 중…"}
+            </span>
+          ) : null}
         </div>
-        {isLoading || isElectiveLoading ? (
-          <span className={styles.loadingBadge}>
-            {isElectiveLoading
-              ? "교양 강좌 조회 중… (처음 조회는 최대 10초 정도 걸릴 수 있어요)"
-              : "성대 강좌 조회 중…"}
-          </span>
-        ) : null}
-      </div>
-      {collectionError ? <p className={styles.collectionError} role="alert">{collectionError}</p> : null}
-      {electiveError ? <p className={styles.collectionError} role="alert">{electiveError}</p> : null}
+      ) : (
+        <div className={styles.notice}>
+          <div>
+            <strong>AI 시간표 추천</strong>
+            <span>3단계에서 담은 과목을 유지한 채, 조건에 맞는 상위 후보를 보여줍니다.</span>
+          </div>
+        </div>
+      )}
+      {showPlan && collectionError ? (
+        <p className={styles.collectionError} role="alert">{collectionError}</p>
+      ) : null}
+      {showPlan && electiveError ? (
+        <p className={styles.collectionError} role="alert">{electiveError}</p>
+      ) : null}
 
-      <div className={styles.grid}>
+      <div className={showPlan ? styles.grid : styles.aiOnlyGrid}>
+        {showPlan ? (
         <aside className={styles.controls}>
           <fieldset>
             <legend>넣을 과목</legend>
@@ -1555,8 +1579,11 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
             <small>과목 학점은 선택한 분반 수와 관계없이 과목당 한 번만 합산합니다.</small>
           </fieldset>
         </aside>
+        ) : null}
 
         <div className={styles.results} aria-live="polite">
+          {showPlan ? (
+            <>
           <div className={styles.resultHeading}>
             <div>
               <p>유효 시간표</p>
@@ -1617,7 +1644,10 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
               ))}
             </ol>
           ) : null}
+            </>
+          ) : null}
 
+          {showAi ? (
           <div className={styles.recommendationSection}>
             <h3>AI 시간표 추천</h3>
             <p className={styles.recommendationHint}>
@@ -1757,6 +1787,7 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
               </ol>
             ) : null}
           </div>
+          ) : null}
         </div>
       </div>
     </section>

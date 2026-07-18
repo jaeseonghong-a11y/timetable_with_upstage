@@ -1,5 +1,4 @@
 import { PlanningWorkspace } from "@/components/PlanningWorkspace";
-import { SyllabusUploader } from "@/components/SyllabusUploader";
 import styles from "./page.module.css";
 
 export default function Home() {
@@ -14,7 +13,6 @@ export default function Home() {
         </p>
       </section>
       <PlanningWorkspace />
-      <SyllabusUploader />
     </main>
   );
 }
