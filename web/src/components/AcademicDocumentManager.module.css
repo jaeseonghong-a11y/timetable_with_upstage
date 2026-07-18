@@ -526,6 +526,13 @@
   gap: 8px;
 }
 
+/* The horizontal break belongs at a year change, not a 학기 change — every year block after
+   the first gets a rule above it (the first year already has the group heading's own border). */
+.courseYearGroup + .courseYearGroup {
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+}
+
 .courseYearHeading {
   margin: 0;
   color: var(--accent-strong);
@@ -534,30 +541,18 @@
   letter-spacing: 0.04em;
 }
 
-/* Spans the full grid row (see .courseCardGrid) so it always forces a line break at a 학기
-   change, without splitting the year block into a separate grid the way a whole new section
-   would — the year itself keeps flowing in one continuous, auto-fill packed card grid. */
-.termDivider {
-  display: flex;
-  grid-column: 1 / -1;
-  align-items: center;
-  gap: 8px;
-  margin-top: 4px;
-  padding-top: 8px;
-  border-top: 1px dashed var(--border-subtle);
-  list-style: none;
+.courseTermGroup {
+  display: grid;
+  gap: 6px;
 }
 
-.termDivider span {
+/* Sits outside/above its row of cards, like .courseYearHeading but subordinate to it (smaller,
+   indented) — a label inside each card wasn't noticeable enough. */
+.courseTermHeading {
+  margin: 0 0 0 2px;
   color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.termDivider::before {
-  content: "▾";
-  color: var(--accent-strong);
-  font-size: 11px;
+  font-size: 10px;
+  font-weight: 700;
 }
 
 .dataCard {
@@ -649,10 +644,6 @@
   gap: 5px;
 }
 
-.requirementFieldGrid {
-  grid-template-columns: minmax(170px, 1.8fr) repeat(4, minmax(78px, 1fr));
-}
-
 /* Most course fields hold short, format-fixed values (codes, single words, small numbers) — a
    compact auto-fill grid packs several per row instead of one column per field. 과목명 (the one
    field that can genuinely run long) spans the full row via the .wideField override below. The
@@ -692,6 +683,9 @@
 
 .requirementCard .field input,
 .requirementCard .field select {
+  /* Same overflow fix as .courseFieldGrid — a <select>'s widest option can otherwise force the
+     field wider than its grid track. */
+  min-width: 0;
   min-height: 28px;
   padding: 3px 6px;
   font-size: 12px;
@@ -890,10 +884,6 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .requirementFieldGrid {
-    grid-template-columns: minmax(170px, 1.7fr) repeat(4, minmax(78px, 1fr));
-  }
-
   .distributionRuleEditor {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
@@ -906,7 +896,6 @@
     grid-template-columns: 1fr;
   }
 
-  .requirementFieldGrid,
   .distributionRuleEditor {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

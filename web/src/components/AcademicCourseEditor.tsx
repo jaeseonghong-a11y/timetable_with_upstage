@@ -11,8 +11,21 @@ interface Props {
 }
 
 export function AcademicCourseEditor({ profile, onChange }: Props) {
-  // Collapsing only ever applies per 이수구분 group now, never per individual course.
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const groupedCourses = groupCompletedCoursesForReview(profile.completedCourses);
+  const classifications = groupedCourses.map((group) => group.classification);
+  const sourceDocumentId = profile.sourceDocuments[0]?.id;
+
+  // Collapsing only ever applies per 이수구분 group now, never per individual course. Starts
+  // fully collapsed so the first thing shown after analysis is a manageable overview, not every
+  // field open at once — re-collapsed whenever a genuinely new analysis result lands (tracked by
+  // sourceDocumentId, which stays the same across in-place edits), following React's documented
+  // pattern for resetting state on a prop change instead of useEffect (avoids an expanded flash).
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set(classifications));
+  const [lastSourceDocumentId, setLastSourceDocumentId] = useState(sourceDocumentId);
+  if (sourceDocumentId !== lastSourceDocumentId) {
+    setLastSourceDocumentId(sourceDocumentId);
+    setCollapsedGroups(new Set(classifications));
+  }
 
   function toggleGroupCollapsed(classification: string): void {
     setCollapsedGroups((current) => {
@@ -218,7 +231,6 @@ export function AcademicCourseEditor({ profile, onChange }: Props) {
     );
   }
 
-  const groupedCourses = groupCompletedCoursesForReview(profile.completedCourses);
   const displayNumberByIndex = new Map<number, number>();
   for (const group of groupedCourses) {
     for (const yearGroup of group.yearGroups) {
@@ -229,7 +241,6 @@ export function AcademicCourseEditor({ profile, onChange }: Props) {
       }
     }
   }
-  const classifications = groupedCourses.map((group) => group.classification);
 
   return (
     <div className={styles.dataSection}>
@@ -282,31 +293,25 @@ export function AcademicCourseEditor({ profile, onChange }: Props) {
                         <p className={styles.courseYearHeading}>
                           {yearGroup.year !== null ? `${yearGroup.year}년` : "연도 미상"}
                         </p>
-                        <ol className={styles.courseCardGrid}>
-                          {yearGroup.termGroups.flatMap((termGroup, termIndex) => {
-                            const cards = termGroup.entries.map(({ course, index }) =>
-                              renderCourseCard(
-                                course,
-                                index,
-                                displayNumberByIndex.get(index) ?? index + 1,
-                              ),
-                            );
-                            // The first 학기 in a year needs no divider — the year heading above
-                            // it already marks the start of this block.
-                            if (termIndex === 0) {
-                              return cards;
-                            }
-                            return [
-                              <li
-                                className={styles.termDivider}
-                                key={`divider-${termGroup.term ?? "unknown"}`}
-                              >
-                                <span>{formatTermLabel(termGroup.term)}</span>
-                              </li>,
-                              ...cards,
-                            ];
-                          })}
-                        </ol>
+                        {yearGroup.termGroups.map((termGroup) => (
+                          <div
+                            className={styles.courseTermGroup}
+                            key={termGroup.term ?? "unknown"}
+                          >
+                            <p className={styles.courseTermHeading}>
+                              {formatTermLabel(termGroup.term)}
+                            </p>
+                            <ol className={styles.courseCardGrid}>
+                              {termGroup.entries.map(({ course, index }) =>
+                                renderCourseCard(
+                                  course,
+                                  index,
+                                  displayNumberByIndex.get(index) ?? index + 1,
+                                ),
+                              )}
+                            </ol>
+                          </div>
+                        ))}
                       </div>
                     ))
                   : null}

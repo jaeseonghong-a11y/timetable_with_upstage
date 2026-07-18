@@ -15,54 +15,17 @@ interface Props {
   onChange: (profile: AcademicProfile) => void;
 }
 
-const SCOPE_LABELS: Record<Requirement["scope"], string> = {
-  primary_major: "제1전공",
-  general: "교양",
-  ds: "DS",
-  university: "대학 공통",
-  other: "기타",
-};
-
-const STATUS_LABELS: Record<Requirement["status"], string> = {
-  satisfied: "충족",
-  in_progress: "수강 중",
-  unmet: "미충족",
-  review: "확인 필요",
-};
-
 export function AcademicRequirementEditor({ profile, onChange }: Props) {
-  const [explicitOpenIds, setExplicitOpenIds] = useState<Set<string> | null>(null);
-  const isConfirmed = profile.sourceDocuments.every((document) => document.status === "confirmed");
+  const sourceDocumentId = profile.sourceDocuments[0]?.id;
 
-  function getOpenIds(): Set<string> {
-    if (explicitOpenIds) {
-      return new Set(explicitOpenIds);
-    }
-    return new Set(
-      isConfirmed ? [] : profile.requirements.map((requirement) => requirement.requirementId),
-    );
-  }
-
-  function isRequirementOpen(requirementId: string): boolean {
-    return explicitOpenIds
-      ? explicitOpenIds.has(requirementId)
-      : !isConfirmed;
-  }
-
-  function toggleRequirement(requirementId: string): void {
-    const nextOpenIds = getOpenIds();
-    if (nextOpenIds.has(requirementId)) {
-      nextOpenIds.delete(requirementId);
-    } else {
-      nextOpenIds.add(requirementId);
-    }
-    setExplicitOpenIds(nextOpenIds);
-  }
-
-  function setAllRequirementsOpen(open: boolean): void {
-    setExplicitOpenIds(
-      new Set(open ? profile.requirements.map((requirement) => requirement.requirementId) : []),
-    );
+  // 졸업요건은 수강내역과 달리 이수구분 같은 분류 기준이 없어 그룹으로 나누기 어려우므로,
+  // 목록 전체를 하나의 단위로만 접고 편다 (개별 요건 접기는 없음). 수강내역 편집기와 같은
+  // 이유로, 새 분석 결과가 들어올 때(sourceDocumentId 변경)마다 접힌 상태로 시작한다.
+  const [isListCollapsed, setIsListCollapsed] = useState(true);
+  const [lastSourceDocumentId, setLastSourceDocumentId] = useState(sourceDocumentId);
+  if (sourceDocumentId !== lastSourceDocumentId) {
+    setLastSourceDocumentId(sourceDocumentId);
+    setIsListCollapsed(true);
   }
 
   function updateRequirement(index: number, requirement: Requirement): void {
@@ -95,8 +58,8 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
   }
 
   function addRequirement(): void {
-    const sourceDocumentId = profile.sourceDocuments[0]?.id;
-    if (!sourceDocumentId) {
+    const sourceDocumentIdForNewRow = profile.sourceDocuments[0]?.id;
+    if (!sourceDocumentIdForNewRow) {
       return;
     }
     onChange({
@@ -113,7 +76,7 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
           remainingCredits: null,
           status: "review",
           rawValues: {},
-          sourceDocumentId,
+          sourceDocumentId: sourceDocumentIdForNewRow,
           reviewReasons: [],
         },
       ],
@@ -135,10 +98,10 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
           <h3>{profile.requirements.length}개</h3>
         </div>
         <div className={styles.sectionControls}>
-          <button type="button" onClick={() => setAllRequirementsOpen(false)}>
+          <button type="button" onClick={() => setIsListCollapsed(true)}>
             전체 접기
           </button>
-          <button type="button" onClick={() => setAllRequirementsOpen(true)}>
+          <button type="button" onClick={() => setIsListCollapsed(false)}>
             전체 펼치기
           </button>
           <button className={styles.secondaryButton} type="button" onClick={addRequirement}>
@@ -149,14 +112,21 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
 
       {profile.requirements.length === 0 ? (
         <p className={styles.dataEmpty}>추출된 요건이 없습니다. 필요하면 수동으로 추가해 주세요.</p>
+      ) : isListCollapsed ? (
+        <button
+          aria-expanded={false}
+          className={styles.courseGroupHeading}
+          type="button"
+          onClick={() => setIsListCollapsed(false)}
+        >
+          <span>▶ 접힘</span>
+          <span>펼치려면 클릭</span>
+        </button>
       ) : (
-        <ol className={styles.cardList}>
-          {profile.requirements.map((requirement, index) => {
-            const isOpen = isRequirementOpen(requirement.requirementId);
-            const panelId = `requirement-panel-${index + 1}`;
-            return (
+        <ol className={styles.courseCardGrid}>
+          {profile.requirements.map((requirement, index) => (
             <li
-              className={`${styles.dataCard} ${styles.requirementCard} ${isOpen ? "" : styles.collapsedCard}`}
+              className={`${styles.dataCard} ${styles.requirementCard}`}
               key={requirement.requirementId}
             >
               <div className={styles.cardTopline}>
@@ -169,15 +139,6 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
                     <span>확인 필요 {requirement.reviewReasons.length}</span>
                   ) : null}
                   <button
-                    aria-controls={panelId}
-                    aria-expanded={isOpen}
-                    className={styles.cardToggleButton}
-                    type="button"
-                    onClick={() => toggleRequirement(requirement.requirementId)}
-                  >
-                    {isOpen ? "접기" : "펼치기"}
-                  </button>
-                  <button
                     className={styles.deleteButton}
                     type="button"
                     onClick={() => deleteRequirement(index)}
@@ -187,117 +148,111 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
                 </div>
               </div>
 
-              {!isOpen ? (
-                <p className={styles.collapsedSummary}>
-                  <span>{SCOPE_LABELS[requirement.scope]}</span>
-                  <span>{STATUS_LABELS[requirement.status]}</span>
-                  <span>취득 {formatNullableCredits(requirement.earnedCredits)}</span>
-                  <span>잔여 {formatNullableCredits(requirement.remainingCredits)}</span>
-                </p>
-              ) : null}
+              <div className={styles.cardBody}>
+                <div className={`${styles.fieldGrid} ${styles.courseFieldGrid}`}>
+                  <label className={`${styles.field} ${styles.wideField}`}>
+                    <span>요건명</span>
+                    <input
+                      value={requirement.label}
+                      onChange={(event) =>
+                        updateRequirement(index, { ...requirement, label: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label className={styles.field}>
+                    <span>범위</span>
+                    <select
+                      value={requirement.scope}
+                      onChange={(event) =>
+                        updateRequirement(index, {
+                          ...requirement,
+                          scope: event.target.value as Requirement["scope"],
+                        })
+                      }
+                    >
+                      <option value="primary_major">제1전공</option>
+                      <option value="general">교양</option>
+                      <option value="ds">DS</option>
+                      <option value="university">대학 공통</option>
+                      <option value="other">기타</option>
+                    </select>
+                  </label>
+                  <label className={styles.field}>
+                    <span>상태</span>
+                    <select
+                      value={requirement.status}
+                      onChange={(event) =>
+                        updateRequirement(index, {
+                          ...requirement,
+                          status: event.target.value as Requirement["status"],
+                        })
+                      }
+                    >
+                      <option value="satisfied">충족</option>
+                      <option value="in_progress">수강 중</option>
+                      <option value="unmet">미충족</option>
+                      <option value="review">확인 필요</option>
+                    </select>
+                  </label>
+                  <label className={styles.field}>
+                    <span>취득학점</span>
+                    <input
+                      min="0"
+                      step="0.5"
+                      type="number"
+                      value={nullableNumberInputValue(requirement.earnedCredits)}
+                      onChange={(event) =>
+                        updateRequirement(index, {
+                          ...requirement,
+                          earnedCredits: readNullableNumber(
+                            event.target.value,
+                            event.target.valueAsNumber,
+                          ),
+                        })
+                      }
+                    />
+                  </label>
+                  <label className={styles.field}>
+                    <span>잔여학점</span>
+                    <input
+                      min="0"
+                      step="0.5"
+                      type="number"
+                      value={nullableNumberInputValue(requirement.remainingCredits)}
+                      onChange={(event) =>
+                        updateRequirement(index, {
+                          ...requirement,
+                          remainingCredits: readNullableNumber(
+                            event.target.value,
+                            event.target.valueAsNumber,
+                          ),
+                        })
+                      }
+                    />
+                  </label>
+                </div>
 
-              {isOpen ? (
-              <div className={styles.cardBody} id={panelId}>
-              <div className={`${styles.fieldGrid} ${styles.requirementFieldGrid}`}>
-                <label className={styles.field}>
-                  <span>요건명</span>
-                  <input
-                    value={requirement.label}
-                    onChange={(event) =>
-                      updateRequirement(index, { ...requirement, label: event.target.value })
-                    }
-                  />
-                </label>
-                <label className={styles.field}>
-                  <span>범위</span>
-                  <select
-                    value={requirement.scope}
-                    onChange={(event) =>
-                      updateRequirement(index, {
-                        ...requirement,
-                        scope: event.target.value as Requirement["scope"],
-                      })
-                    }
-                  >
-                    <option value="primary_major">제1전공</option>
-                    <option value="general">교양</option>
-                    <option value="ds">DS</option>
-                    <option value="university">대학 공통</option>
-                    <option value="other">기타</option>
-                  </select>
-                </label>
-                <label className={styles.field}>
-                  <span>상태</span>
-                  <select
-                    value={requirement.status}
-                    onChange={(event) =>
-                      updateRequirement(index, {
-                        ...requirement,
-                        status: event.target.value as Requirement["status"],
-                      })
-                    }
-                  >
-                    <option value="satisfied">충족</option>
-                    <option value="in_progress">수강 중</option>
-                    <option value="unmet">미충족</option>
-                    <option value="review">확인 필요</option>
-                  </select>
-                </label>
-                <label className={styles.field}>
-                  <span>취득학점</span>
-                  <input
-                    min="0"
-                    step="0.5"
-                    type="number"
-                    value={nullableNumberInputValue(requirement.earnedCredits)}
-                    onChange={(event) =>
-                      updateRequirement(index, {
-                        ...requirement,
-                        earnedCredits: readNullableNumber(event.target.value, event.target.valueAsNumber),
-                      })
-                    }
-                  />
-                </label>
-                <label className={styles.field}>
-                  <span>잔여학점</span>
-                  <input
-                    min="0"
-                    step="0.5"
-                    type="number"
-                    value={nullableNumberInputValue(requirement.remainingCredits)}
-                    onChange={(event) =>
-                      updateRequirement(index, {
-                        ...requirement,
-                        remainingCredits: readNullableNumber(event.target.value, event.target.valueAsNumber),
-                      })
-                    }
-                  />
-                </label>
+                <RequirementRuleEditor
+                  rule={requirement.rule}
+                  onChange={(rule) => updateRequirementRule(index, rule)}
+                />
+
+                {Object.keys(requirement.rawValues).length > 0 ? (
+                  <details className={styles.rawValues}>
+                    <summary>원본 셀 값 확인</summary>
+                    <dl>
+                      {Object.entries(requirement.rawValues).map(([label, value]) => (
+                        <div key={label}>
+                          <dt>{label}</dt>
+                          <dd>{value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </details>
+                ) : null}
               </div>
-
-              <RequirementRuleEditor
-                rule={requirement.rule}
-                onChange={(rule) => updateRequirementRule(index, rule)}
-              />
-
-              {Object.keys(requirement.rawValues).length > 0 ? (
-                <details className={styles.rawValues}>
-                  <summary>원본 셀 값 확인</summary>
-                  <dl>
-                    {Object.entries(requirement.rawValues).map(([label, value]) => (
-                      <div key={label}>
-                        <dt>{label}</dt>
-                        <dd>{value}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                </details>
-              ) : null}
-              </div>
-              ) : null}
             </li>
-            );
-          })}
+          ))}
         </ol>
       )}
     </div>
@@ -422,8 +377,4 @@ function nullableNumberInputValue(value: number | null): number | "" {
 
 function numberInputValue(value: number): number | "" {
   return Number.isFinite(value) ? value : "";
-}
-
-function formatNullableCredits(value: number | null): string {
-  return value === null ? "확인 필요" : `${value}학점`;
 }
