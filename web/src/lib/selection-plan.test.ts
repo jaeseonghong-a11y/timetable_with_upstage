@@ -205,6 +205,43 @@ describe("enumerateSubjectSelections", () => {
     ).toThrow(SelectionPlanError);
   });
 
+  it("prunes over-budget partial selections instead of letting later bags multiply them", () => {
+    // Each bag offers 2 "light" (1 credit) and 2 "heavy" (20 credits) subjects, exactly one pick
+    // per bag. The full unpruned cartesian product is 4×4×4=64, and even just the first two bags
+    // alone (4×4=16) would already exceed a maxSelections of 15 before a single credit is ever
+    // checked. Once a single heavy pick is chosen, the running total (20) already exceeds
+    // maxCredits (3), so pruning must drop that branch immediately — before it reaches later bags
+    // — for this call to succeed at all under such a tight safety limit.
+    const bag = (id: string) => ({
+      id,
+      title: id,
+      subjects: [
+        subject(`${id}-light-1`, 1, 1),
+        subject(`${id}-light-2`, 1, 1),
+        subject(`${id}-heavy-1`, 1, 20),
+        subject(`${id}-heavy-2`, 1, 20),
+      ],
+      minSubjects: 1,
+      maxSubjects: 1,
+    });
+
+    const selections = enumerateSubjectSelections(
+      {
+        requiredSubjects: [],
+        choiceBags: [bag("one"), bag("two"), bag("three")],
+        creditRange: { minCredits: 0, maxCredits: 3 },
+      },
+      15,
+    );
+
+    expect(selections).toHaveLength(8);
+    expect(
+      selections.every((subjects) =>
+        subjects.every((selected) => selected.id.includes("-light-")),
+      ),
+    ).toBe(true);
+  });
+
   it("fails rather than returning an arbitrary subset when the safety limit is exceeded", () => {
     expect(() =>
       enumerateSubjectSelections(

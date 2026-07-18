@@ -128,7 +128,18 @@ export function enumerateSubjectSelections(
   const excludedIds = new Set(plan.excludedSubjectIds ?? []);
   validatePlan(plan, excludedIds);
 
+  // Branch-and-bound on the running credit total: validatePlan already rejected non-negative
+  // credits and an inverted range, so a selection's credit total only ever grows as more bags
+  // are folded in. Once a partial selection already exceeds maxCredits, no combination of
+  // remaining bags can bring it back into range, so it is dropped here instead of being carried
+  // forward to multiply against every later bag's choices — this is what was blowing past the
+  // 10,000-combination safety limit for generous choice bags, without changing which
+  // combinations end up in the final result (still exactly the ones inside creditRange).
+  const maxCredits = plan.creditRange?.maxCredits;
+
   let selections: SubjectOption[][] = [plan.requiredSubjects];
+  let selectionCredits: number[] = [sumCredits(plan.requiredSubjects)];
+
   for (const bag of plan.choiceBags) {
     const availableSubjects = bag.subjects.filter((subject) => !excludedIds.has(subject.id));
     const minSubjects = bag.minSubjects ?? 1;
@@ -141,27 +152,40 @@ export function enumerateSubjectSelections(
     for (let count = minSubjects; count <= Math.min(maxSubjects, availableSubjects.length); count += 1) {
       bagSelections.push(...combinations(availableSubjects, count));
     }
+    const bagSelectionCredits = bagSelections.map(sumCredits);
 
     const nextSelections: SubjectOption[][] = [];
-    for (const selected of selections) {
-      for (const bagSelection of bagSelections) {
+    const nextSelectionCredits: number[] = [];
+    selections.forEach((selected, selectedIndex) => {
+      const baseCredits = selectionCredits[selectedIndex] ?? 0;
+      bagSelections.forEach((bagSelection, bagIndex) => {
+        const credits = baseCredits + (bagSelectionCredits[bagIndex] ?? 0);
+        if (maxCredits !== undefined && credits > maxCredits) {
+          return;
+        }
         if (nextSelections.length === maxSelections) {
           throw new SelectionPlanLimitError(maxSelections);
         }
         nextSelections.push([...selected, ...bagSelection]);
-      }
-    }
+        nextSelectionCredits.push(credits);
+      });
+    });
     selections = nextSelections;
+    selectionCredits = nextSelectionCredits;
   }
 
   const creditRange = plan.creditRange;
   if (!creditRange) {
     return selections;
   }
-  return selections.filter((subjects) => {
-    const credits = subjects.reduce((total, subject) => total + subject.credits, 0);
-    return credits >= creditRange.minCredits && credits <= creditRange.maxCredits;
-  });
+  // maxCredits was already enforced during pruning above; only minCredits remains to check.
+  return selections.filter(
+    (_subjects, index) => (selectionCredits[index] ?? 0) >= creditRange.minCredits,
+  );
+}
+
+function sumCredits(subjects: readonly SubjectOption[]): number {
+  return subjects.reduce((total, subject) => total + subject.credits, 0);
 }
 
 /**

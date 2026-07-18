@@ -410,6 +410,41 @@ ${JSON.stringify({
     });
   });
 
+  it("does not let Solar's own free-text reviewReasons force an otherwise-satisfied requirement into review", () => {
+    // Reproduces a live case (2026-07-19, table parsing failed for a pasted-screenshot document):
+    // Solar reported internally consistent numbers (글로벌 fully earned) but also invented a
+    // nonsensical per-row reviewReasons entry. Before this fix, that alone flipped status to
+    // "review", which made the AI filler treat 글로벌 as still unmet and keep recommending
+    // English-presentation courses for a requirement the student had already completed.
+    const profile = parseAcademicExtraction(
+      JSON.stringify({
+        completedCourses: [],
+        requirements: [
+          {
+            scope: "general",
+            label: "글로벌",
+            rule: { kind: "credit_minimum", credits: 2 },
+            earnedCredits: 2,
+            inProgressCredits: { spring: 0, summer: 0, fall: 0, winter: 0, total: 0 },
+            remainingCredits: 0,
+            status: "satisfied",
+            rawValues: { 기준학점: "2", 취득학점: "2", 잔여학점: "0" },
+            reviewReasons: ["기준학점과 취득학점이 모두 기록되어 있어 모호함"],
+          },
+        ],
+        reviewIssues: [],
+      }),
+      "graduation_requirements",
+      "source-global-satisfied",
+    );
+
+    expect(profile.requirements[0]).toMatchObject({
+      label: "글로벌",
+      status: "satisfied",
+      reviewReasons: [],
+    });
+  });
+
   it("supplements general and DS rows omitted by Solar from the Document Parse table", () => {
     const tableRows = [
       ["제1전공 심화학점", "36", "15", "0", "0", "0", "0", "0", "21"],

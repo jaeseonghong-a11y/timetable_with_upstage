@@ -908,10 +908,18 @@ function normalizeRequirement(
   if (!extractedStatus && rule.kind !== "credit_minimum") {
     normalizationReasons.push("충족 상태를 자동으로 확정할 수 없어 확인이 필요합니다.");
   }
-  const extractedReviewReasons = normalizeStringArray(value.reviewReasons).filter(
-    (reason) => !isNonBlockingRequirementReason(reason, rule),
-  );
-  const reviewReasons = [...new Set([...extractedReviewReasons, ...normalizationReasons])];
+  // Solar's own free-text reviewReasons for this row are never trusted, even here where there is
+  // no deterministic table to cross-check against: every genuine structural problem this function
+  // can detect (composite/unparseable values above, an unclassifiable rule, an undetermined
+  // status, an arithmetic mismatch via reconcileCreditMinimumRemaining) already has its own
+  // code-generated reason in normalizationReasons. Live testing (2026-07-19, a pasted-screenshot
+  // graduation-requirements document that Document Parse could not extract as a table) showed
+  // Solar inventing near-identical, self-contradictory commentary for nearly every row — e.g.
+  // "both required and earned credits are recorded" presented as if that were an ambiguity — even
+  // under the tightened system prompt. Beyond the noise, forcing reviewReasons.length > 0 flips
+  // status to "review" (see deriveNormalizedRequirementStatus), which made the AI filler treat an
+  // already-fully-satisfied requirement as still unmet and keep recommending courses for it.
+  const reviewReasons = [...new Set(normalizationReasons)];
   const status = deriveNormalizedRequirementStatus(
     rule,
     earnedCredits,
@@ -1122,20 +1130,6 @@ function normalizeInProgressCredits(
     winter: termCredits[3],
     total: normalized.total ?? calculatedTotal,
   };
-}
-
-function isNonBlockingRequirementReason(
-  reason: string,
-  rule: RequirementRule,
-): boolean {
-  return (
-    reason.includes("수강학점 일부가 비어 있거나 복합 형식") ||
-    reason.includes("수강학점 세부값이 없어 0으로 표시") ||
-    reason.includes("기준학점 미달") ||
-    reason.includes("취득학점 미달") ||
-    isDeterministicNoticeMessage(reason) ||
-    (rule.kind !== "manual" && reason.includes("졸업요건 규칙을 자동으로 확정하지 못해"))
-  );
 }
 
 function deriveNormalizedRequirementStatus(
@@ -1503,15 +1497,6 @@ function readStringArray(value: unknown): string[] | null {
   return result;
 }
 
-function normalizeStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.flatMap((item) => {
-    const string = readString(item);
-    return string ? [string] : [];
-  });
-}
 
 function normalizeRawValues(value: unknown): Record<string, string> {
   if (!isRecord(value)) {
