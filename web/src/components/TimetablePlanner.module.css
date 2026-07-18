@@ -1198,6 +1198,71 @@
   background: var(--surface-page);
 }
 
+.aiLoadingPanel {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 28px 16px 20px;
+  text-align: center;
+}
+
+.aiLoadingPanel strong {
+  color: var(--accent-strong);
+  font-size: 15px;
+}
+
+.aiLoadingPanel p {
+  max-width: 360px;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.aiSpinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--border-subtle);
+  border-top-color: var(--accent-strong);
+  border-radius: 50%;
+  animation: aiSpinnerRotate 0.8s linear infinite;
+}
+
+.aiSkeletonList {
+  display: grid;
+  width: min(100%, 420px);
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.aiSkeletonCard {
+  height: 72px;
+  border-radius: 12px;
+  background: linear-gradient(
+    90deg,
+    var(--surface-card) 0%,
+    var(--surface-note) 45%,
+    var(--surface-card) 90%
+  );
+  background-size: 200% 100%;
+  animation: aiSkeletonPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes aiSpinnerRotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes aiSkeletonPulse {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
 .recommendationSection h3 {
   margin: 0;
   font-size: 14px;

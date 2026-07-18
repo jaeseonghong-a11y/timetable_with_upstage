@@ -21,7 +21,7 @@ import styles from "./PlanningWorkspace.module.css";
 
 const STEPS = [
   { id: 1, title: "기본 정보 입력", short: "소속·학기 설정" },
-  { id: 2, title: "학사문서 읽기", short: "기수강·졸업요건" },
+  { id: 2, title: "학사문서 읽기 (skip 가능)", short: "skip 가능" },
   { id: 3, title: "과목 담기", short: "담기 → 유효 시간표" },
   { id: 4, title: "AI 시간표 추천", short: "조건 → 결과" },
   { id: 5, title: "강의계획서 확인", short: "평가 방식 확인" },
@@ -35,7 +35,11 @@ export function PlanningWorkspace() {
   const [step, setStep] = useState<StepId>(1);
   const [planSubstep, setPlanSubstep] = useState<PlanSubstep>("select");
   const [aiSubstep, setAiSubstep] = useState<AiSubstep>("setup");
-  const [hasAiRecommendations, setHasAiRecommendations] = useState(false);
+  const [aiRecommendRequestId, setAiRecommendRequestId] = useState(0);
+  const [aiRecommendAction, setAiRecommendAction] = useState({
+    canRun: false,
+    isRunning: false,
+  });
   const [studentProfile, setStudentProfile] = useState(INITIAL_STUDENT_PROFILE);
   const [appliedProfile, setAppliedProfile] = useState<StudentPlanningProfile | null>(null);
   const [workingProfiles, setWorkingProfiles] = useState<
@@ -45,6 +49,10 @@ export function PlanningWorkspace() {
     Partial<Record<AcademicDocumentKind, AcademicProfile>>
   >({});
   const [hasEnteredPlanner, setHasEnteredPlanner] = useState(false);
+  const [documentAnalysisState, setDocumentAnalysisState] = useState({
+    isAnalyzing: false,
+    hasAnalyzedDocument: false,
+  });
 
   const courseQuery = useMemo(
     () => (appliedProfile ? toSkkuCourseQuery(appliedProfile) : null),
@@ -105,10 +113,12 @@ export function PlanningWorkspace() {
       return;
     }
     if (step === 4 && aiSubstep === "setup") {
-      if (!hasAiRecommendations) {
+      if (!aiRecommendAction.canRun || aiRecommendAction.isRunning) {
         return;
       }
-      setAiSubstep("results");
+      // Show loading immediately; TimetablePlanner will keep/clear this via callbacks.
+      setAiRecommendAction((current) => ({ ...current, isRunning: true }));
+      setAiRecommendRequestId((current) => current + 1);
       return;
     }
     if (step >= STEPS.length) {
@@ -148,8 +158,16 @@ export function PlanningWorkspace() {
 
   const current = STEPS[step - 1]!;
   const progressPercent = (step / STEPS.length) * 100;
+  const hasDocumentAnalysis =
+    documentAnalysisState.hasAnalyzedDocument ||
+    Object.keys(workingProfiles).length > 0 ||
+    Object.keys(confirmedProfiles).length > 0;
   const nextBlocked =
-    (step === 1 && !appliedProfile) || (step === 4 && aiSubstep === "setup" && !hasAiRecommendations);
+    (step === 1 && !appliedProfile) ||
+    (step === 2 && (documentAnalysisState.isAnalyzing || !hasDocumentAnalysis)) ||
+    (step === 4 &&
+      aiSubstep === "setup" &&
+      (!aiRecommendAction.canRun || aiRecommendAction.isRunning));
   const stepTitle =
     step === 3
       ? planSubstep === "select"
@@ -176,7 +194,9 @@ export function PlanningWorkspace() {
     step === 3 && planSubstep === "select"
       ? "유효 시간표 보기"
       : step === 4 && aiSubstep === "setup"
-        ? "추천 결과 보기"
+        ? aiRecommendAction.isRunning
+          ? "추천 생성 중…"
+          : "AI 추천 받기"
         : "다음";
 
   return (
@@ -232,6 +252,7 @@ export function PlanningWorkspace() {
         {step === 2 ? (
           <AcademicDocumentManager
             profileDetails={toAcademicProfileDetails(studentProfile)}
+            onAnalysisStateChange={setDocumentAnalysisState}
             onWorkingProfileChange={updateWorkingProfile}
             onConfirmedProfileChange={updateConfirmedProfile}
           />
@@ -240,12 +261,13 @@ export function PlanningWorkspace() {
         {hasEnteredPlanner ? (
           <div className={step === 3 || step === 4 ? undefined : styles.hiddenStep}>
             <TimetablePlanner
+              aiRecommendRequestId={aiRecommendRequestId}
               excludedCourseNumbers={excludedCourseNumbers}
               query={courseQuery}
               queryLabel={appliedProfile ? getCourseQueryLabel(appliedProfile) : ""}
               requirements={requirements}
               view={plannerView}
-              onRecommendationsAvailabilityChange={setHasAiRecommendations}
+              onAiRecommendActionStateChange={setAiRecommendAction}
               onRecommendationsReady={() => setAiSubstep("results")}
             />
           </div>
@@ -255,30 +277,45 @@ export function PlanningWorkspace() {
       </div>
 
       <div className={styles.nav}>
-        <button disabled={step === 1} type="button" onClick={goPrev}>
+        <button
+          disabled={step === 1 || (step === 4 && aiRecommendAction.isRunning)}
+          type="button"
+          onClick={goPrev}
+        >
           이전
         </button>
-        {showNextButton ? (
-          <button data-primary="true" disabled={nextBlocked} type="button" onClick={goNext}>
-            {nextLabel}
-          </button>
-        ) : (
-          <span />
-        )}
+        <div className={styles.navActions}>
+          {step === 2 ? (
+            <button type="button" onClick={goNext}>
+              건너뛰기
+            </button>
+          ) : null}
+          {showNextButton ? (
+            <button data-primary="true" disabled={nextBlocked} type="button" onClick={goNext}>
+              {nextLabel}
+            </button>
+          ) : null}
+        </div>
         {step === 1 && !appliedProfile ? (
           <p className={styles.navHint}>기본정보를 적용해야 다음 단계로 갈 수 있습니다.</p>
         ) : null}
         {step === 2 ? (
-          <p className={styles.navHint}>학사문서는 나중에 해도 됩니다. 건너뛰고 다음으로 가도 됩니다.</p>
+          <p className={styles.navHint}>
+            {documentAnalysisState.isAnalyzing
+              ? "문서 분석이 끝나면 다음으로 갈 수 있습니다. 지금은 건너뛰기도 가능합니다."
+              : hasDocumentAnalysis
+                ? "문서 분석이 완료되었습니다. 다음으로 가거나, 원하면 다른 문서도 이어서 분석할 수 있습니다."
+                : "문서 분석이 끝나야 다음으로 갈 수 있습니다. 원하지 않으면 지금 건너뛰어도 됩니다."}
+          </p>
         ) : null}
         {step === 3 && planSubstep === "select" ? (
           <p className={styles.navHint}>과목을 담은 뒤 다음에서 유효 시간표를 확인합니다.</p>
         ) : null}
         {step === 4 && aiSubstep === "setup" ? (
           <p className={styles.navHint}>
-            {hasAiRecommendations
-              ? "추천이 준비되었습니다. 결과 화면으로 이동할 수 있습니다."
-              : "조건을 고른 뒤 AI 추천 받기를 누르면 결과 화면으로 이동합니다."}
+            {aiRecommendAction.isRunning
+              ? "AI가 분석 중입니다... 완료되면 결과 화면으로 이동합니다."
+              : "조건을 고른 뒤 AI 추천 받기를 누르면 결과 화면으로 바로 이동합니다."}
           </p>
         ) : null}
       </div>

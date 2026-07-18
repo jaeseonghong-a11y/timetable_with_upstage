@@ -103,9 +103,18 @@
 .nav {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
   padding-top: 4px;
+}
+
+.navActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-left: auto;
 }
 
 .nav button {

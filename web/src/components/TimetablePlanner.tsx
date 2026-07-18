@@ -54,10 +54,17 @@ interface Props {
   requirements: readonly Requirement[];
   /** UI-only: which planner pane to show in the step wizard. */
   view?: "select" | "results" | "ai-setup" | "ai-results";
+  /** Increment from the wizard nav to trigger AI recommendation (replaces in-panel button). */
+  aiRecommendRequestId?: number;
   /** Fires when AI recommendation availability changes (for wizard next-button gating). */
   onRecommendationsAvailabilityChange?: (hasRecommendations: boolean) => void;
   /** Fires after a successful AI recommendation run so the wizard can advance to results. */
   onRecommendationsReady?: () => void;
+  /** Lets the wizard nav mirror the old in-panel AI recommend button state. */
+  onAiRecommendActionStateChange?: (state: {
+    canRun: boolean;
+    isRunning: boolean;
+  }) => void;
 }
 
 const WEIGHT_LABELS: Record<WeightId, string> = {
@@ -141,8 +148,10 @@ export function TimetablePlanner({
   excludedCourseNumbers,
   requirements,
   view = "select",
+  aiRecommendRequestId = 0,
   onRecommendationsAvailabilityChange,
   onRecommendationsReady,
+  onAiRecommendActionStateChange,
 }: Props) {
   const showSelect = view === "select";
   const showResults = view === "results";
@@ -811,6 +820,28 @@ export function TimetablePlanner({
     onRecommendationsAvailabilityChange?.(Boolean(recommendations && recommendations.length > 0));
   }, [onRecommendationsAvailabilityChange, recommendations]);
 
+  const canRunAiRecommend =
+    manualSelectionPlanSubjects.requiredSubjects.length > 0 ||
+    manualSelectionPlanSubjects.choiceBags.length > 0;
+
+  useEffect(() => {
+    onAiRecommendActionStateChange?.({
+      canRun: canRunAiRecommend,
+      isRunning: isRecommending,
+    });
+  }, [canRunAiRecommend, isRecommending, onAiRecommendActionStateChange]);
+
+  const lastAiRecommendRequestId = useRef(0);
+  useEffect(() => {
+    if (!aiRecommendRequestId || aiRecommendRequestId === lastAiRecommendRequestId.current) {
+      return;
+    }
+    lastAiRecommendRequestId.current = aiRecommendRequestId;
+    void fetchAiRecommendations();
+    // Intentionally keyed only by request id; fetch reads the latest planner state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- wizard nav trigger
+  }, [aiRecommendRequestId]);
+
   const [previousManualPlanSubjects, setPreviousManualPlanSubjects] = useState(
     manualSelectionPlanSubjects,
   );
@@ -1071,9 +1102,14 @@ export function TimetablePlanner({
       {showAiSetup ? (
         <div className={styles.notice}>
           <div>
-            <strong>AI 추천 조건</strong>
-            <span>선호 조건을 고른 뒤 추천을 받으면, 다음 화면에서 결과 카드를 확인합니다.</span>
+            <strong>{isRecommending ? "AI 분석 중" : "AI 추천 조건"}</strong>
+            <span>
+              {isRecommending
+                ? "AI가 분석 중입니다... 완료되면 결과 화면으로 이동합니다."
+                : "선호 조건을 고른 뒤 추천을 받으면, 다음 화면에서 결과 카드를 확인합니다."}
+            </span>
           </div>
+          {isRecommending ? <span className={styles.loadingBadge}>분석 중…</span> : null}
         </div>
       ) : null}
       {showAiResults ? (
@@ -1684,7 +1720,23 @@ export function TimetablePlanner({
           ) : null}
 
           {showAiSetup ? (
-          <div className={styles.recommendationSection}>
+          <div
+            aria-busy={isRecommending}
+            className={styles.recommendationSection}
+          >
+            {isRecommending ? (
+              <div className={styles.aiLoadingPanel} role="status" aria-live="polite">
+                <span className={styles.aiSpinner} aria-hidden="true" />
+                <strong>AI가 분석 중입니다...</strong>
+                <p>시간표 후보를 만들고 선호 조건을 반영하는 중이에요. 잠시만 기다려 주세요.</p>
+                <div className={styles.aiSkeletonList} aria-hidden="true">
+                  <div className={styles.aiSkeletonCard} />
+                  <div className={styles.aiSkeletonCard} />
+                  <div className={styles.aiSkeletonCard} />
+                </div>
+              </div>
+            ) : (
+              <>
             <h3>AI 추천 조건</h3>
             <p className={styles.recommendationHint}>
               필수·선택 과목에 더해 부족한 학점만큼 관련 교양을 자동으로 채운 뒤, 아래 조건에
@@ -1765,19 +1817,9 @@ export function TimetablePlanner({
               />
             </label>
 
-            <button
-              disabled={
-                isRecommending ||
-                (manualSelectionPlanSubjects.requiredSubjects.length === 0 &&
-                  manualSelectionPlanSubjects.choiceBags.length === 0)
-              }
-              type="button"
-              onClick={() => void fetchAiRecommendations()}
-            >
-              {isRecommending ? "추천 생성 중…" : "AI 추천 받기"}
-            </button>
-
             {recommendationError ? <p className={styles.error}>{recommendationError}</p> : null}
+              </>
+            )}
           </div>
           ) : null}
 
