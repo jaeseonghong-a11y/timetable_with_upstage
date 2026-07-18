@@ -75,6 +75,13 @@ export function getInitialSectionIds(
   return firstSection ? [firstSection.id] : [];
 }
 
+/** Enables every provided section id (used by “분반 전체 선택”). */
+export function getAllSectionIds(
+  sections: readonly Pick<CourseCandidate, "id">[],
+): string[] {
+  return sections.map((section) => section.id);
+}
+
 /** Toggles one allowed section while keeping at least one section enabled. */
 export function toggleEnabledSectionId(
   currentSectionIds: readonly string[],

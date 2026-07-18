@@ -20,6 +20,7 @@ import {
 } from "@/lib/skku-course-api";
 import {
   generateTimetablesForSelectionPlan,
+  getAllSectionIds,
   getInitialSectionIds,
   removeSubjectsOwnedBy,
   SelectionPlanError,
@@ -361,6 +362,42 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
         [group.selectionId]: toggleEnabledSectionId(current, sectionId),
       };
     });
+  }
+
+  function selectAllSections(
+    group: PlannerCourseGroup,
+    sections: readonly Pick<CourseCandidate, "id">[] = group.candidates,
+  ): void {
+    const sectionIds = getAllSectionIds(sections);
+    if (sectionIds.length === 0) {
+      return;
+    }
+    setEnabledSectionIds((current) => ({
+      ...current,
+      [group.selectionId]: sectionIds,
+    }));
+  }
+
+  function selectAllCatalogSections(
+    group: PlannerCourseGroup,
+    sections: readonly Pick<CourseCandidate, "id">[] = group.candidates,
+  ): void {
+    const sectionIds = getAllSectionIds(sections);
+    if (sectionIds.length === 0) {
+      return;
+    }
+    if (isAssignedToActiveDestination(group.selectionId)) {
+      selectAllSections(group, sections);
+      return;
+    }
+    if (group.source === "elective") {
+      setElectiveCourseGroups((groups) =>
+        groups.some(({ selectionId }) => selectionId === group.selectionId)
+          ? groups
+          : [...groups, group],
+      );
+    }
+    selectCourseGroup(group, activeDestination, sectionIds);
   }
 
   function toggleCatalogSection(group: PlannerCourseGroup, sectionId: string): void {
@@ -1191,6 +1228,7 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
                         <CourseSectionDetails
                           group={group}
                           selectedSectionIds={selectedSections}
+                          onSelectAllSections={() => selectAllCatalogSections(group)}
                           onToggleSection={(sectionId) => toggleCatalogSection(group, sectionId)}
                         />
                       )
@@ -1256,6 +1294,9 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
                         <CourseSectionDetails
                           group={filteredDisplayedGroup}
                           selectedSectionIds={selectedSections}
+                          onSelectAllSections={() =>
+                            selectAllCatalogSections(displayedGroup!, filteredDisplayedGroup.candidates)
+                          }
                           onToggleSection={(sectionId) =>
                             toggleCatalogSection(displayedGroup!, sectionId)
                           }
@@ -1408,6 +1449,16 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
                           >
                             이 과목 선택 해제
                           </button>
+                          {group.candidates.length > 1 ? (
+                            <button
+                              className={styles.selectAllSections}
+                              disabled={selectedSections.length === group.candidates.length}
+                              type="button"
+                              onClick={() => selectAllSections(group)}
+                            >
+                              분반 전체 선택
+                            </button>
+                          ) : null}
                           <div className={styles.sectionChoices}>
                             {group.candidates.map((candidate) => (
                               <label key={candidate.id}>
@@ -1758,10 +1809,12 @@ function ElectivePreviewBoundary({
 function CourseSectionDetails({
   group,
   selectedSectionIds,
+  onSelectAllSections,
   onToggleSection,
 }: {
   group: CourseCandidateGroup;
   selectedSectionIds: readonly string[];
+  onSelectAllSections: () => void;
   onToggleSection: (sectionId: string) => void;
 }) {
   if (group.candidates.length === 1) {
@@ -1771,6 +1824,10 @@ function CourseSectionDetails({
       </div>
     );
   }
+
+  const allSelected = group.candidates.every((candidate) =>
+    selectedSectionIds.includes(candidate.id),
+  );
 
   return (
     <details className={styles.courseSectionDetails}>
@@ -1782,6 +1839,11 @@ function CourseSectionDetails({
             : `${group.candidates.length}개 분반`}
         </small>
       </summary>
+      <div className={styles.sectionBulkActions}>
+        <button disabled={allSelected} type="button" onClick={onSelectAllSections}>
+          분반 전체 선택
+        </button>
+      </div>
       <div className={styles.courseSectionRows}>
         {group.candidates.map((candidate) => {
           const checked = selectedSectionIds.includes(candidate.id);

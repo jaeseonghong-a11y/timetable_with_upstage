@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   enumerateSubjectSelections,
   generateTimetablesForSelectionPlan,
+  getAllSectionIds,
   getInitialSectionIds,
   removeSubjectsOwnedBy,
   SelectionPlanError,
@@ -28,6 +29,11 @@ describe("enumerateSubjectSelections", () => {
   it("enables only the first section when a subject is initially selected", () => {
     expect(getInitialSectionIds(subject("A", 3).sections)).toEqual(["A-1"]);
     expect(getInitialSectionIds([])).toEqual([]);
+  });
+
+  it("enables every section id for select-all", () => {
+    expect(getAllSectionIds(subject("A", 3).sections)).toEqual(["A-1", "A-2", "A-3"]);
+    expect(getAllSectionIds([])).toEqual([]);
   });
 
   it("lets users add or replace sections without leaving a selected subject empty", () => {

@@ -171,9 +171,16 @@ export function TimetableCard({
                               top: (visibleStart - TIMETABLE_START_MINUTES) * PIXELS_PER_MINUTE,
                               height: Math.max(28, (visibleEnd - visibleStart) * PIXELS_PER_MINUTE),
                             }}
-                            title={`${course.title} · ${formatMinutes(meeting.startMinutes)}-${formatMinutes(meeting.endMinutes)}`}
+                            title={[
+                              course.title,
+                              course.professor,
+                              `${formatMinutes(meeting.startMinutes)}-${formatMinutes(meeting.endMinutes)}`,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
                           >
                             <strong>{course.title}</strong>
+                            {course.professor ? <small>{course.professor}</small> : null}
                             <small>{formatMinutes(meeting.startMinutes)}-{formatMinutes(meeting.endMinutes)}</small>
                           </div>
                         );
@@ -186,7 +193,12 @@ export function TimetableCard({
         </div>
         {unscheduledCourses.length > 0 ? (
           <p className={styles.unscheduledNotice}>
-            시간 미정/온라인: {unscheduledCourses.map((course) => course.title).join(", ")}
+            시간 미정/온라인:{" "}
+            {unscheduledCourses
+              .map((course) =>
+                course.professor ? `${course.title}(${course.professor})` : course.title,
+              )
+              .join(", ")}
           </p>
         ) : null}
         <div className={styles.saveImageRow}>
