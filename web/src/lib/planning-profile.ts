@@ -4,6 +4,8 @@ import { findSkkuDepartment } from "./skku-departments";
 
 export interface StudentPlanningProfile {
   departmentCode: string;
+  /** Additional major/linked-major department codes (복수전공·연계전공), beyond the primary one. */
+  additionalDepartmentCodes?: string[];
   admissionYear: number | null;
   currentGrade: number | null;
   primaryCampus: "humanities" | "natural_sciences" | null;
@@ -13,6 +15,7 @@ export interface StudentPlanningProfile {
 
 export const INITIAL_STUDENT_PROFILE: StudentPlanningProfile = {
   departmentCode: "",
+  additionalDepartmentCodes: [],
   admissionYear: null,
   currentGrade: null,
   primaryCampus: null,
@@ -58,7 +61,9 @@ export function toAcademicProfileDetails(
 ): AcademicProfile["profile"] {
   return {
     departmentCode: profile.departmentCode || null,
-    majorCodes: profile.departmentCode ? [profile.departmentCode] : [],
+    majorCodes: profile.departmentCode
+      ? [profile.departmentCode, ...(profile.additionalDepartmentCodes ?? [])]
+      : [],
     admissionYear: profile.admissionYear,
     currentGrade: profile.currentGrade,
     primaryCampus: profile.primaryCampus,
@@ -73,7 +78,8 @@ export function getCourseQueryLabel(profile: StudentPlanningProfile): string {
     20: "2학기",
     25: "겨울학기",
   };
-  return `${profile.courseYear}년 ${termLabel[profile.courseTerm]} · ${department?.name ?? profile.departmentCode}`;
+  const additionalCount = profile.additionalDepartmentCodes?.length ?? 0;
+  return `${profile.courseYear}년 ${termLabel[profile.courseTerm]} · ${department?.name ?? profile.departmentCode}${additionalCount ? ` 외 ${additionalCount}개 전공` : ""}`;
 }
 
 export function getExcludedCourseNumbers(profile: AcademicProfile | undefined): string[] {

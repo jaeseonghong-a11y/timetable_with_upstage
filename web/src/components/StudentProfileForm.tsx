@@ -65,6 +65,8 @@ export function StudentProfileForm({ profile, appliedProfile, onChange, onApply 
   const [isDepartmentListOpen, setIsDepartmentListOpen] = useState(false);
   const [activeDepartmentCode, setActiveDepartmentCode] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [additionalDepartmentSearch, setAdditionalDepartmentSearch] = useState("");
+  const [isAdditionalDepartmentListOpen, setIsAdditionalDepartmentListOpen] = useState(false);
   const visibleDepartments = useMemo(
     () => filterSkkuDepartments(departmentFilter),
     [departmentFilter],
@@ -72,6 +74,17 @@ export function StudentProfileForm({ profile, appliedProfile, onChange, onApply 
   const departmentGroups = useMemo(
     () => groupSkkuDepartments(visibleDepartments),
     [visibleDepartments],
+  );
+  const additionalDepartmentGroups = useMemo(
+    () =>
+      groupSkkuDepartments(
+        filterSkkuDepartments(additionalDepartmentSearch).filter(
+          (department) =>
+            department.code !== profile.departmentCode &&
+            !(profile.additionalDepartmentCodes ?? []).includes(department.code),
+        ),
+      ),
+    [additionalDepartmentSearch, profile.additionalDepartmentCodes, profile.departmentCode],
   );
   const selectedDepartment = findSkkuDepartment(profile.departmentCode);
 
@@ -95,9 +108,13 @@ export function StudentProfileForm({ profile, appliedProfile, onChange, onApply 
         department.code === normalized ||
         department.name === normalized,
     );
+    const nextCode = selected?.code ?? (/^\d{4,8}$/.test(normalized) ? normalized : "");
     onChange({
       ...profile,
-      departmentCode: selected?.code ?? (/^\d{4,8}$/.test(normalized) ? normalized : ""),
+      departmentCode: nextCode,
+      additionalDepartmentCodes: (profile.additionalDepartmentCodes ?? []).filter(
+        (code) => code !== nextCode,
+      ),
     });
   }
 
@@ -106,7 +123,13 @@ export function StudentProfileForm({ profile, appliedProfile, onChange, onApply 
     setDepartmentFilter("");
     setActiveDepartmentCode(department.code);
     setIsDepartmentListOpen(false);
-    onChange({ ...profile, departmentCode: department.code });
+    onChange({
+      ...profile,
+      departmentCode: department.code,
+      additionalDepartmentCodes: (profile.additionalDepartmentCodes ?? []).filter(
+        (code) => code !== department.code,
+      ),
+    });
     trackFieldComplete("department", department.code);
   }
 
@@ -287,6 +310,114 @@ export function StudentProfileForm({ profile, appliedProfile, onChange, onApply 
                 ? `입력 코드 ${profile.departmentCode}`
               : "검색 결과에서 소속을 선택하세요. 목록에 없으면 6자리 코드를 입력할 수 있습니다."}
           </small>
+          <div className={styles.additionalMajors}>
+            <span>복수전공·연계전공·트랙 추가</span>
+            {(profile.additionalDepartmentCodes ?? []).length ? (
+              <div className={styles.majorChips}>
+                {(profile.additionalDepartmentCodes ?? []).map((code) => (
+                  <span className={styles.majorChip} key={code}>
+                    {findSkkuDepartment(code)?.name ?? code}
+                    <button
+                      aria-label={`${findSkkuDepartment(code)?.name ?? code} 삭제`}
+                      type="button"
+                      onClick={() =>
+                        onChange({
+                          ...profile,
+                          additionalDepartmentCodes: (profile.additionalDepartmentCodes ?? []).filter(
+                            (value) => value !== code,
+                          ),
+                        })
+                      }
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            <div
+              className={styles.departmentPicker}
+              onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget)) {
+                  setIsAdditionalDepartmentListOpen(false);
+                }
+              }}
+            >
+              <div className={styles.departmentControl}>
+                <input
+                  aria-autocomplete="list"
+                  aria-controls="additional-department-options"
+                  aria-expanded={isAdditionalDepartmentListOpen}
+                  autoComplete="off"
+                  placeholder="추가할 전공·연계전공·트랙명 또는 코드 검색"
+                  role="combobox"
+                  type="search"
+                  value={additionalDepartmentSearch}
+                  onChange={(event) => {
+                    setAdditionalDepartmentSearch(event.target.value);
+                    setIsAdditionalDepartmentListOpen(true);
+                  }}
+                  onFocus={() => setIsAdditionalDepartmentListOpen(true)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                      setIsAdditionalDepartmentListOpen(false);
+                    }
+                  }}
+                />
+                <button
+                  aria-label={isAdditionalDepartmentListOpen ? "추가 전공 목록 닫기" : "추가 전공 목록 열기"}
+                  className={styles.departmentToggle}
+                  type="button"
+                  onClick={() => setIsAdditionalDepartmentListOpen((open) => !open)}
+                  onMouseDown={(event) => event.preventDefault()}
+                >
+                  <span aria-hidden="true">⌄</span>
+                </button>
+              </div>
+              {isAdditionalDepartmentListOpen ? (
+                <div
+                  id="additional-department-options"
+                  aria-label="추가 전공 목록"
+                  className={styles.departmentDropdown}
+                  role="listbox"
+                >
+                  {additionalDepartmentGroups.length ? (
+                    additionalDepartmentGroups.map((group) => (
+                      <div className={styles.departmentGroup} key={group.college} role="group">
+                        <div className={styles.departmentGroupLabel}>{group.college}</div>
+                        {group.departments.map((department) => (
+                          <button
+                            aria-selected={false}
+                            className={styles.departmentOption}
+                            key={department.code}
+                            role="option"
+                            type="button"
+                            onClick={() => {
+                              onChange({
+                                ...profile,
+                                additionalDepartmentCodes: [
+                                  ...(profile.additionalDepartmentCodes ?? []),
+                                  department.code,
+                                ],
+                              });
+                              setAdditionalDepartmentSearch("");
+                              setIsAdditionalDepartmentListOpen(false);
+                            }}
+                            onMouseDown={(event) => event.preventDefault()}
+                          >
+                            <span>{department.name}</span>
+                            <small>{department.code}</small>
+                          </button>
+                        ))}
+                      </div>
+                    ))
+                  ) : (
+                    <p className={styles.departmentEmpty}>추가할 수 있는 전공이 없습니다.</p>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </div>
         </div>
 
         <YearCombobox

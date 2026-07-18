@@ -277,6 +277,45 @@
   font-weight: 700;
 }
 
+.additionalMajors {
+  display: grid;
+  gap: 7px;
+  margin-top: 6px;
+}
+
+.additionalMajors > span {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.majorChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.majorChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: var(--surface-note);
+  color: var(--accent-strong);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.majorChip button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+}
+
 .departmentField,
 .departmentPicker,
 .departmentControl {

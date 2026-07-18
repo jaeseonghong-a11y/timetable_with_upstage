@@ -5,6 +5,7 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { Requirement } from "@/lib/academic-profile";
 import { selectAiFillerSubjects } from "@/lib/ai-filler-selection";
 import { markSessionCompleted, track } from "@/lib/analytics";
+import { getRoadmapMatch, type CurriculumRoadmap, type RoadmapContext } from "@/lib/curriculum-roadmap";
 import {
   courseGroupsFromCollection,
   shouldShowSectionDetails,
@@ -46,6 +47,7 @@ import {
 } from "@/lib/timetable-scoring";
 
 import { DAYS, formatCredits, formatMinutes, TimetableCard, type TimetableExtra } from "./TimetableCard";
+import { ROADMAP_COLORS } from "./CurriculumRoadmapCollection";
 import styles from "./TimetablePlanner.module.css";
 
 interface Props {
@@ -53,6 +55,9 @@ interface Props {
   queryLabel: string;
   excludedCourseNumbers: readonly string[];
   requirements: readonly Requirement[];
+  curriculumRoadmaps: CurriculumRoadmap[];
+  roadmapProgramCodes: string[];
+  roadmapContext: RoadmapContext | null;
 }
 
 const WEIGHT_LABELS: Record<WeightId, string> = {
@@ -88,6 +93,11 @@ interface PlannerCourseGroup extends CourseCandidateGroup {
   selectionId: string;
   source: CourseSource;
   campus?: SkkuElectiveCampus;
+  programCodes?: string[];
+}
+
+interface ProgramCourseCandidateGroup extends CourseCandidateGroup {
+  programCodes: string[];
 }
 
 interface ElectiveCatalog {
@@ -130,8 +140,16 @@ const MAX_FILLER_SUBJECTS = 5;
 const AI_FILLER_BAG_ID = "ai-filler";
 const AI_FILLER_GROUP_TITLE = "AI 추천 보충 교양";
 
-export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, requirements }: Props) {
-  const [majorCourseGroups, setMajorCourseGroups] = useState<CourseCandidateGroup[]>([]);
+export function TimetablePlanner({
+  query,
+  queryLabel,
+  excludedCourseNumbers,
+  requirements,
+  curriculumRoadmaps,
+  roadmapProgramCodes,
+  roadmapContext,
+}: Props) {
+  const [majorCourseGroups, setMajorCourseGroups] = useState<ProgramCourseCandidateGroup[]>([]);
   const [electiveCourseGroups, setElectiveCourseGroups] = useState<PlannerCourseGroup[]>([]);
   const [electivePreviewGroups, setElectivePreviewGroups] = useState<
     Record<string, PlannerCourseGroup>
@@ -204,8 +222,38 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
       setDayOffFilters([]);
       nextChoiceGroupId.current = 2;
       try {
-        const majorResult = await postJson("/api/skku-courses", activeQuery, controller.signal);
-        setMajorCourseGroups(courseGroupsFromCollection(majorResult));
+        const programCodes = roadmapProgramCodes.length
+          ? roadmapProgramCodes
+          : [activeQuery.departmentCode];
+        const majorResults = await Promise.all(
+          programCodes.map((departmentCode) =>
+            postJson("/api/skku-courses", { ...activeQuery, departmentCode }, controller.signal),
+          ),
+        );
+        const groups = majorResults.flatMap((result, index) =>
+          courseGroupsFromCollection(result).map((group) => ({
+            ...group,
+            programCodes: [programCodes[index]],
+          })),
+        );
+        const merged = new Map<string, ProgramCourseCandidateGroup>();
+        for (const group of groups) {
+          const existing = merged.get(group.id);
+          if (!existing) {
+            merged.set(group.id, group);
+            continue;
+          }
+          merged.set(group.id, {
+            ...existing,
+            programCodes: [...new Set([...existing.programCodes, ...group.programCodes])],
+            candidates: [
+              ...new Map(
+                [...existing.candidates, ...group.candidates].map((candidate) => [candidate.id, candidate]),
+              ).values(),
+            ],
+          });
+        }
+        setMajorCourseGroups([...merged.values()]);
       } catch (error) {
         if (isAbortError(error)) {
           return;
@@ -219,7 +267,7 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
     }
     void loadCourses();
     return () => controller.abort();
-  }, [query]);
+  }, [query, roadmapProgramCodes]);
 
   /**
    * The elective catalog fetch is slow on a cold cache (session login + up to 14 sequential
@@ -1207,13 +1255,36 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
             ) : null}
             <div className={styles.courseList}>
               {courseSource === "major" ? visibleMajorCourseGroups.map((group) => {
+                const roadmapMatches = curriculumRoadmaps.flatMap((roadmap) => {
+                  const context = roadmapContext
+                    ? { ...roadmapContext, programCode: roadmap.programCode ?? roadmapContext.programCode }
+                    : null;
+                  const programIndex = Math.max(0, roadmapProgramCodes.indexOf(roadmap.programCode ?? ""));
+                  const belongsToProgram =
+                    !roadmap.programCode || group.programCodes?.includes(roadmap.programCode);
+                  return belongsToProgram && getRoadmapMatch(group.title, context, roadmap, group.id)
+                    ? [{ roadmap, color: ROADMAP_COLORS[programIndex % ROADMAP_COLORS.length] }]
+                    : [];
+                });
+                const roadmapColor = roadmapMatches[0]?.color;
                 const isSelectedElsewhere = selectedGroupIds.includes(group.selectionId);
                 const checked = isAssignedToActiveDestination(group.selectionId);
                 const selectedSections = checked
                   ? enabledSectionIds[group.selectionId] ?? getInitialSectionIds(group.candidates)
                   : [];
                 return (
-                  <div className={styles.courseCatalogItem} key={group.selectionId}>
+                  <div
+                    className={`${styles.courseCatalogItem} ${roadmapMatches.length ? styles.roadmapCourse : ""}`}
+                    key={group.selectionId}
+                    style={
+                      roadmapColor
+                        ? {
+                            background: `color-mix(in srgb, ${roadmapColor} 15%, white)`,
+                            borderLeft: `5px solid ${roadmapColor}`,
+                          }
+                        : undefined
+                    }
+                  >
                     <label className={styles.courseToggle}>
                       <input
                         checked={checked}
@@ -1222,6 +1293,15 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
                       />
                       <span>
                         <strong>{group.title}</strong>
+                        {roadmapMatches.map(({ roadmap, color }) => (
+                          <span
+                            className={styles.roadmapBadge}
+                            key={roadmap.sourceDocumentId}
+                            style={{ background: color }}
+                          >
+                            {roadmap.programName ?? roadmap.programCode ?? "로드맵"}
+                          </span>
+                        ))}
                         <small>
                           {group.id}
                           {group.classification ? ` · ${group.classification}` : ""}
