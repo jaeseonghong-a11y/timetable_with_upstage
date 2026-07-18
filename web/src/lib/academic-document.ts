@@ -348,21 +348,28 @@ ${markdown}
     }
     throw error;
   }
-  const coursesByCode = new Map<string, CompletedCourse>();
+  // A code missing after the first pass has, by definition, no entry in `profile.completedCourses`
+  // yet — so simply unioning the retry's rows in (as this used to do) would let a code the table
+  // parser actually captured fine skip supplementCompletedCoursesFromTable entirely, leaving the
+  // retry's own possibly-wrong year/term/completionStatus stand as final with no table backstop.
+  // Re-running the table merge against the combined Solar rows applies the same table-vs-Solar
+  // precedence to retried codes as to first-pass ones.
+  const combinedSolarCourses = new Map<string, CompletedCourse>();
   [...profile.completedCourses, ...retryProfile.completedCourses].forEach((course) => {
-    if (!coursesByCode.has(course.courseCode)) {
-      coursesByCode.set(course.courseCode, course);
+    if (!combinedSolarCourses.has(course.courseCode)) {
+      combinedSolarCourses.set(course.courseCode, course);
     }
   });
-  const mergedProfile: AcademicProfile = {
-    ...profile,
-    completedCourses: expectedCodes.flatMap((code) => {
-      const course = coursesByCode.get(code);
-      return course ? [course] : [];
-    }),
-    reviewIssues: [...profile.reviewIssues, ...retryProfile.reviewIssues],
-  };
-  return cleanCompletedCourseExtraction(mergedProfile, expectedCodes, tableParsingSucceeded);
+  const mergedProfile = supplementCompletedCoursesFromTable(
+    { ...profile, completedCourses: [...combinedSolarCourses.values()] },
+    tableCourses,
+    expectedCodes,
+  );
+  return cleanCompletedCourseExtraction(
+    { ...mergedProfile, reviewIssues: [...profile.reviewIssues, ...retryProfile.reviewIssues] },
+    expectedCodes,
+    tableParsingSucceeded,
+  );
 }
 
 /**
@@ -393,7 +400,9 @@ function supplementCompletedCoursesFromTable(
         ? {
             ...tableCourse,
             ...solarCourse,
-            courseName: tableCourse.courseName,
+            // Usually the table's own name is authoritative, but it can be blank when Document
+            // Parse split the name into a garbled adjacent row (see extractCourseCodeNamePairs).
+            courseName: tableCourse.courseName || solarCourse.courseName,
             majorScope: solarCourse.majorScope || tableCourse.majorScope,
             classification: solarCourse.classification || tableCourse.classification,
             year: solarCourse.year ?? tableCourse.year,
@@ -509,14 +518,22 @@ function parseCompletedCourseTable(
   return courses;
 }
 
+/**
+ * Live-verified (2026-07-19): Document Parse occasionally splits one course's row in two —
+ * the last row of a short section, right before its subtotal row, ends up with just the code
+ * cell ("겨울학 GELT066") while the name/영역/학점/성적 that belong to it land in the garbled
+ * subtotal row instead. The trailing name is therefore optional here; when absent,
+ * supplementCompletedCoursesFromTable falls back to Solar's own courseName for that code, since
+ * Solar isn't limited by this specific cell-boundary garbling the way a per-cell regex is.
+ */
 function extractCourseCodeNamePairs(
   cell: string,
 ): Array<{ courseCode: string; courseName: string }> {
-  const pattern = /\b([A-Z]{2,6}[0-9]{3,4})\s+(.+?)(?=\s+[A-Z]{2,6}[0-9]{3,4}\b|$)/g;
+  const pattern = /\b([A-Z]{2,6}[0-9]{3,4})(?:\s+(.+?))?(?=\s+[A-Z]{2,6}[0-9]{3,4}\b|$)/g;
   return [...cell.matchAll(pattern)].flatMap((match) => {
     const courseCode = match[1];
-    const courseName = match[2]?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-    return courseCode && courseName ? [{ courseCode, courseName }] : [];
+    const courseName = (match[2] ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    return courseCode ? [{ courseCode, courseName }] : [];
   });
 }
 

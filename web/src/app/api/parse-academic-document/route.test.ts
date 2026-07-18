@@ -187,10 +187,13 @@ describe("POST /api/parse-academic-document", () => {
   });
 
   it("retries and merges completed courses omitted by the first Solar pass", async () => {
-    const markdown = `| 학수번호 | 교과목명 | 학기 |
+    // BIZ2021 appears only in this prose line, never inside a table row, so the deterministic
+    // table parser has no row to find it in at all — the retry must be what recovers it.
+    const markdown = `문서에 언급된 학수번호: GEDG001, BIZ2021
+
+| 학수번호 | 교과목명 | 학기 |
 | --- | --- | --- |
-| GEDG001 | Communication | 1학기 |
-| BIZ2021 | Business | 2학기 |`;
+| GEDG001 | Communication | 1학기 |`;
     const course = (courseCode: string, courseName: string, term: string) => ({
       courseCode,
       courseName,
@@ -299,8 +302,85 @@ describe("POST /api/parse-academic-document", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("recovers a course whose name/영역/학점 Document Parse split into the following garbled subtotal row", async () => {
+    // Live-verified 2026-07-19: for the last row of a short section, right before its subtotal
+    // row, Document Parse put the code alone in its row ("겨울학 GELT066") and the name/영역/학점
+    // that belong to it landed in the next (subtotal) row instead.
+    const markdown = `| 전공 | 이수구분 | 년도 | 학기 | 학수번호 | 영역 | 학점 | 성적 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 제1전공 | 선택 | 2022 | 겨울학 GELT066 |  |  |  |  |
+|  |  | 선택 | - 수강 0.0 | 4차산업혁명의이해와진로탐색 취득학점: 3.0 | 일반선택 합계: 3.0 | 1.0 | P |`;
+    const firstPass = {
+      completedCourses: [
+        {
+          courseCode: "GELT066",
+          courseName: "4차산업혁명의이해와진로탐색",
+          majorScope: "제1전공",
+          classification: "선택",
+          year: null,
+          term: null,
+          credits: 1,
+          area: "일반선택",
+          completionStatus: "review",
+          flags: [],
+          reviewReasons: [],
+        },
+      ],
+      requirements: [],
+      reviewIssues: [],
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ content: { markdown } }))
+      .mockResolvedValueOnce(
+        Response.json({
+          choices: [{ message: { role: "assistant", content: JSON.stringify(firstPass) } }],
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await POST(
+      requestWithDocument(
+        "course_history",
+        new Blob(["pdf"], { type: "application/pdf" }),
+        "courses.pdf",
+      ),
+    );
+    const body = (await response.json()) as {
+      academicProfile: {
+        completedCourses: Array<{
+          courseCode: string;
+          courseName: string;
+          year: number | null;
+          term: string | null;
+          credits: number;
+          area: string;
+          completionStatus: string;
+        }>;
+      };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.academicProfile.completedCourses).toMatchObject([
+      {
+        courseCode: "GELT066",
+        courseName: "4차산업혁명의이해와진로탐색",
+        year: 2022,
+        term: "winter",
+        credits: 1,
+        area: "일반선택",
+        // Always earned when the table parser found the row, regardless of Solar's own
+        // (documented-inconsistent) completionStatus judgement for the same row.
+        completionStatus: "earned",
+      },
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("keeps the first completed-course result when the coverage retry is invalid", async () => {
-    const markdown = "| 학수번호 |\n| --- |\n| GEDG001 |\n| BIZ2021 |";
+    // BIZ2021 appears only in this prose line, never inside a table row, so it's genuinely
+    // missing after the table pass and must come from Solar's retry (which fails here).
+    const markdown = "문서에 언급된 학수번호: GEDG001, BIZ2021\n\n| 학수번호 |\n| --- |\n| GEDG001 |";
     const firstPass = {
       completedCourses: [
         {
