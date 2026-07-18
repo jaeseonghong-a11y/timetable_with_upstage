@@ -23,6 +23,7 @@ const SAMPLE_TIMETABLE: Timetable = {
     },
   ],
   meetings: [],
+  fixedEvents: [],
 };
 
 describe("encodeShareableTimetable / decodeShareableTimetable", () => {
@@ -53,6 +54,7 @@ describe("encodeShareableTimetable / decodeShareableTimetable", () => {
         { id: "missing-title", schedule: "월 09:00-10:15" },
       ],
       meetings: [],
+      fixedEvents: [],
     });
 
     const decoded = decodeShareableTimetable(encoded);
@@ -68,7 +70,7 @@ describe("encodeShareableTimetable / decodeShareableTimetable", () => {
       schedule: "월 09:00-10:15",
     }));
 
-    const encoded = encodeShareableTimetable({ courses: manyCourses, meetings: [] });
+    const encoded = encodeShareableTimetable({ courses: manyCourses, meetings: [], fixedEvents: [] });
     const decoded = decodeShareableTimetable(encoded);
 
     expect(decoded?.courses.length).toBeLessThanOrEqual(30);

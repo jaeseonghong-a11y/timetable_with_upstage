@@ -6,6 +6,15 @@ export interface Meeting {
   endMinutes: number;
 }
 
+/** A user-defined block (e.g. 알바) that reserves time without being a course. */
+export interface FixedEvent {
+  id: string;
+  label: string;
+  day: Weekday;
+  startMinutes: number;
+  endMinutes: number;
+}
+
 export interface CourseCandidate {
   id: string;
   title: string;
@@ -21,11 +30,14 @@ export interface TimetableConstraints {
   unavailableDays?: Weekday[];
   /** A course beginning before this minute of the day is excluded. */
   earliestStartMinutes?: number;
+  /** Reserved time blocks (e.g. 알바) that every generated timetable must avoid. */
+  fixedEvents?: FixedEvent[];
 }
 
 export interface Timetable {
   courses: CourseCandidate[];
   meetings: Meeting[];
+  fixedEvents: FixedEvent[];
 }
 
 export class CombinationLimitError extends Error {
@@ -122,13 +134,14 @@ export function generateValidTimetables(
 
   const results: Timetable[] = [];
   const unavailableDays = new Set(constraints.unavailableDays);
+  const fixedEvents = constraints.fixedEvents ?? [];
 
   function visit(groupIndex: number, selectedCourses: CourseCandidate[], selectedMeetings: Meeting[]): void {
     if (groupIndex === courseGroups.length) {
       if (results.length === maxCombinations) {
         throw new CombinationLimitError(maxCombinations);
       }
-      results.push({ courses: selectedCourses, meetings: selectedMeetings });
+      results.push({ courses: selectedCourses, meetings: selectedMeetings, fixedEvents });
       return;
     }
 
@@ -137,7 +150,13 @@ export function generateValidTimetables(
       if (violatesConstraints(meetings, unavailableDays, constraints.earliestStartMinutes)) {
         continue;
       }
-      if (meetings.some((meeting) => selectedMeetings.some((chosen) => meetingsConflict(meeting, chosen)))) {
+      if (
+        meetings.some(
+          (meeting) =>
+            selectedMeetings.some((chosen) => meetingsConflict(meeting, chosen)) ||
+            fixedEvents.some((fixed) => meetingsConflict(meeting, fixed)),
+        )
+      ) {
         continue;
       }
       visit(groupIndex + 1, [...selectedCourses, course], [...selectedMeetings, ...meetings]);

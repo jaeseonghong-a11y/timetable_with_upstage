@@ -47,6 +47,20 @@ type ProfilesByKind = Partial<Record<AcademicDocumentKind, AcademicProfile>>;
 type AcknowledgementsByKind = Partial<Record<AcademicDocumentKind, string[]>>;
 type FileInputMethod = "picker" | "clipboard";
 
+/**
+ * Purely cosmetic stage labels shown while analyzeDocument()'s single fetch is in flight — the
+ * server does not stream real progress, so this is a timed guess at what's likely happening, not
+ * a measured percentage. Stops advancing at the last label rather than looping, so a slow request
+ * never looks like it silently restarted.
+ */
+const ANALYSIS_STAGES = [
+  "파일을 업로드하는 중…",
+  "Document Parse로 문서 구조를 읽는 중…",
+  "Solar가 항목을 분석하는 중…",
+  "결과를 정리하는 중…",
+] as const;
+const ANALYSIS_STAGE_INTERVAL_MS = 2400;
+
 interface Props {
   profileDetails?: AcademicProfile["profile"];
   onWorkingProfileChange?: (
@@ -73,6 +87,7 @@ export function AcademicDocumentManager({
   const [collapsedResults, setCollapsedResults] = useState<Partial<Record<AcademicDocumentKind, boolean>>>({});
   const [error, setError] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisStageIndex, setAnalysisStageIndex] = useState(0);
 
   const profile = profiles[kind];
   const reviewChecklist = profile ? getReviewChecklist(profile) : [];
@@ -143,10 +158,23 @@ export function AcademicDocumentManager({
     return () => window.removeEventListener("paste", pasteClipboardImage);
   }, [kind, selectFile]);
 
+  useEffect(() => {
+    if (!isAnalyzing) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setAnalysisStageIndex((current) =>
+        current < ANALYSIS_STAGES.length - 1 ? current + 1 : current,
+      );
+    }, ANALYSIS_STAGE_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [isAnalyzing]);
+
   async function analyzeDocument(): Promise<void> {
     if (!file || !hasConsented) {
       return;
     }
+    setAnalysisStageIndex(0);
     setIsAnalyzing(true);
     setError("");
     track("document_upload_start", { doc_type: kind });
@@ -394,6 +422,12 @@ export function AcademicDocumentManager({
           {isAnalyzing ? "Parse + Solar 분석 중…" : profile ? "다시 분석하기" : "문서 분석하기"}
         </button>
       </div>
+      {isAnalyzing ? (
+        <div className={styles.analysisProgress} role="status" aria-live="polite">
+          <div className={styles.analysisProgressBar} />
+          <span>{ANALYSIS_STAGES[analysisStageIndex]}</span>
+        </div>
+      ) : null}
       {file && !hasConsented ? (
         <p className={styles.consentHint}>
           외부 전송 동의에 체크해야 분석을 시작할 수 있습니다.

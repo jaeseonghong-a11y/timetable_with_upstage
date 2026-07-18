@@ -350,6 +350,66 @@ ${JSON.stringify({
     });
   });
 
+  it("recomputes remaining credits from code instead of trusting Solar's own arithmetic, and flags a mismatch", () => {
+    const profile = parseAcademicExtraction(
+      JSON.stringify({
+        completedCourses: [],
+        requirements: [
+          {
+            scope: "general",
+            label: "글로벌",
+            rule: { kind: "credit_minimum", credits: 10 },
+            earnedCredits: 6,
+            inProgressCredits: { spring: 0, summer: 0, fall: 0, winter: 0, total: 0 },
+            // Solar reported 5, but 10 - 6 - 0 = 4: code must win, not Solar's arithmetic.
+            remainingCredits: 5,
+            status: "unmet",
+            rawValues: { 기준학점: "10", 취득학점: "6", 잔여학점: "5" },
+          },
+        ],
+        reviewIssues: [],
+      }),
+      "graduation_requirements",
+      "source-remaining-mismatch",
+    );
+
+    expect(profile.requirements[0]).toMatchObject({
+      remainingCredits: 4,
+      status: "review",
+    });
+    expect(profile.requirements[0]?.reviewReasons).toEqual(
+      expect.arrayContaining([expect.stringContaining("기준·취득·수강학점으로 계산한 잔여학점")]),
+    );
+  });
+
+  it("computes remaining credits even when Solar omits the field entirely", () => {
+    const profile = parseAcademicExtraction(
+      JSON.stringify({
+        completedCourses: [],
+        requirements: [
+          {
+            scope: "general",
+            label: "창의",
+            rule: { kind: "credit_minimum", credits: 3 },
+            earnedCredits: 1,
+            inProgressCredits: { spring: 1, summer: 0, fall: 0, winter: 0, total: 1 },
+            remainingCredits: null,
+            status: "in_progress",
+            rawValues: { 기준학점: "3", 취득학점: "1" },
+          },
+        ],
+        reviewIssues: [],
+      }),
+      "graduation_requirements",
+      "source-remaining-missing",
+    );
+
+    expect(profile.requirements[0]).toMatchObject({
+      remainingCredits: 1,
+      reviewReasons: [],
+    });
+  });
+
   it("supplements general and DS rows omitted by Solar from the Document Parse table", () => {
     const tableRows = [
       ["제1전공 심화학점", "36", "15", "0", "0", "0", "0", "0", "21"],

@@ -17,7 +17,7 @@ function course(id: string, courseType?: string): CourseCandidate {
 }
 
 function timetable(courses: CourseCandidate[], meetings: Meeting[]): Timetable {
-  return { courses, meetings };
+  return { courses, meetings, fixedEvents: [] };
 }
 
 function weight(

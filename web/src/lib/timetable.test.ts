@@ -74,4 +74,24 @@ describe("generateValidTimetables", () => {
   it("fails explicitly instead of returning an arbitrary top N when combinations exceed the guard", () => {
     expect(() => generateValidTimetables(groups, {}, 1)).toThrow(CombinationLimitError);
   });
+
+  it("excludes courses that overlap a fixed event and attaches the event to every result", () => {
+    const timetables = generateValidTimetables(groups, {
+      unavailableDays: ["tue"],
+      fixedEvents: [
+        { id: "part-time", label: "알바", day: "mon", startMinutes: 570, endMinutes: 660 },
+      ],
+    });
+
+    // a-mon (월 09:00-10:15) overlaps 알바 (월 09:30-11:00) and must be excluded, leaving only
+    // combinations built from b-conflict/b-wed with no first-group course left standing on 월.
+    expect(timetables.map((timetable) => timetable.courses.map((course) => course.id))).toEqual([]);
+    expect(
+      generateValidTimetables(groups, {
+        fixedEvents: [
+          { id: "part-time", label: "알바", day: "mon", startMinutes: 570, endMinutes: 660 },
+        ],
+      })[0]?.fixedEvents,
+    ).toEqual([{ id: "part-time", label: "알바", day: "mon", startMinutes: 570, endMinutes: 660 }]);
+  });
 });

@@ -178,6 +178,29 @@ export function TimetableCard({
                           </div>
                         );
                       })}
+                    {timetable.fixedEvents
+                      .filter((event) => event.day === day.id)
+                      .map((event) => {
+                        const visibleStart = Math.max(event.startMinutes, TIMETABLE_START_MINUTES);
+                        const visibleEnd = Math.min(event.endMinutes, TIMETABLE_END_MINUTES);
+                        if (visibleStart >= visibleEnd) {
+                          return null;
+                        }
+                        return (
+                          <div
+                            className={styles.fixedEventBlock}
+                            key={event.id}
+                            style={{
+                              top: (visibleStart - TIMETABLE_START_MINUTES) * PIXELS_PER_MINUTE,
+                              height: Math.max(28, (visibleEnd - visibleStart) * PIXELS_PER_MINUTE),
+                            }}
+                            title={`${event.label} · ${formatMinutes(event.startMinutes)}-${formatMinutes(event.endMinutes)}`}
+                          >
+                            <strong>{event.label}</strong>
+                            <small>{formatMinutes(event.startMinutes)}-{formatMinutes(event.endMinutes)}</small>
+                          </div>
+                        );
+                      })}
                   </div>
                 ))}
               </div>
@@ -237,7 +260,7 @@ export function formatCredits(credits: number): string {
   return Number.isInteger(credits) ? String(credits) : String(Number(credits.toFixed(1)));
 }
 
-function formatMinutes(minutes: number): string {
+export function formatMinutes(minutes: number): string {
   const hour = Math.floor(minutes / 60);
   const minute = minutes % 60;
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;

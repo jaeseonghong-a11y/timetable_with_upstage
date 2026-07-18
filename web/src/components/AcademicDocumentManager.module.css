@@ -296,6 +296,55 @@
   font-size: 13px;
 }
 
+.analysisProgress {
+  display: grid;
+  gap: 8px;
+}
+
+.analysisProgress span {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.analysisProgressBar {
+  position: relative;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-note);
+}
+
+.analysisProgressBar::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -35%;
+  width: 35%;
+  border-radius: 999px;
+  background: var(--accent-strong);
+  animation: analysisProgressSlide 1.1s ease-in-out infinite;
+}
+
+@keyframes analysisProgressSlide {
+  0% {
+    left: -35%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .analysisProgressBar::after {
+    animation: none;
+    left: 0;
+    width: 100%;
+    opacity: 0.5;
+  }
+}
+
 .pasteZone {
   display: grid;
   gap: 7px;

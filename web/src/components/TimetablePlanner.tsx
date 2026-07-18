@@ -30,7 +30,9 @@ import {
 } from "@/lib/selection-plan";
 import {
   CombinationLimitError,
+  meetingsConflict,
   type CourseCandidate,
+  type FixedEvent,
   type Timetable,
   type Weekday,
 } from "@/lib/timetable";
@@ -43,7 +45,7 @@ import {
   type WeightImportance,
 } from "@/lib/timetable-scoring";
 
-import { DAYS, formatCredits, TimetableCard, type TimetableExtra } from "./TimetableCard";
+import { DAYS, formatCredits, formatMinutes, TimetableCard, type TimetableExtra } from "./TimetableCard";
 import styles from "./TimetablePlanner.module.css";
 
 interface Props {
@@ -147,6 +149,12 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
   const [enabledSectionIds, setEnabledSectionIds] = useState<Record<string, string[]>>({});
   const [unavailableDays, setUnavailableDays] = useState<Weekday[]>([]);
   const [earliestStart, setEarliestStart] = useState("");
+  const [fixedEvents, setFixedEvents] = useState<FixedEvent[]>([]);
+  const [newEventLabel, setNewEventLabel] = useState("");
+  const [newEventDay, setNewEventDay] = useState<Weekday>("mon");
+  const [newEventStart, setNewEventStart] = useState("18:00");
+  const [newEventEnd, setNewEventEnd] = useState("20:00");
+  const [fixedEventError, setFixedEventError] = useState("");
   const [minimumCredits, setMinimumCredits] = useState("12");
   const [maximumCredits, setMaximumCredits] = useState("21");
   const [disabledCourseTypes, setDisabledCourseTypes] = useState<Set<string>>(new Set());
@@ -531,6 +539,36 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
       return next;
     });
   }
+  function addFixedEvent(): void {
+    const label = newEventLabel.trim();
+    if (!label) {
+      setFixedEventError("일정 이름을 입력해 주세요.");
+      return;
+    }
+    const startMinutes = parseTimeInputToMinutes(newEventStart);
+    const endMinutes = parseTimeInputToMinutes(newEventEnd);
+    if (startMinutes === null || endMinutes === null || startMinutes >= endMinutes) {
+      setFixedEventError("시작 시각이 종료 시각보다 빨라야 합니다.");
+      return;
+    }
+    const candidate: FixedEvent = {
+      id: `fixed-${Date.now()}-${Math.round(Math.random() * 1000)}`,
+      label,
+      day: newEventDay,
+      startMinutes,
+      endMinutes,
+    };
+    if (fixedEvents.some((event) => meetingsConflict(event, candidate))) {
+      setFixedEventError("이미 등록한 다른 고정 일정과 시간이 겹칩니다.");
+      return;
+    }
+    setFixedEvents((current) => [...current, candidate]);
+    setNewEventLabel("");
+    setFixedEventError("");
+  }
+  function removeFixedEvent(id: string): void {
+    setFixedEvents((current) => current.filter((event) => event.id !== id));
+  }
   /**
    * Format filtering happens here, while picking courses — not on already-generated timetables.
    * A course whose every section is filtered out simply disappears from the catalog; sections
@@ -661,6 +699,7 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
         {
           unavailableDays,
           earliestStartMinutes: earliestStart ? Number(earliestStart) : undefined,
+          fixedEvents,
         },
       );
 
@@ -687,6 +726,7 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
     choiceGroups,
     courseOwners,
     earliestStart,
+    fixedEvents,
     manualSelectionPlanSubjects,
     maximumCredits,
     minimumCredits,
@@ -924,6 +964,7 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
         {
           unavailableDays,
           earliestStartMinutes: earliestStart ? Number(earliestStart) : undefined,
+          fixedEvents,
         },
       );
       const dayFiltered =
@@ -1465,6 +1506,56 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
             </div>
           </fieldset>
 
+          <fieldset>
+            <legend>고정 일정(알바 등)</legend>
+            {fixedEvents.length > 0 ? (
+              <ul className={styles.fixedEventList}>
+                {fixedEvents.map((event) => (
+                  <li key={event.id}>
+                    <span>
+                      {DAYS.find(({ id }) => id === event.day)?.label ?? event.day} ·{" "}
+                      {formatMinutes(event.startMinutes)}-{formatMinutes(event.endMinutes)} ·{" "}
+                      {event.label}
+                    </span>
+                    <button type="button" onClick={() => removeFixedEvent(event.id)}>
+                      삭제
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <div className={styles.fixedEventForm}>
+              <input
+                placeholder="일정 이름(예: 알바)"
+                type="text"
+                value={newEventLabel}
+                onChange={(event) => setNewEventLabel(event.target.value)}
+              />
+              <select
+                value={newEventDay}
+                onChange={(event) => setNewEventDay(event.target.value as Weekday)}
+              >
+                {DAYS.map(({ id, label }) => (
+                  <option key={id} value={id}>{label}</option>
+                ))}
+              </select>
+              <input
+                type="time"
+                value={newEventStart}
+                onChange={(event) => setNewEventStart(event.target.value)}
+              />
+              <span aria-hidden="true">~</span>
+              <input
+                type="time"
+                value={newEventEnd}
+                onChange={(event) => setNewEventEnd(event.target.value)}
+              />
+              <button type="button" onClick={addFixedEvent}>추가</button>
+            </div>
+            {fixedEventError ? <p className={styles.fixedEventError}>{fixedEventError}</p> : null}
+            <small>등록한 시간에는 과목이 배치되지 않도록 시간표 조합에서 제외합니다.</small>
+          </fieldset>
+
           <label className={styles.startSelect}>
             <span>첫 수업</span>
             <select value={earliestStart} onChange={(event) => setEarliestStart(event.target.value)}>
@@ -1877,7 +1968,22 @@ function describeTimetableExtras(
 }
 
 function isDayFree(timetable: Timetable, day: Weekday): boolean {
-  return !timetable.meetings.some((meeting) => meeting.day === day);
+  return !timetable.meetings.some((meeting) => meeting.day === day) &&
+    !timetable.fixedEvents.some((event) => event.day === day);
+}
+
+/** Parses an `<input type="time">` value ("HH:MM", 24-hour) into minutes since midnight. */
+function parseTimeInputToMinutes(value: string): number | null {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(value);
+  if (!match) {
+    return null;
+  }
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour > 23 || minute > 59) {
+    return null;
+  }
+  return hour * 60 + minute;
 }
 
 async function fetchElectivePlannerGroup(

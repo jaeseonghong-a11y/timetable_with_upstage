@@ -48,7 +48,8 @@ export function decodeShareableTimetable(encoded: string): Timetable | null {
   if (courses.length === 0) {
     return null;
   }
-  return { courses, meetings: [] };
+  // Fixed events (알바 등) are personal and never encoded into the link — see stripCourseForSharing.
+  return { courses, meetings: [], fixedEvents: [] };
 }
 
 function toBase64Url(base64: string): string {

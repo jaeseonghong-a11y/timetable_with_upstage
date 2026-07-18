@@ -310,7 +310,8 @@ function parseTimetable(value: unknown): Timetable | null {
     }
     meetings.push(meeting);
   }
-  return { courses, meetings };
+  // Fixed events (알바 등) don't affect scoring/explanation, so they're not part of this wire format.
+  return { courses, meetings, fixedEvents: [] };
 }
 
 function parseCourseCandidate(value: unknown): CourseCandidate | null {
