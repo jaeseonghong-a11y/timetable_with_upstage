@@ -5,7 +5,6 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { Requirement } from "@/lib/academic-profile";
 import { selectAiFillerSubjects } from "@/lib/ai-filler-selection";
 import { markSessionCompleted, track } from "@/lib/analytics";
-import { getRoadmapMatch, type CurriculumRoadmap, type RoadmapContext } from "@/lib/curriculum-roadmap";
 import {
   courseGroupsFromCollection,
   shouldShowSectionDetails,
@@ -49,7 +48,6 @@ import {
 } from "@/lib/timetable-scoring";
 
 import { DAYS, formatCredits, formatMinutes, TimetableCard, type TimetableExtra } from "./TimetableCard";
-import { ROADMAP_COLORS } from "./CurriculumRoadmapCollection";
 import styles from "./TimetablePlanner.module.css";
 
 interface Props {
@@ -57,9 +55,7 @@ interface Props {
   queryLabel: string;
   excludedCourseNumbers: readonly string[];
   requirements: readonly Requirement[];
-  curriculumRoadmaps: CurriculumRoadmap[];
   roadmapProgramCodes: string[];
-  roadmapContext: RoadmapContext | null;
   /** UI-only: which planner pane to show in the step wizard. */
   view?: "select" | "results" | "ai-setup" | "ai-results";
   /** Increment from the wizard nav to trigger AI recommendation (replaces in-panel button). */
@@ -160,9 +156,7 @@ export function TimetablePlanner({
   queryLabel,
   excludedCourseNumbers,
   requirements,
-  curriculumRoadmaps,
   roadmapProgramCodes,
-  roadmapContext,
   view = "select",
   aiRecommendRequestId = 0,
   onRecommendationsAvailabilityChange,
@@ -1397,36 +1391,13 @@ export function TimetablePlanner({
             ) : null}
             <div className={styles.courseList}>
               {courseSource === "major" ? visibleMajorCourseGroups.map((group) => {
-                const roadmapMatches = curriculumRoadmaps.flatMap((roadmap) => {
-                  const context = roadmapContext
-                    ? { ...roadmapContext, programCode: roadmap.programCode ?? roadmapContext.programCode }
-                    : null;
-                  const programIndex = Math.max(0, roadmapProgramCodes.indexOf(roadmap.programCode ?? ""));
-                  const belongsToProgram =
-                    !roadmap.programCode || group.programCodes?.includes(roadmap.programCode);
-                  return belongsToProgram && getRoadmapMatch(group.title, context, roadmap, group.id)
-                    ? [{ roadmap, color: ROADMAP_COLORS[programIndex % ROADMAP_COLORS.length] }]
-                    : [];
-                });
-                const roadmapColor = roadmapMatches[0]?.color;
                 const isSelectedElsewhere = selectedGroupIds.includes(group.selectionId);
                 const checked = isAssignedToActiveDestination(group.selectionId);
                 const selectedSections = checked
                   ? enabledSectionIds[group.selectionId] ?? getInitialSectionIds(group.candidates)
                   : [];
                 return (
-                  <div
-                    className={`${styles.courseCatalogItem} ${roadmapMatches.length ? styles.roadmapCourse : ""}`}
-                    key={group.selectionId}
-                    style={
-                      roadmapColor
-                        ? {
-                            background: `color-mix(in srgb, ${roadmapColor} 15%, white)`,
-                            borderLeft: `5px solid ${roadmapColor}`,
-                          }
-                        : undefined
-                    }
-                  >
+                  <div className={styles.courseCatalogItem} key={group.selectionId}>
                     <label className={styles.courseToggle}>
                       <input
                         checked={checked}
@@ -1435,15 +1406,6 @@ export function TimetablePlanner({
                       />
                       <span>
                         <strong>{group.title}</strong>
-                        {roadmapMatches.map(({ roadmap, color }) => (
-                          <span
-                            className={styles.roadmapBadge}
-                            key={roadmap.sourceDocumentId}
-                            style={{ background: color }}
-                          >
-                            {roadmap.programName ?? roadmap.programCode ?? "로드맵"}
-                          </span>
-                        ))}
                         <small>
                           {group.id}
                           {group.classification ? ` · ${group.classification}` : ""}

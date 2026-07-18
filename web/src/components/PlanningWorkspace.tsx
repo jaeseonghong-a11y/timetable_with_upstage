@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 
 import type { AcademicDocumentKind, AcademicProfile, Requirement } from "@/lib/academic-profile";
 import { initAbandonTracking, track } from "@/lib/analytics";
-import type { CurriculumRoadmap } from "@/lib/curriculum-roadmap";
 import {
   getExcludedCourseNumbers,
   getCourseQueryLabel,
@@ -15,9 +14,7 @@ import {
 } from "@/lib/planning-profile";
 
 import { AcademicDocumentManager } from "./AcademicDocumentManager";
-import { CurriculumRoadmapCollection } from "./CurriculumRoadmapCollection";
 import { StudentProfileForm } from "./StudentProfileForm";
-import { SyllabusUploader } from "./SyllabusUploader";
 import { TimetablePlanner } from "./TimetablePlanner";
 import styles from "./PlanningWorkspace.module.css";
 
@@ -26,7 +23,6 @@ const STEPS = [
   { id: 2, title: "학사문서 읽기 (skip 가능)", short: "skip 가능" },
   { id: 3, title: "과목 담기", short: "담기 → 유효 시간표" },
   { id: 4, title: "AI 시간표 추천", short: "조건 → 결과" },
-  { id: 5, title: "강의계획서 확인", short: "평가 방식 확인" },
 ] as const;
 
 type StepId = (typeof STEPS)[number]["id"];
@@ -50,7 +46,6 @@ export function PlanningWorkspace() {
   const [confirmedProfiles, setConfirmedProfiles] = useState<
     Partial<Record<AcademicDocumentKind, AcademicProfile>>
   >({});
-  const [curriculumRoadmaps, setCurriculumRoadmaps] = useState<CurriculumRoadmap[]>([]);
   const [roadmapProgramCodes, setRoadmapProgramCodes] = useState<string[]>([]);
   const [hasEnteredPlanner, setHasEnteredPlanner] = useState(false);
   const [documentAnalysisState, setDocumentAnalysisState] = useState({
@@ -203,19 +198,6 @@ export function PlanningWorkspace() {
           : "AI 추천 받기"
         : "다음";
 
-  const roadmapContext =
-    appliedProfile &&
-    appliedProfile.admissionYear !== null &&
-    appliedProfile.currentGrade !== null &&
-    (appliedProfile.courseTerm === 10 || appliedProfile.courseTerm === 20)
-      ? {
-          programCode: appliedProfile.departmentCode,
-          admissionYear: appliedProfile.admissionYear,
-          currentGrade: appliedProfile.currentGrade,
-          semester: appliedProfile.courseTerm === 10 ? (1 as const) : (2 as const),
-        }
-      : null;
-
   return (
     <div className={styles.workspace}>
       <div className={styles.progress} aria-label="진행 단계">
@@ -260,7 +242,6 @@ export function PlanningWorkspace() {
             profile={studentProfile}
             onApply={(profile) => {
               setAppliedProfile({ ...profile });
-              setCurriculumRoadmaps([]);
               setRoadmapProgramCodes([
                 profile.departmentCode,
                 ...(profile.additionalDepartmentCodes ?? []),
@@ -272,38 +253,22 @@ export function PlanningWorkspace() {
         ) : null}
 
         {step === 2 ? (
-          <>
-            <AcademicDocumentManager
-              profileDetails={toAcademicProfileDetails(studentProfile)}
-              onAnalysisStateChange={setDocumentAnalysisState}
-              onWorkingProfileChange={updateWorkingProfile}
-              onConfirmedProfileChange={updateConfirmedProfile}
-            />
-            {appliedProfile ? (
-              <CurriculumRoadmapCollection
-                key={`${roadmapProgramCodes.join(",")}-${appliedProfile.admissionYear}-${appliedProfile.currentGrade}-${appliedProfile.courseTerm}`}
-                academicYear={appliedProfile.admissionYear}
-                programCodes={roadmapProgramCodes}
-                currentGrade={appliedProfile.currentGrade}
-                semester={
-                  appliedProfile.courseTerm === 10 ? 1 : appliedProfile.courseTerm === 20 ? 2 : null
-                }
-                onChange={setCurriculumRoadmaps}
-              />
-            ) : null}
-          </>
+          <AcademicDocumentManager
+            profileDetails={toAcademicProfileDetails(studentProfile)}
+            onAnalysisStateChange={setDocumentAnalysisState}
+            onWorkingProfileChange={updateWorkingProfile}
+            onConfirmedProfileChange={updateConfirmedProfile}
+          />
         ) : null}
 
         {hasEnteredPlanner ? (
           <div className={step === 3 || step === 4 ? undefined : styles.hiddenStep}>
             <TimetablePlanner
               aiRecommendRequestId={aiRecommendRequestId}
-              curriculumRoadmaps={curriculumRoadmaps}
               excludedCourseNumbers={excludedCourseNumbers}
               query={courseQuery}
               queryLabel={appliedProfile ? getCourseQueryLabel(appliedProfile) : ""}
               requirements={requirements}
-              roadmapContext={roadmapContext}
               roadmapProgramCodes={roadmapProgramCodes}
               view={plannerView}
               onAiRecommendActionStateChange={setAiRecommendAction}
@@ -311,8 +276,6 @@ export function PlanningWorkspace() {
             />
           </div>
         ) : null}
-
-        {step === 5 ? <SyllabusUploader /> : null}
       </div>
 
       <div className={styles.nav}>

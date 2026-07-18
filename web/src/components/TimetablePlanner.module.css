@@ -270,21 +270,6 @@
   border-bottom: 0;
 }
 
-.roadmapCourse {
-  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 8%);
-}
-
-.roadmapBadge {
-  display: inline-block;
-  margin-left: 7px;
-  padding: 2px 7px;
-  border-radius: 999px;
-  background: #f59f00;
-  color: #1f2937;
-  font-size: 9px;
-  font-weight: 800;
-}
-
 .courseToggle > span {
   display: flex;
   min-width: 0;
