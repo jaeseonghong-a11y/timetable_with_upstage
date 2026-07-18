@@ -47,6 +47,7 @@ interface TimetableRecommendationItem {
 }
 
 interface SolarExplanation {
+  /** Resolved locally from Solar's 1-based `position`, never trusted from its own output. */
   candidateId: string;
   rank: number | null;
   reason: string;
@@ -180,6 +181,14 @@ function tryReorderByCustomPreference(
  * academic-document.ts's ACADEMIC_EXTRACTION_SCHEMA: without it, Solar is free to add markdown
  * fences or prose around the array, and — more importantly — a bare top-level array isn't a valid
  * root type for structured JSON Schema output, so the object wrapper is required either way.
+ *
+ * Explanations are keyed by `position` (the candidate's 1-based index in the input array), not
+ * candidateId. Live testing showed Solar reliably reproduces a small integer but silently drops
+ * or garbles a subset of entries when asked to echo back the long, generated candidateId string
+ * (course ids joined with "|", 60+ characters) across 8 candidates — every dropped/mismatched id
+ * meant that candidate lost its explanation, and occasionally all of them mismatched at once,
+ * which is what actually produced "Solar 추천 이유 생성에 실패" for users. Position never leaves
+ * our own control, so it can't drift.
  */
 const RECOMMENDATION_EXPLANATION_SCHEMA: SolarJsonSchema = {
   name: "timetable_recommendation_explanations",
@@ -191,13 +200,13 @@ const RECOMMENDATION_EXPLANATION_SCHEMA: SolarJsonSchema = {
         items: {
           type: "object",
           properties: {
-            candidateId: { type: "string" },
+            position: { type: "integer" },
             rank: { type: "integer" },
             reason: { type: "string" },
             requirementContribution: { type: ["string", "null"] },
             customPreferenceNote: { type: ["string", "null"] },
           },
-          required: ["candidateId", "rank", "reason", "requirementContribution", "customPreferenceNote"],
+          required: ["position", "rank", "reason", "requirementContribution", "customPreferenceNote"],
           additionalProperties: false,
         },
       },
@@ -223,15 +232,16 @@ async function requestRecommendationExplanations(
     "여러 후보가 필수과목 구성은 같고 과목 1개의 분반(교수)만 다른 경우, 그 후보들 사이의 실질적",
     "차이가 시간표 배치 외에는 없다는 것을 있는 그대로 말하고, 근거 없는 차별점을 지어내지",
     "마세요.",
-    '각 원소 형식: {"candidateId": string, "rank": number, "reason": string, "requirementContribution": string 또는 null, "customPreferenceNote": string 또는 null}',
-    "rank는 1부터 후보 개수까지 각각 한 번씩만 사용하세요. customPreference가 없으면 입력 순서를 그대로 rank로 사용하세요.",
+    '각 원소 형식: {"position": number, "rank": number, "reason": string, "requirementContribution": string 또는 null, "customPreferenceNote": string 또는 null}',
+    "position은 입력 candidates 배열에서 그 후보의 1부터 시작하는 순번을 그대로 옮겨 적으세요. 절대 새로 만들지 마세요.",
+    "rank는 1부터 후보 개수까지 각각 한 번씩만 사용하세요. customPreference가 없으면 position과 동일한 값을 rank로 사용하세요.",
     "customPreference가 있으면 그 조건에 더 부합하는 후보일수록 낮은 rank(더 상위)를 부여하고, customPreferenceNote에 그 이유를 설명하세요. 없으면 customPreferenceNote는 null로 두세요.",
     "requirementContribution에는 미충족 졸업요건 중 이 후보가 어떤 영역에 도움이 되는지 설명하고, 해당사항이 없으면 null로 두세요.",
   ].join("\n");
 
   const userPrompt = JSON.stringify({
-    candidates: scored.map((entry) => ({
-      candidateId: entry.candidateId,
+    candidates: scored.map((entry, index) => ({
+      position: index + 1,
       courses: entry.timetable.courses.map((course) => ({
         title: course.title,
         professor: course.professor ?? null,
@@ -252,15 +262,12 @@ async function requestRecommendationExplanations(
     apiKey,
     RECOMMENDATION_EXPLANATION_SCHEMA,
   );
-  return parseSolarExplanations(
-    content,
-    new Set(scored.map((entry) => entry.candidateId)),
-  );
+  return parseSolarExplanations(content, scored);
 }
 
 function parseSolarExplanations(
   content: string,
-  validCandidateIds: ReadonlySet<string>,
+  scored: readonly ScoredTimetable[],
 ): SolarExplanation[] {
   const trimmed = content
     .trim()
@@ -284,18 +291,23 @@ function parseSolarExplanations(
   }
 
   const explanations: SolarExplanation[] = [];
+  const seenPositions = new Set<number>();
   for (const entry of parsed) {
     if (
       !isRecord(entry) ||
-      typeof entry.candidateId !== "string" ||
-      !validCandidateIds.has(entry.candidateId) ||
+      typeof entry.position !== "number" ||
+      !Number.isInteger(entry.position) ||
+      entry.position < 1 ||
+      entry.position > scored.length ||
+      seenPositions.has(entry.position) ||
       typeof entry.reason !== "string" ||
       !entry.reason.trim()
     ) {
       continue;
     }
+    seenPositions.add(entry.position);
     explanations.push({
-      candidateId: entry.candidateId,
+      candidateId: scored[entry.position - 1]!.candidateId,
       rank: typeof entry.rank === "number" && Number.isInteger(entry.rank) ? entry.rank : null,
       reason: entry.reason.trim(),
       requirementContribution:

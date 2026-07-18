@@ -1,4 +1,4 @@
-import type { CourseCandidate } from "./timetable";
+import { parseSchedule, type CourseCandidate } from "./timetable";
 
 export interface CourseCandidateGroup {
   id: string;
@@ -10,6 +10,32 @@ export interface CourseCandidateGroup {
 
 export function shouldShowSectionDetails(sectionCount: number): boolean {
   return sectionCount > 0;
+}
+
+/**
+ * Keeps one section per distinct meeting-time signature (day/start/end), dropping sections that
+ * meet at the exact same time as one already kept. Two sections at the same time are
+ * interchangeable for timetable-shape purposes — only the professor differs — so keeping both
+ * would just multiply the combination space with near-duplicate timetables. Sections meeting at
+ * genuinely different times are all kept, since they produce real schedule variety.
+ */
+export function dedupeCandidatesBySchedule(
+  candidates: readonly CourseCandidate[],
+): CourseCandidate[] {
+  const seenSignatures = new Set<string>();
+  const result: CourseCandidate[] = [];
+  for (const candidate of candidates) {
+    const signature = parseSchedule(candidate.schedule)
+      .map((meeting) => `${meeting.day}:${meeting.startMinutes}-${meeting.endMinutes}`)
+      .sort()
+      .join(",");
+    if (seenSignatures.has(signature)) {
+      continue;
+    }
+    seenSignatures.add(signature);
+    result.push(candidate);
+  }
+  return result;
 }
 
 type ScrapedCourse = {

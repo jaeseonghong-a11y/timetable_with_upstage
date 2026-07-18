@@ -1,5 +1,21 @@
 import type { SkkuElectiveAreaCode, SkkuElectiveSubject } from "./skku-course-api";
 
+/**
+ * The graduation-requirement sheet and the elective course search use independently worded area
+ * names for the same 핵심교양 areas — confirmed against a real document, the sheet labels the
+ * 소통과사고 area "의사소통", which shares no substring with the catalog's own label. Known
+ * mismatches are listed here; combined labels ("인간/문화", "고전·명저") are also split on their
+ * delimiter below so a requirement naming just one half still matches.
+ */
+const AREA_LABEL_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  소통과사고: ["의사소통"],
+};
+
+function areaLabelFragments(areaLabel: string): string[] {
+  const aliases = AREA_LABEL_ALIASES[areaLabel] ?? [];
+  return [areaLabel, ...aliases].flatMap((label) => label.split(/[/·]/)).filter(Boolean);
+}
+
 export interface AiFillerSelectionInput {
   catalogSubjects: readonly SkkuElectiveSubject[];
   /** Subject ids (matching SubjectOption.id) already used as required/choice subjects. */
@@ -40,7 +56,13 @@ export function selectAiFillerSubjects(input: AiFillerSelectionInput): SkkuElect
 
   const matchesUnmetArea = (areaCode: SkkuElectiveAreaCode): boolean => {
     const areaLabel = areaLabelByCode.get(areaCode) ?? "";
-    return unmetGeneralLabels.some((label) => label.includes(areaLabel) || areaLabel.includes(label));
+    if (!areaLabel) {
+      return false;
+    }
+    const fragments = areaLabelFragments(areaLabel);
+    return unmetGeneralLabels.some((label) =>
+      fragments.some((fragment) => label.includes(fragment) || fragment.includes(label)),
+    );
   };
 
   const excludedUpper = new Set([...excludedCourseNumbers].map((value) => value.toUpperCase()));

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { courseGroupsFromCollection, shouldShowSectionDetails } from "./course-candidates";
+import {
+  courseGroupsFromCollection,
+  dedupeCandidatesBySchedule,
+  shouldShowSectionDetails,
+} from "./course-candidates";
+import type { CourseCandidate } from "./timetable";
 
 describe("courseGroupsFromCollection", () => {
   it("shows section metadata before course selection for one or multiple sections", () => {
@@ -106,5 +111,44 @@ describe("courseGroupsFromCollection", () => {
     expect(() => courseGroupsFromCollection({ courses: [{ name: "과목" }] })).toThrow(
       "course_id 문자열이 필요합니다.",
     );
+  });
+});
+
+describe("dedupeCandidatesBySchedule", () => {
+  function candidate(id: string, schedule: string, professor: string): CourseCandidate {
+    return { id, title: "과목", schedule, professor };
+  }
+
+  it("keeps only the first section for each distinct meeting time", () => {
+    const result = dedupeCandidatesBySchedule([
+      candidate("A-01", "월09:00-09:50", "김교수"),
+      candidate("A-02", "월09:00-09:50", "이교수"),
+      candidate("A-03", "화10:00-10:50", "박교수"),
+    ]);
+    expect(result.map((c) => c.id)).toEqual(["A-01", "A-03"]);
+  });
+
+  it("treats different room numbers at the same time as the same slot", () => {
+    const result = dedupeCandidatesBySchedule([
+      candidate("A-01", "월09:00-09:50【22110】", "김교수"),
+      candidate("A-02", "월09:00-09:50【30301】", "이교수"),
+    ]);
+    expect(result).toHaveLength(1);
+  });
+
+  it("collapses fully-online sections with no parsed meeting time down to one", () => {
+    const result = dedupeCandidatesBySchedule([
+      candidate("A-01", "온라인 강의", "김교수"),
+      candidate("A-02", "온라인 강의", "이교수"),
+    ]);
+    expect(result).toHaveLength(1);
+  });
+
+  it("keeps sections that meet at multiple genuinely different times", () => {
+    const result = dedupeCandidatesBySchedule([
+      candidate("A-01", "월09:00-09:50,수09:00-09:50", "김교수"),
+      candidate("A-02", "화10:00-10:50,목10:00-10:50", "이교수"),
+    ]);
+    expect(result.map((c) => c.id)).toEqual(["A-01", "A-02"]);
   });
 });

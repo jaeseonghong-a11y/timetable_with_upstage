@@ -7,6 +7,7 @@ const AREA_LABELS = new Map<SkkuElectiveAreaCode, string>([
   ["A5", "글로벌"],
   ["D1", "인간/문화"],
   ["ETC", "일반선택"],
+  ["A1", "소통과사고"],
 ]);
 
 function subject(areaCode: SkkuElectiveAreaCode, courseNumber: string, name = courseNumber): SkkuElectiveSubject {
@@ -40,6 +41,26 @@ describe("selectAiFillerSubjects", () => {
   it("prioritizes subjects whose area matches an unmet 교양 requirement label", () => {
     const result = selectAiFillerSubjects(
       baseInput({ hasAnyRequirements: true, unmetGeneralLabels: ["인간/문화 영역"] }),
+    );
+    expect(result.map((s) => s.courseNumber)).toEqual(["GEDH001"]);
+  });
+
+  it("matches a requirement label that's a known alias of the area's catalog name", () => {
+    // Real graduation-requirement sheets label the 소통과사고 area "의사소통" — a different
+    // word that shares no substring with the elective catalog's own area label.
+    const result = selectAiFillerSubjects(
+      baseInput({
+        catalogSubjects: [subject("A1", "GEDS001", "말하기와글쓰기")],
+        hasAnyRequirements: true,
+        unmetGeneralLabels: ["의사소통"],
+      }),
+    );
+    expect(result.map((s) => s.courseNumber)).toEqual(["GEDS001"]);
+  });
+
+  it("matches a requirement label naming only one half of a combined area label", () => {
+    const result = selectAiFillerSubjects(
+      baseInput({ hasAnyRequirements: true, unmetGeneralLabels: ["균형교양 - 문화"] }),
     );
     expect(result.map((s) => s.courseNumber)).toEqual(["GEDH001"]);
   });

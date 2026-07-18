@@ -80,8 +80,8 @@ describe("POST /api/timetable-recommendations", () => {
   it("attaches Solar reasons and requirement contributions on the happy path", async () => {
     const solarResult = JSON.stringify({
       explanations: [
-        { candidateId: "B1", rank: 1, reason: "공강이 더 많습니다.", requirementContribution: "전공필수 충족", customPreferenceNote: null },
-        { candidateId: "A1", rank: 2, reason: "요일이 몰려 있습니다.", requirementContribution: null, customPreferenceNote: null },
+        { position: 1, rank: 1, reason: "공강이 더 많습니다.", requirementContribution: "전공필수 충족", customPreferenceNote: null },
+        { position: 2, rank: 2, reason: "요일이 몰려 있습니다.", requirementContribution: null, customPreferenceNote: null },
       ],
     });
     const fetchMock = vi
@@ -149,8 +149,8 @@ describe("POST /api/timetable-recommendations", () => {
   it("reorders by customPreference only when Solar returns a clean rank permutation", async () => {
     const solarResult = JSON.stringify({
       explanations: [
-        { candidateId: "B1", rank: 2, reason: "이유1", requirementContribution: null, customPreferenceNote: "덜 맞음" },
-        { candidateId: "A1", rank: 1, reason: "이유2", requirementContribution: null, customPreferenceNote: "화요일 수업 회피 조건에 맞음" },
+        { position: 1, rank: 2, reason: "이유1", requirementContribution: null, customPreferenceNote: "덜 맞음" },
+        { position: 2, rank: 1, reason: "이유2", requirementContribution: null, customPreferenceNote: "화요일 수업 회피 조건에 맞음" },
       ],
     });
     const fetchMock = vi
@@ -173,6 +173,37 @@ describe("POST /api/timetable-recommendations", () => {
 
     expect(body.recommendations[0]).toMatchObject({ candidateId: "A1", rank: 1 });
     expect(body.recommendations[1]).toMatchObject({ candidateId: "B1", rank: 2 });
+  });
+
+  it("keeps valid explanations and drops out-of-range or duplicate positions instead of failing outright", async () => {
+    const solarResult = JSON.stringify({
+      explanations: [
+        { position: 1, rank: 1, reason: "공강이 더 많습니다.", requirementContribution: null, customPreferenceNote: null },
+        { position: 1, rank: 1, reason: "중복된 자리입니다.", requirementContribution: null, customPreferenceNote: null },
+        { position: 99, rank: 2, reason: "범위 밖 자리입니다.", requirementContribution: null, customPreferenceNote: null },
+      ],
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({ choices: [{ message: { role: "assistant", content: solarResult } }] }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await POST(
+      jsonRequest({
+        timetables: [weekdayFilledTimetable, spaciousTimetable],
+        weights: [{ id: "free_days", enabled: true, importance: "medium" }],
+      }),
+    );
+    const body = (await response.json()) as {
+      recommendations: Array<{ candidateId: string; reason: string | null }>;
+      aiExplanationFailed: boolean;
+    };
+
+    expect(body.aiExplanationFailed).toBe(false);
+    expect(body.recommendations[0]).toMatchObject({ candidateId: "B1", reason: "공강이 더 많습니다." });
+    expect(body.recommendations[1]).toMatchObject({ candidateId: "A1", reason: null });
   });
 
   it("uses default weights when weights is omitted", async () => {

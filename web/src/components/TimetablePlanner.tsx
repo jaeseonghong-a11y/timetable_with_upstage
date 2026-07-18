@@ -7,6 +7,7 @@ import { selectAiFillerSubjects } from "@/lib/ai-filler-selection";
 import { markSessionCompleted, track } from "@/lib/analytics";
 import {
   courseGroupsFromCollection,
+  dedupeCandidatesBySchedule,
   shouldShowSectionDetails,
   type CourseCandidateGroup,
 } from "@/lib/course-candidates";
@@ -1072,28 +1073,31 @@ export function TimetablePlanner({
       if (filtered.candidates.length === 0) {
         continue;
       }
-      // AI-suggested filler subjects offer only one representative section (matching the same
-      // "first section" default used when the user manually adds a subject, getInitialSectionIds)
-      // instead of every section. The recommendation is about which subjects to add, not which
-      // professor's section — offering all of them multiplied the combination space with
-      // near-duplicate timetables that differ only by section/professor, which both looked
-      // repetitive to the user and forced Solar to invent unfounded distinguishing reasons
-      // (e.g. fabricated professor reputation) to explain candidates with no real difference.
-      const representativeSection = filtered.candidates[0];
-      if (!representativeSection) {
+      // AI-suggested filler subjects keep one section per distinct schedule (day/time), not one
+      // per professor: two sections meeting at the exact same time are interchangeable for
+      // timetable-shape purposes, and offering both only multiplied the combination space with
+      // near-duplicate timetables that differ solely by professor — which both looked repetitive
+      // to the user and forced Solar to invent unfounded distinguishing reasons (e.g. fabricated
+      // professor reputation). Sections that meet at genuinely different times are kept, since
+      // they produce real timetable-shape variety instead of noise (previously collapsed to a
+      // single "first" section, which cut candidate diversity far more than necessary).
+      const scheduleDeduped = dedupeCandidatesBySchedule(filtered.candidates);
+      if (scheduleDeduped.length === 0) {
         continue;
       }
       subjects.push({
         id: filtered.selectionId,
         title: filtered.title,
         credits: filtered.credits,
-        sections: [representativeSection],
+        sections: scheduleDeduped,
       });
-      extrasBySectionId.set(representativeSection.id, {
-        groupTitle: AI_FILLER_GROUP_TITLE,
-        title: filtered.title,
-        classification: filtered.classification || "영역 미상",
-      });
+      for (const section of scheduleDeduped) {
+        extrasBySectionId.set(section.id, {
+          groupTitle: AI_FILLER_GROUP_TITLE,
+          title: filtered.title,
+          classification: filtered.classification || "영역 미상",
+        });
+      }
     }
     if (subjects.length === 0) {
       return { bag: null, extrasBySectionId };
