@@ -53,7 +53,7 @@ interface Props {
   excludedCourseNumbers: readonly string[];
   requirements: readonly Requirement[];
   /** UI-only: which planner pane to show in the step wizard. */
-  view?: "plan" | "ai";
+  view?: "select" | "results" | "ai";
 }
 
 const WEIGHT_LABELS: Record<WeightId, string> = {
@@ -136,9 +136,10 @@ export function TimetablePlanner({
   queryLabel,
   excludedCourseNumbers,
   requirements,
-  view = "plan",
+  view = "select",
 }: Props) {
-  const showPlan = view === "plan";
+  const showSelect = view === "select";
+  const showResults = view === "results";
   const showAi = view === "ai";
   const [majorCourseGroups, setMajorCourseGroups] = useState<CourseCandidateGroup[]>([]);
   const [electiveCourseGroups, setElectiveCourseGroups] = useState<PlannerCourseGroup[]>([]);
@@ -1026,13 +1027,13 @@ export function TimetablePlanner({
 
   return (
     <section className={styles.planner} aria-label="시간표 조합">
-      {showPlan ? (
+      {showSelect ? (
         <div className={styles.notice}>
           <div>
             <strong>{query ? queryLabel : "개설강좌 조회 전"}</strong>
             <span>
               {query
-                ? "선택한 소속 범위의 공개 개설강좌를 서버에서 직접 조회합니다."
+                ? "필요한 과목과 분반을 담아 주세요. 시간표 결과는 다음 화면에서 확인합니다."
                 : "위 기본정보를 입력하면 해당 소속의 실제 개설강좌가 여기에 표시됩니다."}
             </span>
           </div>
@@ -1044,23 +1045,32 @@ export function TimetablePlanner({
             </span>
           ) : null}
         </div>
-      ) : (
+      ) : null}
+      {showResults ? (
+        <div className={styles.notice}>
+          <div>
+            <strong>유효 시간표 확인</strong>
+            <span>요일·학점 조건을 조정하며, 담아 둔 과목으로 만들 수 있는 시간표를 확인합니다.</span>
+          </div>
+        </div>
+      ) : null}
+      {showAi ? (
         <div className={styles.notice}>
           <div>
             <strong>AI 시간표 추천</strong>
-            <span>3단계에서 담은 과목을 유지한 채, 조건에 맞는 상위 후보를 보여줍니다.</span>
+            <span>앞에서 담은 과목을 유지한 채, 조건에 맞는 상위 후보를 보여줍니다.</span>
           </div>
         </div>
-      )}
-      {showPlan && collectionError ? (
+      ) : null}
+      {showSelect && collectionError ? (
         <p className={styles.collectionError} role="alert">{collectionError}</p>
       ) : null}
-      {showPlan && electiveError ? (
+      {showSelect && electiveError ? (
         <p className={styles.collectionError} role="alert">{electiveError}</p>
       ) : null}
 
-      <div className={showPlan ? styles.grid : styles.aiOnlyGrid}>
-        {showPlan ? (
+      <div className={showResults ? styles.grid : styles.aiOnlyGrid}>
+        {showSelect ? (
         <aside className={styles.controls}>
           <fieldset>
             <legend>넣을 과목</legend>
@@ -1516,7 +1526,11 @@ export function TimetablePlanner({
               )}
             </section>
           </fieldset>
+        </aside>
+        ) : null}
 
+        {showResults ? (
+        <aside className={styles.controls}>
           <fieldset>
             <legend>수업 없는 요일</legend>
             <div className={styles.dayChoices}>
@@ -1582,7 +1596,7 @@ export function TimetablePlanner({
         ) : null}
 
         <div className={styles.results} aria-live="polite">
-          {showPlan ? (
+          {showResults ? (
             <>
           <div className={styles.resultHeading}>
             <div>
@@ -1622,7 +1636,7 @@ export function TimetablePlanner({
 
           {result.error ? <p className={styles.error}>{result.error}</p> : null}
           {!result.error && effectiveSelectedGroupIds.length === 0 ? (
-            <p className={styles.empty}>왼쪽에서 필수 과목이나 선택 그룹 후보를 추가해 주세요.</p>
+            <p className={styles.empty}>이전 단계에서 필수 과목이나 선택 그룹 후보를 추가해 주세요.</p>
           ) : null}
           {!result.error && effectiveSelectedGroupIds.length > 0 && result.entries.length === 0 ? (
             <p className={styles.empty}>

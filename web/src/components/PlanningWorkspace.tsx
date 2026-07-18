@@ -22,15 +22,17 @@ import styles from "./PlanningWorkspace.module.css";
 const STEPS = [
   { id: 1, title: "기본 정보 입력", short: "소속·학기 설정" },
   { id: 2, title: "학사문서 읽기", short: "기수강·졸업요건" },
-  { id: 3, title: "과목 담기", short: "유효 시간표 확인" },
+  { id: 3, title: "과목 담기", short: "담기 → 유효 시간표" },
   { id: 4, title: "AI 시간표 추천", short: "조건 맞춰 추천" },
   { id: 5, title: "강의계획서 확인", short: "평가 방식 확인" },
 ] as const;
 
 type StepId = (typeof STEPS)[number]["id"];
+type PlanSubstep = "select" | "results";
 
 export function PlanningWorkspace() {
   const [step, setStep] = useState<StepId>(1);
+  const [planSubstep, setPlanSubstep] = useState<PlanSubstep>("select");
   const [studentProfile, setStudentProfile] = useState(INITIAL_STUDENT_PROFILE);
   const [appliedProfile, setAppliedProfile] = useState<StudentPlanningProfile | null>(null);
   const [workingProfiles, setWorkingProfiles] = useState<
@@ -81,30 +83,64 @@ export function PlanningWorkspace() {
     setConfirmedProfiles((current) => updateProfileMap(current, kind, profile));
   }
 
+  function goToStep(nextStep: StepId, nextPlanSubstep: PlanSubstep = "select"): void {
+    if (nextStep !== 1 && !appliedProfile && nextStep > 1) {
+      return;
+    }
+    setStep(nextStep);
+    if (nextStep === 3) {
+      setPlanSubstep(nextPlanSubstep);
+    }
+  }
+
   function goNext(): void {
+    if (step === 3 && planSubstep === "select") {
+      setPlanSubstep("results");
+      return;
+    }
     if (step >= STEPS.length) {
       return;
     }
-    setStep((current) => (current + 1) as StepId);
+    const nextStep = (step + 1) as StepId;
+    setStep(nextStep);
+    if (nextStep === 3) {
+      setPlanSubstep("select");
+    }
   }
 
   function goPrev(): void {
+    if (step === 3 && planSubstep === "results") {
+      setPlanSubstep("select");
+      return;
+    }
     if (step <= 1) {
       return;
     }
-    setStep((current) => (current - 1) as StepId);
+    const prevStep = (step - 1) as StepId;
+    setStep(prevStep);
+    if (prevStep === 3) {
+      setPlanSubstep("results");
+    }
   }
 
   const current = STEPS[step - 1]!;
   const progressPercent = (step / STEPS.length) * 100;
   const nextBlocked = step === 1 && !appliedProfile;
+  const stepTitle =
+    step === 3
+      ? planSubstep === "select"
+        ? "과목 담기 (1/2)"
+        : "유효 시간표 확인 (2/2)"
+      : current.title;
+  const plannerView =
+    step === 4 ? "ai" : planSubstep === "results" ? "results" : "select";
 
   return (
     <div className={styles.workspace}>
       <div className={styles.progress} aria-label="진행 단계">
         <div className={styles.progressHeader}>
           <strong>
-            {step}단계 · {current.title}
+            {step}단계 · {stepTitle}
           </strong>
           <span>
             {step}/{STEPS.length}
@@ -126,11 +162,7 @@ export function PlanningWorkspace() {
                 data-active={item.id === step}
                 data-done={item.id < step}
                 type="button"
-                onClick={() => {
-                  if (item.id === 1 || appliedProfile || item.id <= step) {
-                    setStep(item.id);
-                  }
-                }}
+                onClick={() => goToStep(item.id, "select")}
               >
                 <strong>{item.id}단계</strong>
                 <span>{item.title}</span>
@@ -168,7 +200,7 @@ export function PlanningWorkspace() {
               query={courseQuery}
               queryLabel={appliedProfile ? getCourseQueryLabel(appliedProfile) : ""}
               requirements={requirements}
-              view={step === 4 ? "ai" : "plan"}
+              view={plannerView}
             />
           </div>
         ) : null}
@@ -180,14 +212,14 @@ export function PlanningWorkspace() {
         <button disabled={step === 1} type="button" onClick={goPrev}>
           이전
         </button>
-        {step < STEPS.length ? (
+        {step < STEPS.length || (step === 3 && planSubstep === "select") ? (
           <button
             data-primary="true"
             disabled={nextBlocked}
             type="button"
             onClick={goNext}
           >
-            다음
+            {step === 3 && planSubstep === "select" ? "유효 시간표 보기" : "다음"}
           </button>
         ) : (
           <span />
@@ -197,6 +229,9 @@ export function PlanningWorkspace() {
         ) : null}
         {step === 2 ? (
           <p className={styles.navHint}>학사문서는 나중에 해도 됩니다. 건너뛰고 다음으로 가도 됩니다.</p>
+        ) : null}
+        {step === 3 && planSubstep === "select" ? (
+          <p className={styles.navHint}>과목을 담은 뒤 다음에서 유효 시간표를 확인합니다.</p>
         ) : null}
       </div>
     </div>
