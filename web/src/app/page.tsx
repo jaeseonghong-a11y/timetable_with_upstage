@@ -13,6 +13,11 @@ export default function Home() {
         </p>
       </section>
       <PlanningWorkspace />
+      <footer className={styles.footer}>
+        <p>
+          오류 제보·문의: <a href="mailto:jaeseong.hong@gmail.com">jaeseong.hong@gmail.com</a>
+        </p>
+      </footer>
     </main>
   );
 }

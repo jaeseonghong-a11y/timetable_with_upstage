@@ -329,6 +329,7 @@ export function AcademicDocumentManager({
       </div>
 
       <div className={styles.privacyNotice}>
+        <p className={styles.privacyNoticeLabel}>[개인정보 수집·이용 동의]</p>
         <p>
           업로드한 파일은 분석을 위해 <strong>외부 API(Upstage)</strong>로 전송됩니다.
           분석이 끝나면 원본 파일과 전체 분석 결과는 <strong>우리 서버에 저장하지

@@ -89,6 +89,12 @@
   line-height: 1.6;
 }
 
+.privacyNotice p.privacyNoticeLabel {
+  color: var(--accent-strong);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
 .privacyNotice p strong {
   color: var(--text-primary);
 }

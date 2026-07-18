@@ -34,6 +34,19 @@
   line-height: 1.65;
 }
 
+.footer {
+  max-width: 720px;
+  margin: 48px auto 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.footer a {
+  color: var(--accent-strong);
+}
+
 @media (max-width: 640px) {
   .page {
     padding-top: 44px;
