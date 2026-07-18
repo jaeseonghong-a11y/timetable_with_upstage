@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { CompletedCourse } from "./academic-profile";
-import { formatCourseYearTerm, groupCompletedCoursesForReview } from "./course-history-grouping";
+import { formatTermLabel, groupCompletedCoursesForReview } from "./course-history-grouping";
 
 function makeCourse(overrides: Partial<CompletedCourse>): CompletedCourse {
   return {
@@ -23,7 +23,7 @@ function makeCourse(overrides: Partial<CompletedCourse>): CompletedCourse {
 }
 
 describe("groupCompletedCoursesForReview", () => {
-  it("groups by classification and sorts entries by year then 학기 within each group", () => {
+  it("groups by classification, then by year (own block, ascending), then by 학기 within a year", () => {
     const courses = [
       makeCourse({ courseCode: "A", classification: "전공필수", year: 2023, term: "fall" }),
       makeCourse({ courseCode: "B", classification: "교양선택", year: 2022, term: "spring" }),
@@ -34,11 +34,14 @@ describe("groupCompletedCoursesForReview", () => {
     const groups = groupCompletedCoursesForReview(courses);
 
     expect(groups.map((group) => group.classification)).toEqual(["전공필수", "교양선택"]);
-    // C(2022 spring) -> D(2023 spring) -> A(2023 fall), one flat list, not split by year.
-    expect(groups[0]!.entries).toEqual([
-      { course: courses[2], index: 2 },
-      { course: courses[3], index: 3 },
-      { course: courses[0], index: 0 },
+    expect(groups[0]!.yearGroups.map((yearGroup) => yearGroup.year)).toEqual([2022, 2023]);
+    expect(groups[0]!.yearGroups[0]!.termGroups).toEqual([
+      { term: "spring", entries: [{ course: courses[2], index: 2 }] },
+    ]);
+    // 2023 has both spring(D) and fall(A) — separate term groups, spring first, same year block.
+    expect(groups[0]!.yearGroups[1]!.termGroups).toEqual([
+      { term: "spring", entries: [{ course: courses[3], index: 3 }] },
+      { term: "fall", entries: [{ course: courses[0], index: 0 }] },
     ]);
   });
 
@@ -64,7 +67,7 @@ describe("groupCompletedCoursesForReview", () => {
     ]);
   });
 
-  it("sorts undated entries and entries with no 학기 last within a classification", () => {
+  it("puts undated entries in their own trailing year block, and unset 학기 last within a year", () => {
     const courses = [
       makeCourse({ courseCode: "A", classification: "전공선택", year: 2023, term: null }),
       makeCourse({ courseCode: "B", classification: "전공선택", year: null, term: null }),
@@ -73,7 +76,10 @@ describe("groupCompletedCoursesForReview", () => {
 
     const groups = groupCompletedCoursesForReview(courses);
 
-    expect(groups[0]!.entries.map((entry) => entry.course.courseCode)).toEqual(["C", "A", "B"]);
+    expect(groups[0]!.yearGroups.map((yearGroup) => yearGroup.year)).toEqual([2021, 2023, null]);
+    expect(groups[0]!.yearGroups[1]!.termGroups).toEqual([
+      { term: null, entries: [{ course: courses[0], index: 0 }] },
+    ]);
   });
 
   it("returns an empty array for no courses", () => {
@@ -81,13 +87,13 @@ describe("groupCompletedCoursesForReview", () => {
   });
 });
 
-describe("formatCourseYearTerm", () => {
-  it("formats a known year and term", () => {
-    expect(formatCourseYearTerm({ year: 2023, term: "fall" })).toBe("2023년 2학기");
+describe("formatTermLabel", () => {
+  it("formats a known term", () => {
+    expect(formatTermLabel("fall")).toBe("2학기");
+    expect(formatTermLabel("winter")).toBe("겨울학기");
   });
 
-  it("falls back to 미상 labels for missing year/term", () => {
-    expect(formatCourseYearTerm({ year: null, term: null })).toBe("연도 미상 학기 미상");
-    expect(formatCourseYearTerm({ year: 2023, term: null })).toBe("2023년 학기 미상");
+  it("falls back to 학기 미상 when missing", () => {
+    expect(formatTermLabel(null)).toBe("학기 미상");
   });
 });
