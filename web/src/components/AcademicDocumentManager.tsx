@@ -71,12 +71,18 @@ interface Props {
     kind: AcademicDocumentKind,
     profile: AcademicProfile | undefined,
   ) => void;
+  /** Lets the wizard gate the Next button until document analysis finishes. */
+  onAnalysisStateChange?: (state: {
+    isAnalyzing: boolean;
+    hasAnalyzedDocument: boolean;
+  }) => void;
 }
 
 export function AcademicDocumentManager({
   profileDetails,
   onWorkingProfileChange,
   onConfirmedProfileChange,
+  onAnalysisStateChange,
 }: Props = {}) {
   const [kind, setKind] = useState<AcademicDocumentKind>("course_history");
   const [file, setFile] = useState<File>();
@@ -169,6 +175,13 @@ export function AcademicDocumentManager({
     }, ANALYSIS_STAGE_INTERVAL_MS);
     return () => window.clearInterval(timer);
   }, [isAnalyzing]);
+
+  useEffect(() => {
+    onAnalysisStateChange?.({
+      isAnalyzing,
+      hasAnalyzedDocument: Object.keys(profiles).length > 0,
+    });
+  }, [isAnalyzing, onAnalysisStateChange, profiles]);
 
   async function analyzeDocument(): Promise<void> {
     if (!file || !hasConsented) {

@@ -1,0 +1,161 @@
+.workspace {
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  display: grid;
+  gap: 20px;
+}
+
+.progress {
+  display: grid;
+  gap: 14px;
+  padding: 18px 20px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+  background: var(--surface-card);
+}
+
+.progressHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.progressHeader strong {
+  color: var(--text-primary);
+  font-size: 16px;
+  letter-spacing: -0.03em;
+}
+
+.progressHeader span {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.progressTrack {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-page);
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent-strong);
+  transition: width 220ms ease;
+}
+
+.stepList {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  list-style: none;
+}
+
+.stepList button {
+  width: 100%;
+  min-height: 64px;
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  padding: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  background: var(--surface-page);
+  color: var(--text-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.stepList button[data-active="true"] {
+  border-color: var(--accent-strong);
+  background: var(--surface-note);
+  color: var(--text-primary);
+}
+
+.stepList button[data-done="true"]:not([data-active="true"]) {
+  color: var(--accent-strong);
+}
+
+.stepList strong {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.stepList span {
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.stepPanel {
+  min-width: 0;
+}
+
+.hiddenStep {
+  display: none;
+}
+
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.navActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.nav button {
+  min-width: 112px;
+  padding: 12px 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.nav button[data-primary="true"] {
+  border-color: var(--accent-strong);
+  background: var(--accent-strong);
+  color: #fff;
+}
+
+.nav button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.navHint {
+  width: 100%;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+@media (max-width: 800px) {
+  .stepList {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .stepList {
+    grid-template-columns: 1fr;
+  }
+}

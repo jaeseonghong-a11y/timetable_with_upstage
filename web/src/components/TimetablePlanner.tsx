@@ -20,7 +20,9 @@ import {
   type SkkuElectiveSubject,
 } from "@/lib/skku-course-api";
 import {
+  estimateCreditRangeFromPlan,
   generateTimetablesForSelectionPlan,
+  getAllSectionIds,
   getInitialSectionIds,
   removeSubjectsOwnedBy,
   SelectionPlanError,
@@ -58,6 +60,19 @@ interface Props {
   curriculumRoadmaps: CurriculumRoadmap[];
   roadmapProgramCodes: string[];
   roadmapContext: RoadmapContext | null;
+  /** UI-only: which planner pane to show in the step wizard. */
+  view?: "select" | "results" | "ai-setup" | "ai-results";
+  /** Increment from the wizard nav to trigger AI recommendation (replaces in-panel button). */
+  aiRecommendRequestId?: number;
+  /** Fires when AI recommendation availability changes (for wizard next-button gating). */
+  onRecommendationsAvailabilityChange?: (hasRecommendations: boolean) => void;
+  /** Fires after a successful AI recommendation run so the wizard can advance to results. */
+  onRecommendationsReady?: () => void;
+  /** Lets the wizard nav mirror the old in-panel AI recommend button state. */
+  onAiRecommendActionStateChange?: (state: {
+    canRun: boolean;
+    isRunning: boolean;
+  }) => void;
 }
 
 const WEIGHT_LABELS: Record<WeightId, string> = {
@@ -148,7 +163,16 @@ export function TimetablePlanner({
   curriculumRoadmaps,
   roadmapProgramCodes,
   roadmapContext,
+  view = "select",
+  aiRecommendRequestId = 0,
+  onRecommendationsAvailabilityChange,
+  onRecommendationsReady,
+  onAiRecommendActionStateChange,
 }: Props) {
+  const showSelect = view === "select";
+  const showResults = view === "results";
+  const showAiSetup = view === "ai-setup";
+  const showAiResults = view === "ai-results";
   const [majorCourseGroups, setMajorCourseGroups] = useState<ProgramCourseCandidateGroup[]>([]);
   const [electiveCourseGroups, setElectiveCourseGroups] = useState<PlannerCourseGroup[]>([]);
   const [electivePreviewGroups, setElectivePreviewGroups] = useState<
@@ -417,6 +441,42 @@ export function TimetablePlanner({
         [group.selectionId]: toggleEnabledSectionId(current, sectionId),
       };
     });
+  }
+
+  function selectAllSections(
+    group: PlannerCourseGroup,
+    sections: readonly Pick<CourseCandidate, "id">[] = group.candidates,
+  ): void {
+    const sectionIds = getAllSectionIds(sections);
+    if (sectionIds.length === 0) {
+      return;
+    }
+    setEnabledSectionIds((current) => ({
+      ...current,
+      [group.selectionId]: sectionIds,
+    }));
+  }
+
+  function selectAllCatalogSections(
+    group: PlannerCourseGroup,
+    sections: readonly Pick<CourseCandidate, "id">[] = group.candidates,
+  ): void {
+    const sectionIds = getAllSectionIds(sections);
+    if (sectionIds.length === 0) {
+      return;
+    }
+    if (isAssignedToActiveDestination(group.selectionId)) {
+      selectAllSections(group, sections);
+      return;
+    }
+    if (group.source === "elective") {
+      setElectiveCourseGroups((groups) =>
+        groups.some(({ selectionId }) => selectionId === group.selectionId)
+          ? groups
+          : [...groups, group],
+      );
+    }
+    selectCourseGroup(group, activeDestination, sectionIds);
   }
 
   function toggleCatalogSection(group: PlannerCourseGroup, sectionId: string): void {
@@ -730,6 +790,22 @@ export function TimetablePlanner({
     return { requiredSubjects, choiceBags };
   }, [choiceGroups, courseOwners, enabledSectionIds, selectedCourseGroups]);
 
+  const derivedCreditRange = useMemo(
+    () => estimateCreditRangeFromPlan(manualSelectionPlanSubjects),
+    [manualSelectionPlanSubjects],
+  );
+  const [previousDerivedCreditRange, setPreviousDerivedCreditRange] = useState(derivedCreditRange);
+  if (previousDerivedCreditRange !== derivedCreditRange) {
+    setPreviousDerivedCreditRange(derivedCreditRange);
+    if (!derivedCreditRange) {
+      setMinimumCredits("12");
+      setMaximumCredits("21");
+    } else {
+      setMinimumCredits(formatCredits(derivedCreditRange.minCredits));
+      setMaximumCredits(formatCredits(derivedCreditRange.maxCredits));
+    }
+  }
+
   const result = useMemo(() => {
     if (selectedCourseGroups.length === 0) {
       return { entries: [], error: null };
@@ -839,6 +915,23 @@ export function TimetablePlanner({
     }, 3000);
     return () => clearTimeout(timer);
   }, [recommendations]);
+
+  useEffect(() => {
+    onRecommendationsAvailabilityChange?.(Boolean(recommendations && recommendations.length > 0));
+  }, [onRecommendationsAvailabilityChange, recommendations]);
+
+  const canRunAiRecommend =
+    manualSelectionPlanSubjects.requiredSubjects.length > 0 ||
+    manualSelectionPlanSubjects.choiceBags.length > 0;
+
+  useEffect(() => {
+    onAiRecommendActionStateChange?.({
+      canRun: canRunAiRecommend,
+      isRunning: isRecommending,
+    });
+  }, [canRunAiRecommend, isRecommending, onAiRecommendActionStateChange]);
+
+  const lastAiRecommendRequestId = useRef(0);
 
   const [previousManualPlanSubjects, setPreviousManualPlanSubjects] = useState(
     manualSelectionPlanSubjects,
@@ -997,7 +1090,7 @@ export function TimetablePlanner({
       manualSelectionPlanSubjects.requiredSubjects.length > 0 ||
       manualSelectionPlanSubjects.choiceBags.length > 0;
     if (!hasAnySelection) {
-      setRecommendationError("왼쪽에서 필수 과목이나 선택 그룹 후보를 먼저 추가해 주세요.");
+      setRecommendationError("이전 단계에서 필수 과목이나 선택 그룹 후보를 먼저 추가해 주세요.");
       return;
     }
     track("ai_recommend_click");
@@ -1064,6 +1157,9 @@ export function TimetablePlanner({
       const parsed = readRecommendationResponse(payload);
       setRecommendations(parsed.recommendations);
       setAiExplanationFailed(parsed.aiExplanationFailed);
+      if (parsed.recommendations.length > 0) {
+        onRecommendationsReady?.();
+      }
     } catch (error) {
       setRecommendationError(readThrownMessage(error));
       setRecommendations(null);
@@ -1073,34 +1169,80 @@ export function TimetablePlanner({
     }
   }
 
+  useEffect(() => {
+    if (!aiRecommendRequestId || aiRecommendRequestId === lastAiRecommendRequestId.current) {
+      return;
+    }
+    lastAiRecommendRequestId.current = aiRecommendRequestId;
+    void fetchAiRecommendations();
+    // Intentionally keyed only by request id; fetch reads the latest planner state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- wizard nav trigger
+  }, [aiRecommendRequestId]);
+
   const excludedCount = courseGroups.length - availableCourseGroups.length;
 
   return (
     <section className={styles.planner} aria-label="시간표 조합">
-      <div className={styles.notice}>
-        <div>
-          <strong>{query ? queryLabel : "개설강좌 조회 전"}</strong>
-          <span>
-            {query
-              ? "선택한 소속 범위의 공개 개설강좌를 서버에서 직접 조회합니다."
-              : "위 기본정보를 입력하면 해당 소속의 실제 개설강좌가 여기에 표시됩니다."}
-          </span>
+      {showSelect ? (
+        <div className={styles.notice}>
+          <div>
+            <strong>{query ? queryLabel : "개설강좌 조회 전"}</strong>
+            <span>
+              {query
+                ? "필요한 과목과 분반을 담아 주세요. 시간표 결과는 다음 화면에서 확인합니다."
+                : "위 기본정보를 입력하면 해당 소속의 실제 개설강좌가 여기에 표시됩니다."}
+            </span>
+          </div>
+          {isLoading || isElectiveLoading ? (
+            <span className={styles.loadingBadge}>
+              {isElectiveLoading
+                ? "교양 강좌 조회 중… (처음 조회는 최대 10초 정도 걸릴 수 있어요)"
+                : "성대 강좌 조회 중…"}
+            </span>
+          ) : null}
         </div>
-        {isLoading || isElectiveLoading ? (
-          <span className={styles.loadingBadge}>
-            {isElectiveLoading
-              ? "교양 강좌 조회 중… (처음 조회는 최대 10초 정도 걸릴 수 있어요)"
-              : "성대 강좌 조회 중…"}
-          </span>
-        ) : null}
-      </div>
-      {collectionError ? <p className={styles.collectionError} role="alert">{collectionError}</p> : null}
-      {electiveError ? <p className={styles.collectionError} role="alert">{electiveError}</p> : null}
+      ) : null}
+      {showResults ? (
+        <div className={styles.notice}>
+          <div>
+            <strong>유효 시간표 확인</strong>
+            <span>요일·학점 조건을 조정하며, 담아 둔 과목으로 만들 수 있는 시간표를 확인합니다.</span>
+          </div>
+        </div>
+      ) : null}
+      {showAiSetup ? (
+        <div className={styles.notice}>
+          <div>
+            <strong>{isRecommending ? "AI 분석 중" : "AI 추천 조건"}</strong>
+            <span>
+              {isRecommending
+                ? "AI가 분석 중입니다... 완료되면 결과 화면으로 이동합니다."
+                : "선호 조건을 고른 뒤 추천을 받으면, 다음 화면에서 결과 카드를 확인합니다."}
+            </span>
+          </div>
+          {isRecommending ? <span className={styles.loadingBadge}>분석 중…</span> : null}
+        </div>
+      ) : null}
+      {showAiResults ? (
+        <div className={styles.notice}>
+          <div>
+            <strong>AI 추천 결과</strong>
+            <span>앞에서 담은 과목을 유지한 채, 조건에 맞는 상위 후보를 보여줍니다.</span>
+          </div>
+        </div>
+      ) : null}
+      {showSelect && collectionError ? (
+        <p className={styles.collectionError} role="alert">{collectionError}</p>
+      ) : null}
+      {showSelect && electiveError ? (
+        <p className={styles.collectionError} role="alert">{electiveError}</p>
+      ) : null}
 
-      <div className={styles.grid}>
+      <div className={showResults ? styles.grid : styles.aiOnlyGrid}>
+        {showSelect ? (
         <aside className={styles.controls}>
           <fieldset>
-            <legend>넣을 과목</legend>
+            <legend>과목 담기</legend>
             <div className={styles.sourceTabs} role="tablist" aria-label="과목 분류">
               <button
                 aria-selected={courseSource === "major"}
@@ -1321,6 +1463,7 @@ export function TimetablePlanner({
                         <CourseSectionDetails
                           group={group}
                           selectedSectionIds={selectedSections}
+                          onSelectAllSections={() => selectAllCatalogSections(group)}
                           onToggleSection={(sectionId) => toggleCatalogSection(group, sectionId)}
                         />
                       )
@@ -1386,6 +1529,9 @@ export function TimetablePlanner({
                         <CourseSectionDetails
                           group={filteredDisplayedGroup}
                           selectedSectionIds={selectedSections}
+                          onSelectAllSections={() =>
+                            selectAllCatalogSections(displayedGroup!, filteredDisplayedGroup.candidates)
+                          }
                           onToggleSection={(sectionId) =>
                             toggleCatalogSection(displayedGroup!, sectionId)
                           }
@@ -1417,11 +1563,11 @@ export function TimetablePlanner({
               {!query ? <p className={styles.courseEmpty}>먼저 기본정보를 입력해 주세요.</p> : null}
             </div>
 
-            <section className={styles.selectionPlanEditor} aria-label="과목 조합 설정">
+            <section className={styles.selectionPlanEditor} aria-label="담은 과목 정리">
               <div className={styles.selectionPlanHeading}>
                 <div>
-                  <strong>과목 조합 설정</strong>
-                  <small>각 선택 그룹에서 몇 과목을 고를지 정합니다.</small>
+                  <strong>담은 과목 정리</strong>
+                  <small>과목을 선택하면 여기서 그룹 이동과 분반 선택을 할 수 있습니다.</small>
                 </div>
                 <button type="button" onClick={addChoiceGroup}>+ 선택 그룹 추가</button>
               </div>
@@ -1450,35 +1596,46 @@ export function TimetablePlanner({
                       />
                     </label>
                     <div className={styles.cardinalityInputs}>
-                      <label>
-                        <span>최소</span>
-                        <input
-                          min="0"
-                          max="20"
-                          type="number"
-                          value={choiceGroup.minSubjects}
-                          onChange={(event) =>
-                            updateChoiceGroup(choiceGroup.id, {
-                              minSubjects: Number(event.target.value),
-                            })
-                          }
-                        />
-                      </label>
-                      <span>~</span>
-                      <label>
-                        <span>최대</span>
-                        <input
-                          min="0"
-                          max="20"
-                          type="number"
-                          value={choiceGroup.maxSubjects}
-                          onChange={(event) =>
-                            updateChoiceGroup(choiceGroup.id, {
-                              maxSubjects: Number(event.target.value),
-                            })
-                          }
-                        />
-                      </label>
+                      <p className={styles.cardinalityLabel}>
+                        이 그룹에서 시간표에 넣을 과목 수
+                      </p>
+                      <div className={styles.cardinalityFields}>
+                        <label>
+                          <span className={styles.srOnly}>최소 과목 수</span>
+                          <span className={styles.cardinalityField}>
+                            <input
+                              min="0"
+                              max="20"
+                              type="number"
+                              value={choiceGroup.minSubjects}
+                              onChange={(event) =>
+                                updateChoiceGroup(choiceGroup.id, {
+                                  minSubjects: Number(event.target.value),
+                                })
+                              }
+                            />
+                            <span aria-hidden="true">개</span>
+                          </span>
+                        </label>
+                        <span aria-hidden="true">~</span>
+                        <label>
+                          <span className={styles.srOnly}>최대 과목 수</span>
+                          <span className={styles.cardinalityField}>
+                            <input
+                              min="0"
+                              max="20"
+                              type="number"
+                              value={choiceGroup.maxSubjects}
+                              onChange={(event) =>
+                                updateChoiceGroup(choiceGroup.id, {
+                                  maxSubjects: Number(event.target.value),
+                                })
+                              }
+                            />
+                            <span aria-hidden="true">개</span>
+                          </span>
+                        </label>
+                      </div>
                     </div>
                     <small>{choiceGroupSubjectCounts.get(choiceGroup.id) ?? 0}개 후보</small>
                     <button
@@ -1504,7 +1661,10 @@ export function TimetablePlanner({
                         <summary>
                           <span>
                             <strong>{group.title}</strong>
-                            <small>{group.id}</small>
+                            <small>
+                              {group.id}
+                              {group.credits > 0 ? ` · ${formatCredits(group.credits)}학점` : ""}
+                            </small>
                           </span>
                           <small>
                             {getDestinationLabel(owner, choiceGroups)} · 분반 {selectedSections.length}/
@@ -1538,6 +1698,16 @@ export function TimetablePlanner({
                           >
                             이 과목 선택 해제
                           </button>
+                          {group.candidates.length > 1 ? (
+                            <button
+                              className={styles.selectAllSections}
+                              disabled={selectedSections.length === group.candidates.length}
+                              type="button"
+                              onClick={() => selectAllSections(group)}
+                            >
+                              분반 전체 선택
+                            </button>
+                          ) : null}
                           <div className={styles.sectionChoices}>
                             {group.candidates.map((candidate) => (
                               <label key={candidate.id}>
@@ -1564,14 +1734,14 @@ export function TimetablePlanner({
                     );
                   })}
                 </div>
-              ) : (
-                <p className={styles.selectionPlanEmpty}>
-                  과목을 선택하면 여기서 그룹 이동과 분반 선택을 할 수 있습니다.
-                </p>
-              )}
+              ) : null}
             </section>
           </fieldset>
+        </aside>
+        ) : null}
 
+        {showResults ? (
+        <aside className={styles.controls}>
           <fieldset>
             <legend>수업 없는 요일</legend>
             <div className={styles.dayChoices}>
@@ -1681,11 +1851,17 @@ export function TimetablePlanner({
                 />
               </label>
             </div>
-            <small>과목 학점은 선택한 분반 수와 관계없이 과목당 한 번만 합산합니다.</small>
+            <small>
+              담은 과목 기준으로 자동 채웁니다. 선택 그룹이 있으면 가능한 최소~최대 합을 씁니다.
+              필요하면 직접 수정할 수 있습니다.
+            </small>
           </fieldset>
         </aside>
+        ) : null}
 
         <div className={styles.results} aria-live="polite">
+          {showResults ? (
+            <>
           <div className={styles.resultHeading}>
             <div>
               <p>유효 시간표</p>
@@ -1724,7 +1900,7 @@ export function TimetablePlanner({
 
           {result.error ? <p className={styles.error}>{result.error}</p> : null}
           {!result.error && effectiveSelectedGroupIds.length === 0 ? (
-            <p className={styles.empty}>왼쪽에서 필수 과목이나 선택 그룹 후보를 추가해 주세요.</p>
+            <p className={styles.empty}>이전 단계에서 필수 과목이나 선택 그룹 후보를 추가해 주세요.</p>
           ) : null}
           {!result.error && effectiveSelectedGroupIds.length > 0 && result.entries.length === 0 ? (
             <p className={styles.empty}>
@@ -1746,13 +1922,32 @@ export function TimetablePlanner({
               ))}
             </ol>
           ) : null}
+            </>
+          ) : null}
 
-          <div className={styles.recommendationSection}>
-            <h3>AI 시간표 추천</h3>
+          {showAiSetup ? (
+          <div
+            aria-busy={isRecommending}
+            className={styles.recommendationSection}
+          >
+            {isRecommending ? (
+              <div className={styles.aiLoadingPanel} role="status" aria-live="polite">
+                <span className={styles.aiSpinner} aria-hidden="true" />
+                <strong>AI가 분석 중입니다...</strong>
+                <p>시간표 후보를 만들고 선호 조건을 반영하는 중이에요. 잠시만 기다려 주세요.</p>
+                <div className={styles.aiSkeletonList} aria-hidden="true">
+                  <div className={styles.aiSkeletonCard} />
+                  <div className={styles.aiSkeletonCard} />
+                  <div className={styles.aiSkeletonCard} />
+                </div>
+              </div>
+            ) : (
+              <>
+            <h3>AI 추천 조건</h3>
             <p className={styles.recommendationHint}>
-              위 목록은 그대로 두고, 필수·선택 과목에 더해 부족한 학점만큼 관련 교양을 자동으로
-              채운 뒤 아래 조건에 맞는 상위 후보를 골라 보여줍니다(이미 담은 과목은 그대로
-              유지). 기수강 과목은 제외합니다.
+              필수·선택 과목에 더해 부족한 학점만큼 관련 교양을 자동으로 채운 뒤, 아래 조건에
+              맞는 상위 후보를 골라 보여줍니다(이미 담은 과목은 그대로 유지). 기수강 과목은
+              제외합니다.
               {requirements.length > 0
                 ? " 업로드한 졸업요건 중 아직 충족하지 못한 교양 영역을 우선으로 채웁니다."
                 : " 학사문서(졸업요건)를 업로드하면 미충족 교양 영역을 우선으로 채웁니다."}
@@ -1828,19 +2023,15 @@ export function TimetablePlanner({
               />
             </label>
 
-            <button
-              disabled={
-                isRecommending ||
-                (manualSelectionPlanSubjects.requiredSubjects.length === 0 &&
-                  manualSelectionPlanSubjects.choiceBags.length === 0)
-              }
-              type="button"
-              onClick={() => void fetchAiRecommendations()}
-            >
-              {isRecommending ? "추천 생성 중…" : "AI 추천 받기"}
-            </button>
-
             {recommendationError ? <p className={styles.error}>{recommendationError}</p> : null}
+              </>
+            )}
+          </div>
+          ) : null}
+
+          {showAiResults ? (
+          <div className={styles.recommendationSection}>
+            <h3>AI 추천 결과</h3>
             {aiExplanationFailed && recommendations ? (
               <p className={styles.recommendationNotice}>
                 Solar 추천 이유 생성에 실패해 가중치 기준 순위만 표시합니다.
@@ -1884,8 +2075,13 @@ export function TimetablePlanner({
                   );
                 })}
               </ol>
-            ) : null}
+            ) : (
+              <p className={styles.empty}>
+                아직 추천 결과가 없습니다. 이전 화면에서 조건을 고른 뒤 AI 추천 받기를 눌러 주세요.
+              </p>
+            )}
           </div>
+          ) : null}
         </div>
       </div>
     </section>
@@ -1938,10 +2134,12 @@ function ElectivePreviewBoundary({
 function CourseSectionDetails({
   group,
   selectedSectionIds,
+  onSelectAllSections,
   onToggleSection,
 }: {
   group: CourseCandidateGroup;
   selectedSectionIds: readonly string[];
+  onSelectAllSections: () => void;
   onToggleSection: (sectionId: string) => void;
 }) {
   if (group.candidates.length === 1) {
@@ -1951,6 +2149,10 @@ function CourseSectionDetails({
       </div>
     );
   }
+
+  const allSelected = group.candidates.every((candidate) =>
+    selectedSectionIds.includes(candidate.id),
+  );
 
   return (
     <details className={styles.courseSectionDetails}>
@@ -1962,6 +2164,11 @@ function CourseSectionDetails({
             : `${group.candidates.length}개 분반`}
         </small>
       </summary>
+      <div className={styles.sectionBulkActions}>
+        <button disabled={allSelected} type="button" onClick={onSelectAllSections}>
+          분반 전체 선택
+        </button>
+      </div>
       <div className={styles.courseSectionRows}>
         {group.candidates.map((candidate) => {
           const checked = selectedSectionIds.includes(candidate.id);

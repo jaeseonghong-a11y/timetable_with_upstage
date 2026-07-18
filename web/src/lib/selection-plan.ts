@@ -75,6 +75,13 @@ export function getInitialSectionIds(
   return firstSection ? [firstSection.id] : [];
 }
 
+/** Enables every provided section id (used by “분반 전체 선택”). */
+export function getAllSectionIds(
+  sections: readonly Pick<CourseCandidate, "id">[],
+): string[] {
+  return sections.map((section) => section.id);
+}
+
 /** Toggles one allowed section while keeping at least one section enabled. */
 export function toggleEnabledSectionId(
   currentSectionIds: readonly string[],
@@ -109,6 +116,42 @@ export function removeSubjectsOwnedBy(
     ),
     removedIds,
   };
+}
+
+/**
+ * Estimates the credit total range implied by required subjects and choice-bag cardinalities.
+ * Used to prefill the planner credit filter from the 3-A selection (not a hard plan validator).
+ */
+export function estimateCreditRangeFromPlan(
+  plan: Pick<SelectionPlan, "requiredSubjects" | "choiceBags" | "excludedSubjectIds">,
+): CreditRange | null {
+  const excludedIds = new Set(plan.excludedSubjectIds ?? []);
+  const requiredSubjects = plan.requiredSubjects.filter((subject) => !excludedIds.has(subject.id));
+  const choiceBags = plan.choiceBags
+    .map((bag) => ({
+      ...bag,
+      subjects: bag.subjects.filter((subject) => !excludedIds.has(subject.id)),
+    }))
+    .filter((bag) => bag.subjects.length > 0);
+
+  if (requiredSubjects.length === 0 && choiceBags.length === 0) {
+    return null;
+  }
+
+  let minCredits = requiredSubjects.reduce((total, subject) => total + subject.credits, 0);
+  let maxCredits = minCredits;
+
+  for (const bag of choiceBags) {
+    const credits = bag.subjects.map((subject) => subject.credits).sort((a, b) => a - b);
+    const minSubjects = Math.max(0, bag.minSubjects ?? 1);
+    const maxSubjects = Math.max(0, bag.maxSubjects ?? 1);
+    const takeMin = Math.min(minSubjects, credits.length);
+    const takeMax = Math.min(maxSubjects, credits.length);
+    minCredits += credits.slice(0, takeMin).reduce((total, value) => total + value, 0);
+    maxCredits += credits.slice(credits.length - takeMax).reduce((total, value) => total + value, 0);
+  }
+
+  return { minCredits, maxCredits };
 }
 
 /**

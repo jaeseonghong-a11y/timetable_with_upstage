@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   enumerateSubjectSelections,
+  estimateCreditRangeFromPlan,
   generateTimetablesForSelectionPlan,
+  getAllSectionIds,
   getInitialSectionIds,
   removeSubjectsOwnedBy,
   SelectionPlanError,
@@ -28,6 +30,11 @@ describe("enumerateSubjectSelections", () => {
   it("enables only the first section when a subject is initially selected", () => {
     expect(getInitialSectionIds(subject("A", 3).sections)).toEqual(["A-1"]);
     expect(getInitialSectionIds([])).toEqual([]);
+  });
+
+  it("enables every section id for select-all", () => {
+    expect(getAllSectionIds(subject("A", 3).sections)).toEqual(["A-1", "A-2", "A-3"]);
+    expect(getAllSectionIds([])).toEqual([]);
   });
 
   it("lets users add or replace sections without leaving a selected subject empty", () => {
@@ -90,6 +97,33 @@ describe("enumerateSubjectSelections", () => {
       ["B"],
       ["A", "B"],
     ]);
+  });
+
+  it("estimates a fixed credit total when every subject is required", () => {
+    expect(estimateCreditRangeFromPlan({
+      requiredSubjects: [subject("A", 1, 3), subject("B", 1, 2)],
+      choiceBags: [],
+    })).toEqual({ minCredits: 5, maxCredits: 5 });
+  });
+
+  it("estimates min/max credits from choice-bag cardinality", () => {
+    expect(estimateCreditRangeFromPlan({
+      requiredSubjects: [subject("REQ", 1, 3)],
+      choiceBags: [{
+        id: "electives",
+        title: "교양",
+        minSubjects: 1,
+        maxSubjects: 2,
+        subjects: [subject("A", 1, 2), subject("B", 1, 3), subject("C", 1, 3)],
+      }],
+    })).toEqual({ minCredits: 5, maxCredits: 9 });
+  });
+
+  it("returns null when nothing is selected", () => {
+    expect(estimateCreditRangeFromPlan({
+      requiredSubjects: [],
+      choiceBags: [],
+    })).toBeNull();
   });
 
   it("keeps only subject combinations inside the requested credit range", () => {

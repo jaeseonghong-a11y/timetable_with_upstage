@@ -53,6 +53,11 @@
   grid-template-columns: minmax(280px, 0.85fr) minmax(0, 1.6fr);
 }
 
+.aiOnlyGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .controls {
   display: flex;
   flex-direction: column;
@@ -342,6 +347,36 @@
   font-size: 10px;
 }
 
+.sectionBulkActions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 9px 6px;
+}
+
+.sectionBulkActions > button,
+.selectAllSections {
+  padding: 5px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-card);
+  color: var(--accent-strong);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.sectionBulkActions > button:disabled,
+.selectAllSections:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.sectionBulkActions > button:not(:disabled):hover,
+.selectAllSections:not(:disabled):hover {
+  background: var(--surface-note);
+}
+
 .courseSectionRows {
   display: grid;
   max-height: 210px;
@@ -444,9 +479,9 @@
 .selectionPlanEditor {
   display: grid;
   gap: 10px;
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border-subtle);
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 3px solid var(--border-subtle);
 }
 
 .selectionPlanHeading {
@@ -463,7 +498,8 @@
 
 .selectionPlanHeading strong {
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 15px;
+  font-weight: 700;
 }
 
 .selectionPlanHeading small,
@@ -539,24 +575,48 @@
 }
 
 .cardinalityInputs {
-  display: flex;
-  align-items: end;
+  display: grid;
   gap: 6px;
 }
 
-.cardinalityInputs label {
-  display: grid;
-  flex: 1;
-  gap: 3px;
+.cardinalityLabel {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
-.cardinalityInputs label span,
+.cardinalityFields {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cardinalityFields > label {
+  flex: 1;
+  min-width: 0;
+}
+
+.cardinalityField {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cardinalityField > span {
+  flex: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .choiceGroupRule > small {
   color: var(--text-secondary);
   font-size: 10px;
 }
 
-.cardinalityInputs input {
+.cardinalityField input {
   width: 100%;
   min-width: 0;
   padding: 6px;
@@ -650,6 +710,10 @@
   font-size: 11px;
   font-weight: 800;
   cursor: pointer;
+}
+
+.selectAllSections {
+  justify-self: start;
 }
 
 .sectionChoices {
@@ -1280,6 +1344,71 @@
   border: 1px solid var(--border-subtle);
   border-radius: 14px;
   background: var(--surface-page);
+}
+
+.aiLoadingPanel {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 28px 16px 20px;
+  text-align: center;
+}
+
+.aiLoadingPanel strong {
+  color: var(--accent-strong);
+  font-size: 15px;
+}
+
+.aiLoadingPanel p {
+  max-width: 360px;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.aiSpinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--border-subtle);
+  border-top-color: var(--accent-strong);
+  border-radius: 50%;
+  animation: aiSpinnerRotate 0.8s linear infinite;
+}
+
+.aiSkeletonList {
+  display: grid;
+  width: min(100%, 420px);
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.aiSkeletonCard {
+  height: 72px;
+  border-radius: 12px;
+  background: linear-gradient(
+    90deg,
+    var(--surface-card) 0%,
+    var(--surface-note) 45%,
+    var(--surface-card) 90%
+  );
+  background-size: 200% 100%;
+  animation: aiSkeletonPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes aiSpinnerRotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes aiSkeletonPulse {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
 }
 
 .recommendationSection h3 {
