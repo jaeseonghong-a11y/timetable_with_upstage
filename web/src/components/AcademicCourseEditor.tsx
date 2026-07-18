@@ -84,7 +84,7 @@ export function AcademicCourseEditor({ profile, onChange }: Props) {
     });
   }
 
-  function renderCourseCard(course: CompletedCourse, index: number) {
+  function renderCourseCard(course: CompletedCourse, index: number, displayNumber: number) {
     const isOpen = isCourseOpen(index);
     const panelId = `course-panel-${index + 1}`;
     return (
@@ -94,7 +94,7 @@ export function AcademicCourseEditor({ profile, onChange }: Props) {
             >
               <div className={styles.cardTopline}>
                 <div className={styles.cardIdentity}>
-                  <strong>과목 {index + 1}</strong>
+                  <strong>과목 {displayNumber}</strong>
                   <span>{course.courseName || "과목명 미입력"}</span>
                 </div>
                 <div className={styles.cardActions}>
@@ -126,6 +126,13 @@ export function AcademicCourseEditor({ profile, onChange }: Props) {
               {isOpen ? (
               <div className={styles.cardBody} id={panelId}>
               <div className={`${styles.fieldGrid} ${styles.courseFieldGrid}`}>
+                <label className={`${styles.field} ${styles.wideField}`}>
+                  <span>과목명</span>
+                  <input
+                    value={course.courseName}
+                    onChange={(event) => updateCourse(index, { ...course, courseName: event.target.value })}
+                  />
+                </label>
                 <label className={styles.field}>
                   <span>학수번호</span>
                   <input
@@ -134,13 +141,6 @@ export function AcademicCourseEditor({ profile, onChange }: Props) {
                     onChange={(event) =>
                       updateCourse(index, { ...course, courseCode: event.target.value.toUpperCase() })
                     }
-                  />
-                </label>
-                <label className={`${styles.field} ${styles.wideField}`}>
-                  <span>과목명</span>
-                  <input
-                    value={course.courseName}
-                    onChange={(event) => updateCourse(index, { ...course, courseName: event.target.value })}
                   />
                 </label>
                 <label className={styles.field}>
@@ -251,6 +251,14 @@ export function AcademicCourseEditor({ profile, onChange }: Props) {
   }
 
   const groupedCourses = groupCompletedCoursesForReview(profile.completedCourses);
+  const displayNumberByIndex = new Map<number, number>();
+  for (const group of groupedCourses) {
+    for (const yearGroup of group.yearGroups) {
+      for (const entry of yearGroup.entries) {
+        displayNumberByIndex.set(entry.index, displayNumberByIndex.size + 1);
+      }
+    }
+  }
 
   return (
     <div className={styles.dataSection}>
@@ -289,8 +297,10 @@ export function AcademicCourseEditor({ profile, onChange }: Props) {
                   <p className={styles.courseYearHeading}>
                     {yearGroup.year !== null ? `${yearGroup.year}년` : "연도 미상"}
                   </p>
-                  <ol className={styles.cardList}>
-                    {yearGroup.entries.map(({ course, index }) => renderCourseCard(course, index))}
+                  <ol className={styles.courseCardGrid}>
+                    {yearGroup.entries.map(({ course, index }) =>
+                      renderCourseCard(course, index, displayNumberByIndex.get(index) ?? index + 1),
+                    )}
                   </ol>
                 </div>
               ))}

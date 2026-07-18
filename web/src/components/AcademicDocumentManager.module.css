@@ -478,6 +478,16 @@
   list-style: none;
 }
 
+/* Course cards are compact enough (see .courseFieldGrid) to sit several to a row instead of
+   one full-width row each; auto-fill picks the column count from available width instead of a
+   hardcoded number, so it stays reasonable at any viewport without extra breakpoints. */
+.courseCardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px;
+  list-style: none;
+}
+
 .courseGroupSection {
   display: grid;
   gap: 10px;
@@ -607,8 +617,29 @@
   grid-template-columns: minmax(170px, 1.8fr) repeat(4, minmax(78px, 1fr));
 }
 
-.courseFieldGrid {
-  grid-template-columns: minmax(70px, 0.9fr) minmax(150px, 1.7fr) repeat(6, minmax(64px, 1fr));
+/* Most course fields hold short, format-fixed values (codes, single words, small numbers) — a
+   compact auto-fill grid packs several per row instead of one column per field. 과목명 (the one
+   field that can genuinely run long) spans the full row via the .wideField override below. The
+   compound selector (two classes) guarantees this wins over the later, more generic .fieldGrid
+   rule regardless of source order. */
+.fieldGrid.courseFieldGrid {
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 6px 8px;
+}
+
+.courseFieldGrid .wideField {
+  grid-column: 1 / -1;
+}
+
+.courseFieldGrid .field span {
+  font-size: 10px;
+}
+
+.courseFieldGrid .field input,
+.courseFieldGrid .field select {
+  min-height: 30px;
+  padding: 4px 6px;
+  font-size: 12px;
 }
 
 .requirementCard .field {
@@ -819,10 +850,6 @@
     grid-template-columns: minmax(170px, 1.7fr) repeat(4, minmax(78px, 1fr));
   }
 
-  .courseFieldGrid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
   .distributionRuleEditor {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
@@ -836,7 +863,6 @@
   }
 
   .requirementFieldGrid,
-  .courseFieldGrid,
   .distributionRuleEditor {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

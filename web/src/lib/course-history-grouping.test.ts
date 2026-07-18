@@ -42,6 +42,26 @@ describe("groupCompletedCoursesForReview", () => {
     ]);
   });
 
+  it("reorders 전공 classifications before 교양, even when 교양 appears first in the source", () => {
+    const courses = [
+      makeCourse({ courseCode: "A", classification: "교양필수", year: 2023 }),
+      makeCourse({ courseCode: "B", classification: "일반선택", year: 2023 }),
+      makeCourse({ courseCode: "C", classification: "전공선택", year: 2023 }),
+      makeCourse({ courseCode: "D", classification: "교양선택", year: 2023 }),
+      makeCourse({ courseCode: "E", classification: "전공필수", year: 2023 }),
+    ];
+
+    const groups = groupCompletedCoursesForReview(courses);
+
+    expect(groups.map((group) => group.classification)).toEqual([
+      "전공선택",
+      "전공필수",
+      "일반선택",
+      "교양필수",
+      "교양선택",
+    ]);
+  });
+
   it("sorts unclassified and undated entries last", () => {
     const courses = [
       makeCourse({ courseCode: "A", classification: "", year: 2023 }),

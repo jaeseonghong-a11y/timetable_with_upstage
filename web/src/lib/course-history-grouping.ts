@@ -17,13 +17,28 @@ export interface CourseHistoryClassificationGroup {
   yearGroups: readonly CourseHistoryYearGroup[];
 }
 
+/** Lower sorts first: 전공 classifications before everything else, 교양 after, 미상 always last. */
+function classificationTier(classification: string): number {
+  if (classification === UNKNOWN_CLASSIFICATION) {
+    return 3;
+  }
+  if (classification.includes("전공")) {
+    return 0;
+  }
+  if (classification.includes("교양")) {
+    return 2;
+  }
+  return 1;
+}
+
 /**
  * Groups completed courses for review by 이수구분 (classification), then by year within each —
  * a flat list of dozens of courses is hard to scan, and this mirrors how a transcript itself is
- * organized. Groups keep the source array's relative order (first-seen classification first,
- * ascending year), with unclassified/undated entries always sorted last so unclear data doesn't
- * get lost in the middle. `index` on each entry is the position in the original array, so
- * grouping never breaks index-keyed handlers (edit/delete/collapse) upstream.
+ * organized. Classification groups are ordered 전공 first, then other classifications, then 교양,
+ * then unclassified rows last (stable within each tier, so first-seen order still breaks ties).
+ * Years within a group ascend, with undated entries sorted last so unclear data doesn't get lost
+ * in the middle. `index` on each entry is the position in the original array, so grouping never
+ * breaks index-keyed handlers (edit/delete/collapse) upstream.
  */
 export function groupCompletedCoursesForReview(
   courses: readonly CompletedCourse[],
@@ -40,10 +55,9 @@ export function groupCompletedCoursesForReview(
     byClassification.get(classification)!.push({ course, index });
   });
 
-  const orderedClassifications = [
-    ...classificationOrder.filter((name) => name !== UNKNOWN_CLASSIFICATION),
-    ...classificationOrder.filter((name) => name === UNKNOWN_CLASSIFICATION),
-  ];
+  const orderedClassifications = [...classificationOrder].sort(
+    (a, b) => classificationTier(a) - classificationTier(b),
+  );
 
   return orderedClassifications.map((classification) => {
     const entries = byClassification.get(classification)!;
