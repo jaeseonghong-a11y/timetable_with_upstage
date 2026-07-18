@@ -10,7 +10,7 @@ import {
   shouldShowSectionDetails,
   type CourseCandidateGroup,
 } from "@/lib/course-candidates";
-import { findSkkuDepartment, getDepartmentAliasCodes } from "@/lib/skku-departments";
+import { findSkkuDepartment } from "@/lib/skku-departments";
 import {
   SKKU_ELECTIVE_AREA_DEFINITIONS,
   type SkkuCourseQuery,
@@ -246,26 +246,15 @@ export function TimetablePlanner({
         const programCodes = roadmapProgramCodes.length
           ? roadmapProgramCodes
           : [activeQuery.departmentCode];
-        // A logical major can be listed under multiple SKKU department codes with overlapping
-        // but non-identical course offerings (see getDepartmentAliasCodes) — fetch every alias
-        // and merge below so course search never misses sections offered only under a sibling
-        // code, regardless of which one the student happened to pick.
-        const fetchTargets = programCodes.flatMap((logicalCode) =>
-          getDepartmentAliasCodes(logicalCode).map((fetchCode) => ({ logicalCode, fetchCode })),
-        );
         const majorResults = await Promise.all(
-          fetchTargets.map(({ fetchCode }) =>
-            postJson(
-              "/api/skku-courses",
-              { ...activeQuery, departmentCode: fetchCode },
-              controller.signal,
-            ),
+          programCodes.map((departmentCode) =>
+            postJson("/api/skku-courses", { ...activeQuery, departmentCode }, controller.signal),
           ),
         );
         const groups = majorResults.flatMap((result, index) =>
           courseGroupsFromCollection(result).map((group) => ({
             ...group,
-            programCodes: [fetchTargets[index]!.logicalCode],
+            programCodes: [programCodes[index]],
           })),
         );
         const merged = new Map<string, ProgramCourseCandidateGroup>();
