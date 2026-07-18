@@ -2,7 +2,7 @@
 
 > 이 세션에서 사용자가 요청·반영한 UI 변경 요약.  
 > 관련 커밋: `f02a32f` → `61ddeaa` → `501244f` → `14031c3`  
-> (이후 변경은 아직 워킹트리에 있음: AI 로딩·2단계 skip UX 등)
+> (이후 변경은 아직 워킹트리에 있음: AI 로딩·2단계 skip UX·학점 범위 자동 채움 등)
 
 ## 환경·동기화
 
@@ -97,42 +97,13 @@ AI 추천도 조건/결과로 분할.
   - 아래쪽 동일 빈 상태 문구는 삭제
 - 담은 과목 목록에 학점 표시 (예: `BIZ2021 · 3학점`)
 
-## 논의만 하고 코드로 안 고친 것
+### 11. 3-B 학점 범위 자동 채움 (미커밋)
+하드코딩 `12~21` 대신, 3-A에서 담은 과목으로 **원하는 학점 범위**를 자동 계산.
 
-### 3단계 UX 이슈 (미구현)
-1. 전체 `3/5`와 내부 `(1/2)` 진행 표시가 겹쳐 헷갈림
-2. 3-A 안에도 카탈로그+선택그룹+분반이 한꺼번에 있어 밀도 높음
-3. 필수/선택 그룹/분반 용어 학습 비용
-4. 담은 과목 수·학점 합 같은 진행 피드백 부족
-5. A↔B 왕복 시 “왜 조합 0개인지” 진단이 약함
-6. 실패 메시지가 추상적
-7. primary action 시각 위계가 약함
+- `selection-plan.ts`에 `estimateCreditRangeFromPlan` 추가·테스트
+  - 필수만: 합계로 min=max
+  - 선택 그룹: 그룹 개수 규칙(최소~최대 과목 수)으로 가능한 학점 합의 min~max
+  - 담은 과목 없음: 기본값 `12~21` 복귀
+- `TimetablePlanner`: 담은 과목/그룹이 바뀔 때만 입력값 갱신 (직접 수정은 가능)
+- 안내 문구: 자동 채움·선택 그룹 시 최소~최대 합·수동 수정 가능을 명시
 
-### 유효 시간표 0개 / 학점 안 보임 (원인 조사만)
-- “500개 초과” = 조합 안전 한도 (`DEFAULT_MAX_TIMETABLES = 500`), AI 고장 아님
-- 학점 미표시·유효시간표 0개 후보는  
-  (1) `credits`가 0으로 들어와 최소학점 필터에 전부 탈락  
-  (2) 켜 둔 분반끼리 시간 충돌  
-- 이번 세션에서 학점 파싱/필터 로직은 **수정하지 않음**
-
-## 변경 파일
-
-- `web/src/components/PlanningWorkspace.tsx` (+ `PlanningWorkspace.module.css`)
-- `web/src/components/TimetablePlanner.tsx` (+ module CSS)
-- `web/src/components/TimetableCard.tsx`
-- `web/src/components/AcademicDocumentManager.tsx`
-- `web/src/lib/selection-plan.ts` / `selection-plan.test.ts`
-- `web/src/app/page.tsx`
-
-## 확인 방법
-
-```powershell
-cd web
-npm run dev
-```
-
-브라우저에서:
-1. 1→2에서 건너뛰기 / 분석 후 다음
-2. 3-A 과목 담기 → 유효 시간표 보기
-3. 4-A에서 AI 추천 받기 → 로딩 → 4-B 결과
-4. 5단계 강의계획서

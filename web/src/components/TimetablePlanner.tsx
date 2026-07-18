@@ -19,6 +19,7 @@ import {
   type SkkuElectiveSubject,
 } from "@/lib/skku-course-api";
 import {
+  estimateCreditRangeFromPlan,
   generateTimetablesForSelectionPlan,
   getAllSectionIds,
   getInitialSectionIds,
@@ -708,6 +709,22 @@ export function TimetablePlanner({
     return { requiredSubjects, choiceBags };
   }, [choiceGroups, courseOwners, enabledSectionIds, selectedCourseGroups]);
 
+  const derivedCreditRange = useMemo(
+    () => estimateCreditRangeFromPlan(manualSelectionPlanSubjects),
+    [manualSelectionPlanSubjects],
+  );
+  const [previousDerivedCreditRange, setPreviousDerivedCreditRange] = useState(derivedCreditRange);
+  if (previousDerivedCreditRange !== derivedCreditRange) {
+    setPreviousDerivedCreditRange(derivedCreditRange);
+    if (!derivedCreditRange) {
+      setMinimumCredits("12");
+      setMaximumCredits("21");
+    } else {
+      setMinimumCredits(formatCredits(derivedCreditRange.minCredits));
+      setMaximumCredits(formatCredits(derivedCreditRange.maxCredits));
+    }
+  }
+
   const result = useMemo(() => {
     if (selectedCourseGroups.length === 0) {
       return { entries: [], error: null };
@@ -832,15 +849,6 @@ export function TimetablePlanner({
   }, [canRunAiRecommend, isRecommending, onAiRecommendActionStateChange]);
 
   const lastAiRecommendRequestId = useRef(0);
-  useEffect(() => {
-    if (!aiRecommendRequestId || aiRecommendRequestId === lastAiRecommendRequestId.current) {
-      return;
-    }
-    lastAiRecommendRequestId.current = aiRecommendRequestId;
-    void fetchAiRecommendations();
-    // Intentionally keyed only by request id; fetch reads the latest planner state.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- wizard nav trigger
-  }, [aiRecommendRequestId]);
 
   const [previousManualPlanSubjects, setPreviousManualPlanSubjects] = useState(
     manualSelectionPlanSubjects,
@@ -1067,6 +1075,16 @@ export function TimetablePlanner({
       setIsRecommending(false);
     }
   }
+
+  useEffect(() => {
+    if (!aiRecommendRequestId || aiRecommendRequestId === lastAiRecommendRequestId.current) {
+      return;
+    }
+    lastAiRecommendRequestId.current = aiRecommendRequestId;
+    void fetchAiRecommendations();
+    // Intentionally keyed only by request id; fetch reads the latest planner state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- wizard nav trigger
+  }, [aiRecommendRequestId]);
 
   const excludedCount = courseGroups.length - availableCourseGroups.length;
 
@@ -1658,7 +1676,10 @@ export function TimetablePlanner({
                 />
               </label>
             </div>
-            <small>과목 학점은 선택한 분반 수와 관계없이 과목당 한 번만 합산합니다.</small>
+            <small>
+              담은 과목 기준으로 자동 채웁니다. 선택 그룹이 있으면 가능한 최소~최대 합을 씁니다.
+              필요하면 직접 수정할 수 있습니다.
+            </small>
           </fieldset>
         </aside>
         ) : null}
