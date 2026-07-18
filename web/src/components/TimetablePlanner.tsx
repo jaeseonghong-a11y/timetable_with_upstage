@@ -1424,7 +1424,7 @@ export function TimetablePlanner({
               <div className={styles.selectionPlanHeading}>
                 <div>
                   <strong>담은 과목 정리</strong>
-                  <small>각 선택 그룹에서 몇 과목을 고를지 정합니다.</small>
+                  <small>과목을 선택하면 여기서 그룹 이동과 분반 선택을 할 수 있습니다.</small>
                 </div>
                 <button type="button" onClick={addChoiceGroup}>+ 선택 그룹 추가</button>
               </div>
@@ -1454,7 +1454,7 @@ export function TimetablePlanner({
                     </label>
                     <div className={styles.cardinalityInputs}>
                       <p className={styles.cardinalityLabel}>
-                        시간표에 넣을 과목 수
+                        이 그룹에서 시간표에 넣을 과목 수
                       </p>
                       <div className={styles.cardinalityFields}>
                         <label>
@@ -1518,7 +1518,10 @@ export function TimetablePlanner({
                         <summary>
                           <span>
                             <strong>{group.title}</strong>
-                            <small>{group.id}</small>
+                            <small>
+                              {group.id}
+                              {group.credits > 0 ? ` · ${formatCredits(group.credits)}학점` : ""}
+                            </small>
                           </span>
                           <small>
                             {getDestinationLabel(owner, choiceGroups)} · 분반 {selectedSections.length}/
@@ -1588,11 +1591,7 @@ export function TimetablePlanner({
                     );
                   })}
                 </div>
-              ) : (
-                <p className={styles.selectionPlanEmpty}>
-                  과목을 선택하면 여기서 그룹 이동과 분반 선택을 할 수 있습니다.
-                </p>
-              )}
+              ) : null}
             </section>
           </fieldset>
         </aside>
