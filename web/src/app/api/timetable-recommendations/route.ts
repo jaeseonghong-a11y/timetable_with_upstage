@@ -8,7 +8,7 @@ import {
   type WeightId,
   type WeightImportance,
 } from "../../../lib/timetable-scoring";
-import { requestSolarCompletion } from "../../../lib/upstage";
+import { requestSolarCompletion, type SolarJsonSchema } from "../../../lib/upstage";
 
 type ApiErrorCode = "invalid_request";
 
@@ -175,6 +175,38 @@ function tryReorderByCustomPreference(
   );
 }
 
+/**
+ * Strict response_format schema for the explanation call, mirroring the same reasoning as
+ * academic-document.ts's ACADEMIC_EXTRACTION_SCHEMA: without it, Solar is free to add markdown
+ * fences or prose around the array, and — more importantly — a bare top-level array isn't a valid
+ * root type for structured JSON Schema output, so the object wrapper is required either way.
+ */
+const RECOMMENDATION_EXPLANATION_SCHEMA: SolarJsonSchema = {
+  name: "timetable_recommendation_explanations",
+  schema: {
+    type: "object",
+    properties: {
+      explanations: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            candidateId: { type: "string" },
+            rank: { type: "integer" },
+            reason: { type: "string" },
+            requirementContribution: { type: ["string", "null"] },
+            customPreferenceNote: { type: ["string", "null"] },
+          },
+          required: ["candidateId", "rank", "reason", "requirementContribution", "customPreferenceNote"],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ["explanations"],
+    additionalProperties: false,
+  },
+};
+
 async function requestRecommendationExplanations(
   scored: readonly ScoredTimetable[],
   unmetRequirements: readonly RequirementSummary[],
@@ -185,8 +217,12 @@ async function requestRecommendationExplanations(
     "당신은 성균관대 시간표 추천 서비스의 설명 엔진입니다.",
     "이미 결정론적으로 정렬된 시간표 후보 목록과 학생의 졸업요건 미충족 현황이 주어집니다.",
     "각 후보에 대해 한국어 2~3문장으로 추천 이유를 작성하세요.",
-    "제공된 과목·요건 정보만 사용하고 존재하지 않는 사실을 지어내지 마세요.",
-    "출력은 마크다운이나 다른 설명 없이 JSON 배열만 반환하세요.",
+    "아래 입력(courses, scoreHighlights, unmetRequirements, customPreference)에 실제로 존재하는",
+    "정보만 근거로 쓰세요. 교수의 평판·경력·인기도·학생 선호도·강의평가처럼 입력에 없는 사실은",
+    "단정적으로도 추측으로도 절대 언급하지 마세요.",
+    "여러 후보가 필수과목 구성은 같고 과목 1개의 분반(교수)만 다른 경우, 그 후보들 사이의 실질적",
+    "차이가 시간표 배치 외에는 없다는 것을 있는 그대로 말하고, 근거 없는 차별점을 지어내지",
+    "마세요.",
     '각 원소 형식: {"candidateId": string, "rank": number, "reason": string, "requirementContribution": string 또는 null, "customPreferenceNote": string 또는 null}',
     "rank는 1부터 후보 개수까지 각각 한 번씩만 사용하세요. customPreference가 없으면 입력 순서를 그대로 rank로 사용하세요.",
     "customPreference가 있으면 그 조건에 더 부합하는 후보일수록 낮은 rank(더 상위)를 부여하고, customPreferenceNote에 그 이유를 설명하세요. 없으면 customPreferenceNote는 null로 두세요.",
@@ -210,7 +246,12 @@ async function requestRecommendationExplanations(
     customPreference: customPreference ?? null,
   });
 
-  const content = await requestSolarCompletion(systemPrompt, userPrompt, apiKey);
+  const content = await requestSolarCompletion(
+    systemPrompt,
+    userPrompt,
+    apiKey,
+    RECOMMENDATION_EXPLANATION_SCHEMA,
+  );
   return parseSolarExplanations(
     content,
     new Set(scored.map((entry) => entry.candidateId)),
@@ -225,18 +266,19 @@ function parseSolarExplanations(
     .trim()
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/, "");
-  const start = trimmed.indexOf("[");
-  const end = trimmed.lastIndexOf("]");
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
   if (start < 0 || end < start) {
-    throw new Error("solar_response_not_json_array");
+    throw new Error("solar_response_not_json_object");
   }
 
-  let parsed: unknown;
+  let parsedBody: unknown;
   try {
-    parsed = JSON.parse(trimmed.slice(start, end + 1));
+    parsedBody = JSON.parse(trimmed.slice(start, end + 1));
   } catch {
     throw new Error("solar_response_invalid_json");
   }
+  const parsed = isRecord(parsedBody) ? parsedBody.explanations : undefined;
   if (!Array.isArray(parsed)) {
     throw new Error("solar_response_not_array");
   }

@@ -905,19 +905,28 @@ export function TimetablePlanner({ query, queryLabel, excludedCourseNumbers, req
       if (filtered.candidates.length === 0) {
         continue;
       }
+      // AI-suggested filler subjects offer only one representative section (matching the same
+      // "first section" default used when the user manually adds a subject, getInitialSectionIds)
+      // instead of every section. The recommendation is about which subjects to add, not which
+      // professor's section — offering all of them multiplied the combination space with
+      // near-duplicate timetables that differ only by section/professor, which both looked
+      // repetitive to the user and forced Solar to invent unfounded distinguishing reasons
+      // (e.g. fabricated professor reputation) to explain candidates with no real difference.
+      const representativeSection = filtered.candidates[0];
+      if (!representativeSection) {
+        continue;
+      }
       subjects.push({
         id: filtered.selectionId,
         title: filtered.title,
         credits: filtered.credits,
-        sections: filtered.candidates,
+        sections: [representativeSection],
       });
-      for (const candidate of filtered.candidates) {
-        extrasBySectionId.set(candidate.id, {
-          groupTitle: AI_FILLER_GROUP_TITLE,
-          title: filtered.title,
-          classification: filtered.classification || "영역 미상",
-        });
-      }
+      extrasBySectionId.set(representativeSection.id, {
+        groupTitle: AI_FILLER_GROUP_TITLE,
+        title: filtered.title,
+        classification: filtered.classification || "영역 미상",
+      });
     }
     if (subjects.length === 0) {
       return { bag: null, extrasBySectionId };

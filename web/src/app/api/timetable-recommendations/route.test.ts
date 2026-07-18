@@ -78,10 +78,12 @@ describe("POST /api/timetable-recommendations", () => {
   });
 
   it("attaches Solar reasons and requirement contributions on the happy path", async () => {
-    const solarResult = JSON.stringify([
-      { candidateId: "B1", rank: 1, reason: "공강이 더 많습니다.", requirementContribution: "전공필수 충족", customPreferenceNote: null },
-      { candidateId: "A1", rank: 2, reason: "요일이 몰려 있습니다.", requirementContribution: null, customPreferenceNote: null },
-    ]);
+    const solarResult = JSON.stringify({
+      explanations: [
+        { candidateId: "B1", rank: 1, reason: "공강이 더 많습니다.", requirementContribution: "전공필수 충족", customPreferenceNote: null },
+        { candidateId: "A1", rank: 2, reason: "요일이 몰려 있습니다.", requirementContribution: null, customPreferenceNote: null },
+      ],
+    });
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -114,6 +116,10 @@ describe("POST /api/timetable-recommendations", () => {
       requirementContribution: "전공필수 충족",
     });
     expect(body.recommendations[1]).toMatchObject({ candidateId: "A1", rank: 2 });
+
+    const requestBody = JSON.parse((fetchMock.mock.calls[0]?.[1]?.body as string) ?? "{}");
+    expect(requestBody.response_format?.type).toBe("json_schema");
+    expect(requestBody.response_format?.json_schema?.strict).toBe(true);
   });
 
   it("falls back to deterministic ranking when Solar returns malformed JSON", async () => {
@@ -141,10 +147,12 @@ describe("POST /api/timetable-recommendations", () => {
   });
 
   it("reorders by customPreference only when Solar returns a clean rank permutation", async () => {
-    const solarResult = JSON.stringify([
-      { candidateId: "B1", rank: 2, reason: "이유1", requirementContribution: null, customPreferenceNote: "덜 맞음" },
-      { candidateId: "A1", rank: 1, reason: "이유2", requirementContribution: null, customPreferenceNote: "화요일 수업 회피 조건에 맞음" },
-    ]);
+    const solarResult = JSON.stringify({
+      explanations: [
+        { candidateId: "B1", rank: 2, reason: "이유1", requirementContribution: null, customPreferenceNote: "덜 맞음" },
+        { candidateId: "A1", rank: 1, reason: "이유2", requirementContribution: null, customPreferenceNote: "화요일 수업 회피 조건에 맞음" },
+      ],
+    });
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
