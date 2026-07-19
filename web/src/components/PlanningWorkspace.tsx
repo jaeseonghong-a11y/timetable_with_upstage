@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { AcademicDocumentKind, AcademicProfile, Requirement } from "@/lib/academic-profile";
 import { initAbandonTracking, track } from "@/lib/analytics";
@@ -75,6 +75,11 @@ export function PlanningWorkspace() {
   );
 
   useEffect(() => initAbandonTracking(), []);
+
+  const progressRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    progressRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [step, docSubstep, planSubstep, aiSubstep]);
 
   function updateWorkingProfile(
     kind: AcademicDocumentKind,
@@ -230,7 +235,7 @@ export function PlanningWorkspace() {
 
   return (
     <div className={styles.workspace}>
-      <div className={styles.progress} aria-label="진행 단계">
+      <div ref={progressRef} className={styles.progress} aria-label="진행 단계">
         <div className={styles.progressHeader}>
           <div>
             <p className={styles.progressEyebrow}>진행 단계</p>

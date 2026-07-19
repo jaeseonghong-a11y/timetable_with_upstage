@@ -154,6 +154,16 @@ function createElectivePreviewLanes(): Promise<void>[] {
   return Array.from({ length: ELECTIVE_PREVIEW_CONCURRENCY }, () => Promise.resolve());
 }
 
+/** True only for a well-formed, non-empty course collection — see the 복수전공 loadCourses note. */
+function hasAnyCourses(collection: unknown): boolean {
+  return (
+    typeof collection === "object" &&
+    collection !== null &&
+    Array.isArray((collection as { courses?: unknown }).courses) &&
+    (collection as { courses: unknown[] }).courses.length > 0
+  );
+}
+
 /** How many extra elective subjects the AI recommendation step may consider/add as filler. */
 const MAX_FILLER_SHORTLIST = 8;
 const MAX_FILLER_SUBJECTS = 5;
@@ -261,11 +271,17 @@ export function TimetablePlanner({
             postJson("/api/skku-courses", { ...activeQuery, departmentCode }, controller.signal),
           ),
         );
+        // A department with zero open sections this term is a normal outcome for a niche
+        // 연계전공/융합트랙 in a 복수전공 combo, not a failure — courseGroupsFromCollection throws
+        // on an empty collection, which would otherwise abort every OTHER selected major's
+        // courses too since they're all merged from one Promise.all batch.
         const groups = majorResults.flatMap((result, index) =>
-          courseGroupsFromCollection(result).map((group) => ({
-            ...group,
-            programCodes: [programCodes[index]],
-          })),
+          hasAnyCourses(result)
+            ? courseGroupsFromCollection(result).map((group) => ({
+                ...group,
+                programCodes: [programCodes[index]],
+              }))
+            : [],
         );
         const merged = new Map<string, ProgramCourseCandidateGroup>();
         for (const group of groups) {
@@ -2259,7 +2275,7 @@ function ElectivePreviewBoundary({
           observer.disconnect();
         }
       },
-      { rootMargin: "120px 0px" },
+      { rootMargin: "800px 0px" },
     );
     observer.observe(element);
     return () => observer.disconnect();

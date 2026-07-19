@@ -318,6 +318,9 @@ export async function fetchSkkuElectiveCourses(
 
   const fetcher = options.fetcher ?? fetch;
   const sessionCookie = await establishSkkuSession(fetcher, options.sessionCache);
+  // Unlike the bulk catalog loop in fetchSkkuAllElectiveSubjects, this is a single standalone
+  // request per invocation with nothing else to pace against, so it skips the shared 500ms
+  // burst-protection default that only matters when several requests fire back to back.
   const rows = await fetchSkkuDataset(
     ELECTIVE_COURSES_URL,
     sessionCookie,
@@ -328,7 +331,7 @@ export async function fetchSkkuElectiveCourses(
       ROAD_MAP: "%",
     },
     fetcher,
-    options.requestIntervalMs ?? 500,
+    options.requestIntervalMs ?? 0,
   );
   const result = normalizeCourseRows(rows, "elective");
   sectionsCache.set(cacheKey, result, ELECTIVE_SECTIONS_CACHE_TTL_MS);

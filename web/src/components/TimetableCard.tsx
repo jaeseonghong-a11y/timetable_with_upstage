@@ -212,18 +212,25 @@ export function TimetableCard({
                 ))}
               </div>
             </div>
+            {unscheduledCourses.length > 0 ? (
+              <div className={styles.unscheduledRow}>
+                <span className={styles.unscheduledLabel}>온라인 · 시간 미정</span>
+                <div className={styles.unscheduledChips}>
+                  {unscheduledCourses.map((course, courseIndex) => (
+                    <span
+                      className={styles.unscheduledChip}
+                      data-color={courseIndex % 6}
+                      key={course.id}
+                    >
+                      <strong>{course.title}</strong>
+                      {course.professor ? <small>{course.professor}</small> : null}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
-        {unscheduledCourses.length > 0 ? (
-          <p className={styles.unscheduledNotice}>
-            시간 미정/온라인:{" "}
-            {unscheduledCourses
-              .map((course) =>
-                course.professor ? `${course.title}(${course.professor})` : course.title,
-              )
-              .join(", ")}
-          </p>
-        ) : null}
         <div className={styles.saveImageRow}>
           <button disabled={isSavingImage} onClick={() => void handleSaveImage()} type="button">
             {isSavingImage ? "저장 중…" : "이미지로 저장"}
