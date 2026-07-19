@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   AcademicExtractionError,
+  classifyRequirementScopeFromLabel,
   cleanCompletedCourseExtraction,
   parseAcademicExtraction,
   supplementGraduationRequirementsFromMarkdown,
@@ -685,5 +686,25 @@ describe("cleanCompletedCourseExtraction", () => {
     expect(cleaned.reviewIssues).toEqual([
       expect.objectContaining({ code: "missing_completed_courses", message: expect.stringContaining("1개") }),
     ]);
+  });
+});
+
+describe("classifyRequirementScopeFromLabel", () => {
+  it("classifies communication and balanced-area rows as general", () => {
+    expect(classifyRequirementScopeFromLabel("소통과 사고")).toBe("general");
+    expect(classifyRequirementScopeFromLabel("균형교양 - 인간/문화")).toBe("general");
+    expect(classifyRequirementScopeFromLabel("사회/역사")).toBe("general");
+  });
+
+  it("classifies major, international-language, and total-credit rows as primary major", () => {
+    expect(classifyRequirementScopeFromLabel("전공")).toBe("primary_major");
+    expect(classifyRequirementScopeFromLabel("제1전공 심화학점")).toBe("primary_major");
+    expect(classifyRequirementScopeFromLabel("국제어수업")).toBe("primary_major");
+    expect(classifyRequirementScopeFromLabel("총학점")).toBe("primary_major");
+  });
+
+  it("classifies university-common rows as other", () => {
+    expect(classifyRequirementScopeFromLabel("대학공통")).toBe("other");
+    expect(classifyRequirementScopeFromLabel("대학 공통")).toBe("other");
   });
 });

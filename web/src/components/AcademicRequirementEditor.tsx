@@ -19,7 +19,8 @@ const SCOPE_LABELS: Record<Requirement["scope"], string> = {
   primary_major: "제1전공",
   general: "교양",
   ds: "DS",
-  university: "대학 공통",
+  // No separate university bucket — show/store as 기타.
+  university: "기타",
   other: "기타",
 };
 
@@ -211,7 +212,7 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
                 <label className={styles.field}>
                   <span>범위</span>
                   <select
-                    value={requirement.scope}
+                    value={requirement.scope === "university" ? "other" : requirement.scope}
                     onChange={(event) =>
                       updateRequirement(index, {
                         ...requirement,
@@ -222,7 +223,6 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
                     <option value="primary_major">제1전공</option>
                     <option value="general">교양</option>
                     <option value="ds">DS</option>
-                    <option value="university">대학 공통</option>
                     <option value="other">기타</option>
                   </select>
                 </label>
