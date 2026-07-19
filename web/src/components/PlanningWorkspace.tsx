@@ -22,18 +22,17 @@ const STEPS = [
   { id: 1, title: "기본 정보 입력" },
   { id: 2, title: "내 기록 적용하기" },
   { id: 3, title: "과목 담기" },
-  { id: 4, title: "AI 시간표 추천" },
+  { id: 4, title: "유효 시간표 확인" },
+  { id: 5, title: "AI 시간표 추천" },
 ] as const;
 
 type StepId = (typeof STEPS)[number]["id"];
 type DocSubstep = "course_history" | "graduation_requirements";
-type PlanSubstep = "select" | "results";
 type AiSubstep = "setup" | "results";
 
 export function PlanningWorkspace() {
   const [step, setStep] = useState<StepId>(1);
   const [docSubstep, setDocSubstep] = useState<DocSubstep>("course_history");
-  const [planSubstep, setPlanSubstep] = useState<PlanSubstep>("select");
   const [aiSubstep, setAiSubstep] = useState<AiSubstep>("setup");
   const [hasEnteredDocuments, setHasEnteredDocuments] = useState(false);
   const [aiRecommendRequestId, setAiRecommendRequestId] = useState(0);
@@ -86,7 +85,7 @@ export function PlanningWorkspace() {
       return;
     }
     progressRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [step, docSubstep, planSubstep, aiSubstep]);
+  }, [step, docSubstep, aiSubstep]);
 
   function updateWorkingProfile(
     kind: AcademicDocumentKind,
@@ -110,10 +109,7 @@ export function PlanningWorkspace() {
     if (nextStep >= 3) {
       setHasEnteredPlanner(true);
     }
-    if (nextStep === 3) {
-      setPlanSubstep("select");
-    }
-    if (nextStep === 4) {
+    if (nextStep === 5) {
       setAiSubstep("setup");
     }
   }
@@ -146,11 +142,7 @@ export function PlanningWorkspace() {
       setDocSubstep("graduation_requirements");
       return;
     }
-    if (step === 3 && planSubstep === "select") {
-      setPlanSubstep("results");
-      return;
-    }
-    if (step === 4 && aiSubstep === "setup") {
+    if (step === 5 && aiSubstep === "setup") {
       if (!aiRecommendAction.canRun || aiRecommendAction.isRunning) {
         return;
       }
@@ -173,11 +165,7 @@ export function PlanningWorkspace() {
       setDocSubstep("course_history");
       return;
     }
-    if (step === 3 && planSubstep === "results") {
-      setPlanSubstep("select");
-      return;
-    }
-    if (step === 4 && aiSubstep === "results") {
+    if (step === 5 && aiSubstep === "results") {
       setAiSubstep("setup");
       return;
     }
@@ -188,17 +176,14 @@ export function PlanningWorkspace() {
     if (prevStep === 2) {
       setDocSubstep("graduation_requirements");
     }
-    if (prevStep === 3) {
-      setPlanSubstep("results");
-    }
-    if (prevStep === 4) {
+    if (prevStep === 5) {
       setAiSubstep("results");
     }
     setStep(prevStep);
   }
 
   const current = STEPS[step - 1]!;
-  /** 0–100 along the connector between first and last step centers — tracks the 4 real steps;
+  /** 0–100 along the connector between first and last step centers — tracks the 5 real steps;
    * 2-1/2-2 render as one grouped slot (see stepListSlots) so they don't need their own. */
   const connectorProgress =
     STEPS.length <= 1 ? 0 : ((step - 1) / (STEPS.length - 1)) * 100;
@@ -207,7 +192,7 @@ export function PlanningWorkspace() {
     (step === 1 && !appliedProfile) ||
     (step === 2 &&
       (documentAnalysisState.isAnalyzing || !currentDocumentConfirmed)) ||
-    (step === 4 &&
+    (step === 5 &&
       aiSubstep === "setup" &&
       (!aiRecommendAction.canRun || aiRecommendAction.isRunning));
   const stepTitle =
@@ -215,35 +200,27 @@ export function PlanningWorkspace() {
       ? docSubstep === "course_history"
         ? "내 기록 적용하기 · 수강/취득과목 (1/2)"
         : "내 기록 적용하기 · 졸업요건 충족현황 (2/2)"
-      : step === 3
-        ? planSubstep === "select"
-          ? "과목 담기 (1/2)"
-          : "과목 담기 (2/2)"
-        : step === 4
-          ? aiSubstep === "setup"
-            ? "AI 시간표 추천 (1/2)"
-            : "AI 시간표 추천 (2/2)"
-          : current.title;
+      : step === 5
+        ? aiSubstep === "setup"
+          ? "AI 시간표 추천 (1/2)"
+          : "AI 시간표 추천 (2/2)"
+        : current.title;
   const plannerView =
-    step === 4
+    step === 5
       ? aiSubstep === "results"
         ? "ai-results"
         : "ai-setup"
-      : planSubstep === "results"
+      : step === 4
         ? "results"
         : "select";
-  const showNextButton =
-    step < STEPS.length ||
-    (step === 2 && docSubstep === "course_history") ||
-    (step === 3 && planSubstep === "select") ||
-    (step === 4 && aiSubstep === "setup");
+  const showNextButton = step < STEPS.length || (step === 5 && aiSubstep === "setup");
   const nextLabel =
-    step === 3 && planSubstep === "select"
-      ? "유효 시간표 확인"
-      : step === 4 && aiSubstep === "setup"
-        ? aiRecommendAction.isRunning
-          ? "추천 생성 중…"
-          : "AI 추천 받기"
+    step === 5 && aiSubstep === "setup"
+      ? aiRecommendAction.isRunning
+        ? "추천 생성 중…"
+        : "AI 추천 받기"
+      : step === 3
+        ? "유효 시간표 확인"
         : "다음";
 
   interface StepListButton {
@@ -257,9 +234,9 @@ export function PlanningWorkspace() {
   }
 
   // 2-1/2-2 render as one grouped slot (tight internal spacing, shared pill background) rather
-  // than a 5th equal-width column, so they read as two halves of step 2 instead of standalone
-  // steps on par with 1/3/4 — narrower gap + shared container is the standard way stepper UIs
-  // signal "these belong together" without a dedicated nested-stepper component.
+  // than their own equal-width columns, so they read as two halves of step 2 instead of
+  // standalone steps on par with 1/3/4/5 — narrower gap + shared container is the standard way
+  // stepper UIs signal "these belong together" without a dedicated nested-stepper component.
   const stepListSlots: Array<StepListButton | { key: string; group: StepListButton[] }> = [
     {
       key: "1",
@@ -303,10 +280,18 @@ export function PlanningWorkspace() {
     {
       key: "4",
       indexLabel: "4",
-      label: "AI 시간표 추천",
+      label: "유효 시간표 확인",
       isActive: step === 4,
-      isDone: false,
+      isDone: step > 4,
       onClick: () => goToStep(4),
+    },
+    {
+      key: "5",
+      indexLabel: "5",
+      label: "AI 시간표 추천",
+      isActive: step === 5,
+      isDone: false,
+      onClick: () => goToStep(5),
     },
   ];
 
@@ -407,7 +392,7 @@ export function PlanningWorkspace() {
         ) : null}
 
         {hasEnteredPlanner ? (
-          <div className={step === 3 || step === 4 ? undefined : styles.hiddenStep}>
+          <div className={step === 3 || step === 4 || step === 5 ? undefined : styles.hiddenStep}>
             <TimetablePlanner
               aiRecommendRequestId={aiRecommendRequestId}
               excludedCourseNumbers={excludedCourseNumbers}
@@ -425,7 +410,7 @@ export function PlanningWorkspace() {
 
       <div className={styles.nav}>
         <button
-          disabled={step === 1 || (step === 4 && aiRecommendAction.isRunning)}
+          disabled={step === 1 || (step === 5 && aiRecommendAction.isRunning)}
           type="button"
           onClick={goPrev}
         >
@@ -455,10 +440,16 @@ export function PlanningWorkspace() {
                 : "문서를 분석하고 검토한 뒤 확정해야 다음으로 갈 수 있습니다. 원하지 않으면 건너뛰세요."}
           </p>
         ) : null}
-        {step === 3 && planSubstep === "select" ? (
+        {step === 3 ? (
           <p className={styles.navHint}>과목을 담은 뒤 다음에서 유효 시간표를 확인합니다.</p>
         ) : null}
-        {step === 4 && aiSubstep === "setup" ? (
+        {step === 4 ? (
+          <p className={styles.navHint}>
+            요일·시작 시간이나 학점 범위를 조정하며 시간표를 확인하세요. 마음에 들면 다음에서
+            AI 추천을 받아보세요.
+          </p>
+        ) : null}
+        {step === 5 && aiSubstep === "setup" ? (
           <p className={styles.navHint}>
             {aiRecommendAction.isRunning
               ? "AI가 분석 중입니다... 완료되면 결과 화면으로 이동합니다."

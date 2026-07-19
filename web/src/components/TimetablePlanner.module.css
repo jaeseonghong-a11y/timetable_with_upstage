@@ -1531,6 +1531,22 @@
   color: var(--text-error);
 }
 
+.emptyDiagnosis {
+  padding: 18px;
+  border: 1px solid var(--border-warning);
+  border-radius: 12px;
+  background: var(--surface-warning-subtle);
+  color: var(--text-warning);
+  line-height: 1.6;
+}
+
+.emptyDiagnosis strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
 .recommendationSection {
   display: grid;
   gap: 10px;

@@ -1,6 +1,8 @@
 import {
   CombinationLimitError,
   generateValidTimetables,
+  meetingsConflict,
+  parseSchedule,
   type CourseCandidate,
   type Timetable,
   type TimetableConstraints,
@@ -152,6 +154,87 @@ export function estimateCreditRangeFromPlan(
   }
 
   return { minCredits, maxCredits };
+}
+
+export type EmptyTimetableReason =
+  | "credit_range_unreachable"
+  | "no_available_sections"
+  | "schedule_conflict";
+
+export interface EmptyTimetableDiagnosis {
+  reason: EmptyTimetableReason;
+  /** Set only for no_available_sections: which subject/bag has zero usable sections left. */
+  subjectTitle?: string;
+}
+
+/**
+ * Best-effort deterministic explanation for why generateTimetablesForSelectionPlan returned zero
+ * timetables even though the plan itself is valid (no thrown error) — checked in the order a
+ * student would naturally rule them out: is the credit range even reachable, does every
+ * required subject (and each bag, against its own minimum) still have at least one section left
+ * once day/time filters and fixed events are applied, and only then genuine schedule conflicts
+ * between the remaining candidates. Deliberately rule-based, not inferred by a model, so the same
+ * plan always gets the same answer. Returns null when there is nothing to explain.
+ */
+export function diagnoseEmptyTimetable(
+  plan: SelectionPlan,
+  constraints: TimetableConstraints = {},
+): EmptyTimetableDiagnosis | null {
+  const excludedIds = new Set(plan.excludedSubjectIds ?? []);
+  const requiredSubjects = plan.requiredSubjects.filter((subject) => !excludedIds.has(subject.id));
+  const choiceBags = plan.choiceBags
+    .map((bag) => ({
+      ...bag,
+      subjects: bag.subjects.filter((subject) => !excludedIds.has(subject.id)),
+    }))
+    .filter((bag) => bag.subjects.length > 0);
+
+  if (requiredSubjects.length === 0 && choiceBags.length === 0) {
+    return null;
+  }
+
+  if (plan.creditRange) {
+    const achievable = estimateCreditRangeFromPlan({
+      requiredSubjects,
+      choiceBags,
+    });
+    if (
+      achievable &&
+      (achievable.maxCredits < plan.creditRange.minCredits ||
+        achievable.minCredits > plan.creditRange.maxCredits)
+    ) {
+      return { reason: "credit_range_unreachable" };
+    }
+  }
+
+  const unavailableDays = new Set(constraints.unavailableDays ?? []);
+  const earliestStartMinutes = constraints.earliestStartMinutes;
+  const fixedEvents = constraints.fixedEvents ?? [];
+  const hasViableSection = (subject: SubjectOption): boolean =>
+    subject.sections.some((section) => {
+      const meetings = parseSchedule(section.schedule);
+      return meetings.every(
+        (meeting) =>
+          !unavailableDays.has(meeting.day) &&
+          (earliestStartMinutes === undefined || meeting.startMinutes >= earliestStartMinutes) &&
+          !fixedEvents.some((fixed) => meetingsConflict(meeting, fixed)),
+      );
+    });
+
+  for (const subject of requiredSubjects) {
+    if (!hasViableSection(subject)) {
+      return { reason: "no_available_sections", subjectTitle: subject.title };
+    }
+  }
+  for (const bag of choiceBags) {
+    const minSubjects = bag.minSubjects ?? 1;
+    const viableCount = bag.subjects.filter(hasViableSection).length;
+    if (viableCount < minSubjects) {
+      return { reason: "no_available_sections", subjectTitle: bag.title };
+    }
+  }
+
+  return { reason: "schedule_conflict" };
 }
 
 /**

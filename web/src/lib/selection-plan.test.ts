@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  diagnoseEmptyTimetable,
   enumerateSubjectSelections,
   estimateCreditRangeFromPlan,
   generateTimetablesForSelectionPlan,
@@ -23,6 +24,15 @@ function subject(id: string, sectionCount = 1, credits = 3): SubjectOption {
       title: `${id} ${index + 1}분반`,
       schedule: "",
     })),
+  };
+}
+
+function subjectAt(id: string, schedule: string, credits = 3): SubjectOption {
+  return {
+    id,
+    title: id,
+    credits,
+    sections: [{ id: `${id}-1`, title: `${id} 1분반`, schedule }],
   };
 }
 
@@ -292,5 +302,78 @@ describe("enumerateSubjectSelections", () => {
         2,
       ),
     ).toThrow(SelectionPlanLimitError);
+  });
+});
+
+describe("diagnoseEmptyTimetable", () => {
+  it("returns null when the plan is empty", () => {
+    expect(diagnoseEmptyTimetable({ requiredSubjects: [], choiceBags: [] })).toBeNull();
+  });
+
+  it("flags credit_range_unreachable when required subjects can't reach the minimum credits", () => {
+    const diagnosis = diagnoseEmptyTimetable({
+      requiredSubjects: [subject("A", 1, 3), subject("B", 1, 3)],
+      choiceBags: [],
+      creditRange: { minCredits: 12, maxCredits: 21 },
+    });
+    expect(diagnosis).toEqual({ reason: "credit_range_unreachable" });
+  });
+
+  it("flags no_available_sections when every section of a required subject is filtered out by day constraints", () => {
+    const diagnosis = diagnoseEmptyTimetable(
+      { requiredSubjects: [subjectAt("A", "월09:00-10:15")], choiceBags: [] },
+      { unavailableDays: ["mon"] },
+    );
+    expect(diagnosis).toEqual({ reason: "no_available_sections", subjectTitle: "A" });
+  });
+
+  it("flags no_available_sections for a choice bag that can't meet its own minimum after filtering", () => {
+    const diagnosis = diagnoseEmptyTimetable(
+      {
+        requiredSubjects: [],
+        choiceBags: [
+          {
+            id: "bag",
+            title: "선택 그룹",
+            minSubjects: 1,
+            subjects: [subjectAt("A", "월09:00-10:15")],
+          },
+        ],
+      },
+      { unavailableDays: ["mon"] },
+    );
+    expect(diagnosis).toEqual({ reason: "no_available_sections", subjectTitle: "선택 그룹" });
+  });
+
+  it("treats a fixed-event conflict on every section as no_available_sections too", () => {
+    const diagnosis = diagnoseEmptyTimetable(
+      { requiredSubjects: [subjectAt("A", "월09:00-10:15")], choiceBags: [] },
+      {
+        fixedEvents: [
+          { id: "job", label: "알바", day: "mon", startMinutes: 480, endMinutes: 700 },
+        ],
+      },
+    );
+    expect(diagnosis).toEqual({ reason: "no_available_sections", subjectTitle: "A" });
+  });
+
+  it("flags schedule_conflict when required subjects only have sections that overlap each other", () => {
+    const diagnosis = diagnoseEmptyTimetable({
+      requiredSubjects: [subjectAt("A", "월09:00-10:15"), subjectAt("B", "월09:30-10:45")],
+      choiceBags: [],
+    });
+    expect(diagnosis).toEqual({ reason: "schedule_conflict" });
+  });
+
+  it("checks credit range before schedule conflicts when both would independently explain an empty result", () => {
+    const diagnosis = diagnoseEmptyTimetable(
+      {
+        requiredSubjects: [subjectAt("A", "월09:00-10:15", 3), subjectAt("B", "월09:30-10:45", 3)],
+        choiceBags: [],
+        creditRange: { minCredits: 12, maxCredits: 21 },
+      },
+      {},
+    );
+    expect(diagnosis).toEqual({ reason: "credit_range_unreachable" });
   });
 });

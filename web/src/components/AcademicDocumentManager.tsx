@@ -54,15 +54,29 @@ type FileInputMethod = "picker" | "clipboard";
  * server does not stream real progress, so this is a timed guess at what's likely happening, not
  * a measured percentage. Stops advancing at the last label rather than looping, so a slow request
  * never looks like it silently restarted.
+ *
+ * 수강/취득과목과 졸업요건충족현황은 실제 서버 처리 과정이 다르다(전자는 과목별 표 파싱 +
+ * 누락 과목 재시도, 후자는 영역별 충족 판정 + 복합 학점 표기 보존) — 문서 종류에 맞는 문구를
+ * 보여줘야 해서 kind별로 따로 둔다.
  */
-const ANALYSIS_STAGES = [
-  "파일을 업로드하는 중…",
-  "Document Parse로 문서 구조를 읽는 중…",
-  "표와 글자를 줄 맞춰 정리하는 중…",
-  "Solar가 과목·학점을 하나씩 짚어보는 중…",
-  "헷갈리는 항목은 다시 확인하는 중…",
-  "결과를 정리하는 중…",
-] as const;
+const ANALYSIS_STAGES: Record<AcademicDocumentKind, readonly string[]> = {
+  course_history: [
+    "파일을 업로드하는 중…",
+    "Document Parse로 문서 구조를 읽는 중…",
+    "표와 글자를 줄 맞춰 정리하는 중…",
+    "Solar가 과목·학점을 하나씩 짚어보는 중…",
+    "헷갈리는 항목은 다시 확인하는 중…",
+    "결과를 정리하는 중…",
+  ],
+  graduation_requirements: [
+    "파일을 업로드하는 중…",
+    "Document Parse로 문서 구조를 읽는 중…",
+    "영역별 이수 현황을 줄 맞춰 정리하는 중…",
+    "Solar가 충족·미충족 영역을 하나씩 짚어보는 중…",
+    "복합 학점 표기는 원문 그대로 남겨두는 중…",
+    "결과를 정리하는 중…",
+  ],
+};
 const ANALYSIS_STAGE_INTERVAL_MS = 2400;
 
 /**
@@ -71,12 +85,20 @@ const ANALYSIS_STAGE_INTERVAL_MS = 2400;
  * separate, clearly-atmospheric pool takes over instead. Purely for company during the wait, not
  * a progress claim.
  */
-const ANALYSIS_LONG_WAIT_FLAVORS = [
-  "생각보다 꼼꼼하게 보는 중이에요…",
-  "글자 하나, 학점 하나까지 놓치지 않으려는 중…",
-  "졸업까지 얼마나 남았는지도 같이 챙기는 중…",
-  "거의 다 됐어요, 조금만 더 기다려 주세요…",
-] as const;
+const ANALYSIS_LONG_WAIT_FLAVORS: Record<AcademicDocumentKind, readonly string[]> = {
+  course_history: [
+    "생각보다 꼼꼼하게 보는 중이에요…",
+    "글자 하나, 학점 하나까지 놓치지 않으려는 중…",
+    "졸업까지 얼마나 남았는지도 같이 챙기는 중…",
+    "거의 다 됐어요, 조금만 더 기다려 주세요…",
+  ],
+  graduation_requirements: [
+    "생각보다 꼼꼼하게 보는 중이에요…",
+    "영역별로 겹치는 학점은 없는지 다시 보는 중…",
+    "졸업까지 얼마나 남았는지도 같이 챙기는 중…",
+    "거의 다 됐어요, 조금만 더 기다려 주세요…",
+  ],
+};
 const ANALYSIS_LONG_WAIT_INTERVAL_MS = 3000;
 
 interface Props {
@@ -205,23 +227,23 @@ export function AcademicDocumentManager({
     if (!isAnalyzing) {
       return;
     }
+    const stages = ANALYSIS_STAGES[kind];
     const timer = window.setInterval(() => {
-      setAnalysisStageIndex((current) =>
-        current < ANALYSIS_STAGES.length - 1 ? current + 1 : current,
-      );
+      setAnalysisStageIndex((current) => (current < stages.length - 1 ? current + 1 : current));
     }, ANALYSIS_STAGE_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [isAnalyzing]);
+  }, [isAnalyzing, kind]);
 
   useEffect(() => {
-    if (!isAnalyzing || analysisStageIndex < ANALYSIS_STAGES.length - 1) {
+    if (!isAnalyzing || analysisStageIndex < ANALYSIS_STAGES[kind].length - 1) {
       return;
     }
+    const flavors = ANALYSIS_LONG_WAIT_FLAVORS[kind];
     const timer = window.setInterval(() => {
-      setAnalysisFlavorIndex((current) => (current + 1) % ANALYSIS_LONG_WAIT_FLAVORS.length);
+      setAnalysisFlavorIndex((current) => (current + 1) % flavors.length);
     }, ANALYSIS_LONG_WAIT_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [isAnalyzing, analysisStageIndex]);
+  }, [isAnalyzing, analysisStageIndex, kind]);
 
   useEffect(() => {
     onAnalysisStateChange?.({
@@ -490,8 +512,8 @@ export function AcademicDocumentManager({
           <div className={styles.analysisProgressBar} />
           <span>
             {analysisFlavorIndex >= 0
-              ? ANALYSIS_LONG_WAIT_FLAVORS[analysisFlavorIndex]
-              : ANALYSIS_STAGES[analysisStageIndex]}
+              ? ANALYSIS_LONG_WAIT_FLAVORS[kind][analysisFlavorIndex]
+              : ANALYSIS_STAGES[kind][analysisStageIndex]}
           </span>
         </div>
       ) : null}

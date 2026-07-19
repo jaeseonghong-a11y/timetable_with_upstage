@@ -54,7 +54,7 @@
   --connector-progress: 0;
   position: relative;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0;
   margin: 0;
   padding: 0;
@@ -66,20 +66,20 @@
   content: "";
   position: absolute;
   top: 15px;
-  left: 12.5%;
+  left: 10%;
   height: 2px;
   border-radius: 999px;
   pointer-events: none;
 }
 
 .stepList::before {
-  right: 12.5%;
+  right: 10%;
   background: var(--border-subtle);
   z-index: 0;
 }
 
 .stepList::after {
-  width: calc((100% - 25%) * var(--connector-progress) / 100);
+  width: calc((100% - 20%) * var(--connector-progress) / 100);
   background: var(--accent-strong);
   z-index: 0;
   transition: width 220ms ease;

@@ -22,7 +22,7 @@ import {
   type SkkuElectiveSubject,
 } from "@/lib/skku-course-api";
 import {
-  estimateCreditRangeFromPlan,
+  diagnoseEmptyTimetable,
   generateTimetablesForSelectionPlan,
   getAllSectionIds,
   getInitialSectionIds,
@@ -31,6 +31,7 @@ import {
   SelectionPlanLimitError,
   toggleEnabledSectionId,
   type ChoiceBag,
+  type EmptyTimetableDiagnosis,
   type SubjectOption,
 } from "@/lib/selection-plan";
 import {
@@ -305,7 +306,9 @@ export function TimetablePlanner({
       setElectiveCampus(activeQuery.campus);
       setSelectedElectiveArea("all");
       setCourseSource("major");
-      setSelectedMajorProgramCode("all");
+      // 원전공(기본 정보 입력에서 고른 주전공, roadmapProgramCodes의 첫 번째 코드)을 기본 선택
+      // 상태로 시작한다 — "전체"부터 보여주면 복수전공 과목까지 한꺼번에 섞여서 헷갈리기 쉽다.
+      setSelectedMajorProgramCode(roadmapProgramCodes[0] ?? activeQuery.departmentCode);
       setExtraProgramCodes([]);
       setExtraDepartmentError("");
       setSelectedGroupIds([]);
@@ -967,19 +970,6 @@ export function TimetablePlanner({
     return { requiredSubjects, choiceBags };
   }, [choiceGroups, courseOwners, enabledSectionIds, selectedCourseGroups]);
 
-  const derivedCreditRange = useMemo(
-    () => estimateCreditRangeFromPlan(manualSelectionPlanSubjects),
-    [manualSelectionPlanSubjects],
-  );
-  const [previousDerivedCreditRange, setPreviousDerivedCreditRange] = useState(derivedCreditRange);
-  if (previousDerivedCreditRange !== derivedCreditRange) {
-    setPreviousDerivedCreditRange(derivedCreditRange);
-    if (derivedCreditRange) {
-      setMinimumCredits(formatCredits(derivedCreditRange.minCredits));
-      setMaximumCredits(formatCredits(derivedCreditRange.maxCredits));
-    }
-  }
-
   const result = useMemo(() => {
     if (selectedCourseGroups.length === 0) {
       return { entries: [], error: null };
@@ -1031,6 +1021,38 @@ export function TimetablePlanner({
     maximumCredits,
     minimumCredits,
     sectionIdToGroup,
+    selectedCourseGroups,
+    unavailableDays,
+  ]);
+
+  // Only computed when there's actually an empty result to explain — diagnoseEmptyTimetable is
+  // rule-based (see selection-plan.ts), never AI-guessed, so the same plan always yields the same
+  // specific reason instead of the old one-size-fits-all "조건을 만족하는 조합이 없습니다".
+  const emptyTimetableDiagnosis = useMemo(() => {
+    if (result.error || result.entries.length > 0 || selectedCourseGroups.length === 0) {
+      return null;
+    }
+    const parsedMin = minimumCredits === "" ? Number.NaN : Number(minimumCredits);
+    const parsedMax = maximumCredits === "" ? Number.NaN : Number(maximumCredits);
+    return diagnoseEmptyTimetable(
+      {
+        requiredSubjects: manualSelectionPlanSubjects.requiredSubjects,
+        choiceBags: manualSelectionPlanSubjects.choiceBags,
+        creditRange: { minCredits: parsedMin, maxCredits: parsedMax },
+      },
+      {
+        unavailableDays,
+        earliestStartMinutes: earliestStart ? Number(earliestStart) : undefined,
+        fixedEvents,
+      },
+    );
+  }, [
+    earliestStart,
+    fixedEvents,
+    manualSelectionPlanSubjects,
+    maximumCredits,
+    minimumCredits,
+    result,
     selectedCourseGroups,
     unavailableDays,
   ]);
@@ -1477,7 +1499,7 @@ export function TimetablePlanner({
       {showResults ? (
         <div className={styles.stepIntro}>
           <div className={styles.stepHeading}>
-            <h2>유효 시간표 확인</h2>
+            <h2>STEP 4 · 유효 시간표 확인</h2>
           </div>
           <p className={styles.stepLead}>
             요일, 시간, 학점 조건을 조정하여 담아 둔 과목으로 만들 수 있는 시간표를 확인합니다.
@@ -1487,7 +1509,7 @@ export function TimetablePlanner({
       {showAiSetup ? (
         <div className={styles.stepIntro}>
           <div className={styles.stepHeading}>
-            <h2>STEP 4 · AI 시간표 추천</h2>
+            <h2>STEP 5 · AI 시간표 추천</h2>
             {isRecommending ? <span className={styles.loadingBadge}>분석 중…</span> : null}
           </div>
           <p className={styles.stepLead}>
@@ -1500,7 +1522,7 @@ export function TimetablePlanner({
       {showAiResults ? (
         <div className={styles.stepIntro}>
           <div className={styles.stepHeading}>
-            <h2>STEP 4 · AI 시간표 추천</h2>
+            <h2>STEP 5 · AI 시간표 추천</h2>
           </div>
           <p className={styles.stepLead}>
             앞에서 담은 과목을 유지한 채, 조건에 맞는 상위 후보를 보여줍니다.
@@ -2055,8 +2077,8 @@ export function TimetablePlanner({
                   </label>
                 </div>
                 <small>
-                  필수 과목 학점과 선택 그룹의 학점 범위(예: 1개~2개)를 반영해 자동으로 채웁니다.
-                  필요하면 직접 수정할 수 있습니다.
+                  기본값은 12~21학점입니다. 담은 과목 학점 합이 이 범위를 벗어나면 시간표가
+                  만들어지지 않으니, 필요하면 직접 수정하세요.
                 </small>
               </fieldset>
             </section>
@@ -2193,11 +2215,15 @@ export function TimetablePlanner({
           {!result.error && effectiveSelectedGroupIds.length === 0 ? (
             <p className={styles.empty}>이전 단계에서 필수 과목이나 선택 그룹 후보를 추가해 주세요.</p>
           ) : null}
-          {!result.error && effectiveSelectedGroupIds.length > 0 && result.entries.length === 0 ? (
-            <p className={styles.empty}>
-              조건을 만족하는 조합이 없습니다. 요일·시작 시간이나 과목 그룹을 조정해 보세요.
-            </p>
-          ) : null}
+          {!result.error && effectiveSelectedGroupIds.length > 0 && result.entries.length === 0 ? (() => {
+            const diagnosisText = describeEmptyTimetableDiagnosis(emptyTimetableDiagnosis);
+            return (
+              <p className={styles.emptyDiagnosis} role="alert">
+                <strong>{diagnosisText.title}</strong>
+                {diagnosisText.detail}
+              </p>
+            );
+          })() : null}
           {!result.error && result.entries.length > 0 && filteredEntries.length === 0 ? (
             <p className={styles.empty}>선택한 공강일 필터에 맞는 조합이 없습니다. 필터를 줄여 보세요.</p>
           ) : null}
@@ -2830,6 +2856,38 @@ function isAbortError(error: unknown): boolean {
 
 function readThrownMessage(error: unknown): string {
   return error instanceof Error ? error.message : "개설강좌를 불러오지 못했습니다.";
+}
+
+const GENERIC_EMPTY_TIMETABLE_DIAGNOSIS = {
+  title: "조건을 만족하는 조합이 없어요",
+  detail: "요일·시작 시간이나 과목 그룹을 조정해 보세요.",
+};
+
+function describeEmptyTimetableDiagnosis(
+  diagnosis: EmptyTimetableDiagnosis | null,
+): { title: string; detail: string } {
+  if (!diagnosis) {
+    return GENERIC_EMPTY_TIMETABLE_DIAGNOSIS;
+  }
+  switch (diagnosis.reason) {
+    case "credit_range_unreachable":
+      return {
+        title: "원하는 학점 범위를 조정해 주세요",
+        detail: "담은 과목의 학점 합이 지금 설정한 학점 범위를 벗어나요.",
+      };
+    case "no_available_sections":
+      return {
+        title: "들을 수 있는 분반이 없어요",
+        detail: `“${diagnosis.subjectTitle}”이(가) 요일·시작 시간 조건이나 고정 일정과 모두 겹쳐요. 조건을 확인해 주세요.`,
+      };
+    case "schedule_conflict":
+      return {
+        title: "시간이 겹치는 과목이 있어요",
+        detail: "담은 과목끼리 시간표를 만들 수 없게 겹쳐요. 분반이나 과목 구성을 조정해 주세요.",
+      };
+    default:
+      return GENERIC_EMPTY_TIMETABLE_DIAGNOSIS;
+  }
 }
 
 function readCourseApiError(value: unknown): string {
