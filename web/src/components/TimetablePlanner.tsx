@@ -2084,12 +2084,7 @@ export function TimetablePlanner({
               <>
             <h3>AI 추천 조건</h3>
             <p className={styles.recommendationHint}>
-              필수·선택 과목에 더해 부족한 학점만큼 관련 교양을 자동으로 채운 뒤, 아래 조건에
-              맞는 상위 후보를 골라 보여줍니다(이미 담은 과목은 그대로 유지). 기수강 과목은
-              제외합니다.
-              {requirements.length > 0
-                ? " 업로드한 졸업요건 중 아직 충족하지 못한 교양 영역을 우선으로 채웁니다."
-                : " 학사문서(졸업요건)를 업로드하면 미충족 교양 영역을 우선으로 채웁니다."}
+              졸업요건을 아직 충족하지 못한 교양 영역을 우선으로 추천해드립니다.
             </p>
 
             <div className={styles.recommendationWeights}>

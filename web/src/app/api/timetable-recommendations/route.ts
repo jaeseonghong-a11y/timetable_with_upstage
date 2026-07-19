@@ -236,8 +236,13 @@ async function requestRecommendationExplanations(
     "position은 입력 candidates 배열에서 그 후보의 1부터 시작하는 순번을 그대로 옮겨 적으세요. 절대 새로 만들지 마세요.",
     "rank는 1부터 후보 개수까지 각각 한 번씩만 사용하세요. customPreference가 없으면 position과 동일한 값을 rank로 사용하세요.",
     "customPreference가 있으면 그 조건에 더 부합하는 후보일수록 낮은 rank(더 상위)를 부여하고, customPreferenceNote에 그 이유를 설명하세요. 없으면 customPreferenceNote는 null로 두세요.",
-    "미충족 졸업요건에 도움이 되는 후보라면 reason에 어떤 영역/요건에 도움이 되는지만 짧게 언급하세요.",
-    "requirementContribution에는 같은 내용을 한 줄로 적고, 해당사항이 없으면 null로 두세요.",
+    "reason에는 scoreHighlights / 사용자 선택 가중치가 실제로 어떻게 만족됐는지 쓰세요.",
+    "공강은 그날 수업이 단 1개도 없는 날만 뜻합니다. 온라인 수업이 있는 날은 공강이 아닙니다.",
+    "수업 사이 빈 시간이나 온라인만 있는 날을 공강이라고 쓰지 마세요.",
+    "예: 수업이 하나도 없는 공강일 조건을 만족합니다. / 점심시간 확보 조건에 맞습니다.",
+    "requirementContribution에는 교양 추천 과목이 미충족 졸업요건 중 어느 항목(영역) 충족에",
+    "도움이 되는지 쓰세요. 예: 교양 추천 과목으로 사회/역사 영역 졸업요건 충족에 도움이 됩니다.",
+    "해당사항이 없으면 requirementContribution은 null로 두세요.",
   ].join("\n");
 
   const userPrompt = JSON.stringify({

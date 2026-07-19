@@ -146,6 +146,7 @@ function activeDays(timetable: Timetable): ReadonlySet<Weekday> {
   return new Set(timetable.meetings.map((meeting) => meeting.day));
 }
 
+/** 공강 = 그날 수업이 단 1개도 없는 날. 온라인 수업이 있는 날은 공강이 아니다(meetings에 잡히면 occupied). */
 function countFreeDays(timetable: Timetable): number {
   const days = activeDays(timetable);
   return WEEKDAYS.filter((day) => !days.has(day)).length;

@@ -225,7 +225,7 @@ export function PlanningWorkspace() {
       : step === 4 && aiSubstep === "setup"
         ? aiRecommendAction.isRunning
           ? "추천 생성 중…"
-          : "AI 추천 받기"
+          : "AI 추천 받기 (교양 추천 포함)"
         : "다음";
 
   return (
