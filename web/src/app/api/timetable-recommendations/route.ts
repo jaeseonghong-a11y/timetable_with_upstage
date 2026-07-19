@@ -1,4 +1,11 @@
-import type { CourseCandidate, FixedEvent, Meeting, Timetable, Weekday } from "../../../lib/timetable";
+import {
+  parseCourseCandidate,
+  type CourseCandidate,
+  type FixedEvent,
+  type Meeting,
+  type Timetable,
+  type Weekday,
+} from "../../../lib/timetable";
 import {
   DEFAULT_RECOMMENDATION_WEIGHTS,
   getFreeDayLabels,
@@ -485,27 +492,6 @@ function parseTimetable(value: unknown): Timetable | null {
       })
     : [];
   return { courses, meetings, fixedEvents };
-}
-
-function parseCourseCandidate(value: unknown): CourseCandidate | null {
-  if (
-    !isRecord(value) ||
-    typeof value.id !== "string" ||
-    typeof value.title !== "string" ||
-    typeof value.schedule !== "string"
-  ) {
-    return null;
-  }
-  return {
-    id: value.id,
-    title: value.title,
-    schedule: value.schedule,
-    credits: typeof value.credits === "number" ? value.credits : undefined,
-    section: typeof value.section === "string" ? value.section : undefined,
-    professor: typeof value.professor === "string" ? value.professor : undefined,
-    campus: typeof value.campus === "string" ? value.campus : undefined,
-    courseType: typeof value.courseType === "string" ? value.courseType : undefined,
-  };
 }
 
 function parseMeeting(value: unknown): Meeting | null {

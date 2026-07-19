@@ -1,0 +1,171 @@
+.myCodeSection,
+.addFriendSection,
+.friendListSection {
+  max-width: 720px;
+  margin: 0 auto 32px;
+}
+
+.myCodeSection h2,
+.addFriendSection h2,
+.friendListSection h2 {
+  margin: 0 0 12px;
+  color: var(--text-primary);
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.myCodeCard {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  background: var(--surface-card);
+}
+
+.myCodeCard > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.myCodeValue {
+  color: var(--accent-strong);
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.myCodeCard small {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.myCodeActions {
+  display: flex;
+  gap: 8px;
+}
+
+.myCodeActions button {
+  padding: 8px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  background: var(--surface-page);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dangerButton {
+  border-color: rgb(180 60 60 / 40%) !important;
+  color: rgb(160 40 40) !important;
+}
+
+.emptyHint {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.emptyHint a {
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
+.error {
+  margin: 8px 0 0;
+  color: var(--text-warning, #a33);
+  font-size: 13px;
+}
+
+.addFriendForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+}
+
+.addFriendForm label {
+  display: flex;
+  flex: 1 1 160px;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.addFriendForm label > span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.addFriendForm input {
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+}
+
+.addFriendForm button {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 8px 18px;
+  border: 1px solid var(--accent-strong);
+  border-radius: 9px;
+  background: var(--accent-strong);
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.addFriendForm button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.friendList {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.friendItem {
+  display: grid;
+  gap: 8px;
+}
+
+.friendItemHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.friendItemHeading strong {
+  color: var(--text-primary);
+  font-size: 15px;
+}
+
+.friendItemHeading button {
+  padding: 6px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-page);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}

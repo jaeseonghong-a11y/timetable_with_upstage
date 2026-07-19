@@ -40,6 +40,40 @@ export interface Timetable {
   fixedEvents: FixedEvent[];
 }
 
+/**
+ * Parses an untrusted JSON value into a `CourseCandidate`, or `null` if it doesn't have the
+ * required shape. Shared by every place that accepts course data from outside the running
+ * browser session (share links, AI recommendation requests, friend-timetable saves) so the
+ * validation rules — and any future tightening of them — live in exactly one place instead of
+ * being copy-pasted per call site.
+ */
+export function parseCourseCandidate(value: unknown): CourseCandidate | null {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    typeof value.title !== "string" ||
+    typeof value.schedule !== "string" ||
+    !value.id ||
+    !value.title
+  ) {
+    return null;
+  }
+  return {
+    id: value.id,
+    title: value.title,
+    schedule: value.schedule,
+    credits: typeof value.credits === "number" ? value.credits : undefined,
+    section: typeof value.section === "string" ? value.section : undefined,
+    professor: typeof value.professor === "string" ? value.professor : undefined,
+    campus: typeof value.campus === "string" ? value.campus : undefined,
+    courseType: typeof value.courseType === "string" ? value.courseType : undefined,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 export class CombinationLimitError extends Error {
   constructor(limit: number) {
     super(`시간표 조합이 안전 한도 ${limit}개를 초과했습니다. 과목 후보나 제약을 더 좁혀 주세요.`);

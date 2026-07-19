@@ -1,6 +1,6 @@
 import { compressToBase64, decompressFromBase64 } from "lz-string";
 
-import type { CourseCandidate, Timetable } from "./timetable";
+import { parseCourseCandidate, type CourseCandidate, type Timetable } from "./timetable";
 
 /**
  * Shared timetables carry only course-schedule data (no login, no server storage): the receiving
@@ -42,7 +42,7 @@ export function decodeShareableTimetable(encoded: string): Timetable | null {
     return null;
   }
   const courses = parsed.slice(0, MAX_SHARED_COURSES).flatMap((item) => {
-    const course = readCourseCandidate(item);
+    const course = parseCourseCandidate(item);
     return course ? [course] : [];
   });
   if (courses.length === 0) {
@@ -72,28 +72,5 @@ function stripCourseForSharing(course: CourseCandidate): CourseCandidate {
     professor: course.professor,
     campus: course.campus,
     courseType: course.courseType,
-  };
-}
-
-function readCourseCandidate(value: unknown): CourseCandidate | null {
-  if (typeof value !== "object" || value === null) {
-    return null;
-  }
-  const record = value as Record<string, unknown>;
-  const id = typeof record.id === "string" ? record.id : null;
-  const title = typeof record.title === "string" ? record.title : null;
-  const schedule = typeof record.schedule === "string" ? record.schedule : null;
-  if (!id || !title || schedule === null) {
-    return null;
-  }
-  return {
-    id,
-    title,
-    schedule,
-    credits: typeof record.credits === "number" ? record.credits : undefined,
-    section: typeof record.section === "string" ? record.section : undefined,
-    professor: typeof record.professor === "string" ? record.professor : undefined,
-    campus: typeof record.campus === "string" ? record.campus : undefined,
-    courseType: typeof record.courseType === "string" ? record.courseType : undefined,
   };
 }

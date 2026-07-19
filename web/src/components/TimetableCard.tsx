@@ -1,13 +1,21 @@
 "use client";
 
 import { toPng } from "html-to-image";
+import Link from "next/link";
 import { type ReactNode, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 
 import { track } from "@/lib/analytics";
+import {
+  getMyEditToken,
+  getMyShareCode,
+  MY_LABEL_KEY,
+  setMySave,
+} from "@/lib/friend-list-storage";
 import { SITE_URL } from "@/lib/site-config";
 import { mergeMeetingsForDisplay, parseSchedule, type Timetable, type Weekday } from "@/lib/timetable";
 import { encodeShareableTimetable } from "@/lib/timetable-share";
+import { useLocalStorageItem } from "@/lib/use-local-storage-item";
 
 import styles from "./TimetablePlanner.module.css";
 
@@ -64,6 +72,18 @@ export function TimetableCard({
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
 
+  const [isServerPanelOpen, setIsServerPanelOpen] = useState(false);
+  // Seeded from this browser's last-used label (SSR-safe, see use-local-storage-item.ts), but
+  // once the user types anything the draft takes over permanently — external syncing must never
+  // clobber input the user is actively editing.
+  const storedLabel = useLocalStorageItem(MY_LABEL_KEY) ?? "";
+  const [ownerLabelDraft, setOwnerLabelDraft] = useState<string | null>(null);
+  const ownerLabelInput = ownerLabelDraft ?? storedLabel;
+  const [isSavingToServer, setIsSavingToServer] = useState(false);
+  const [serverSaveError, setServerSaveError] = useState("");
+  const [savedServerCode, setSavedServerCode] = useState<string | null>(null);
+  const [serverCodeCopied, setServerCodeCopied] = useState(false);
+
   async function handleSaveImage(): Promise<void> {
     if (!gridRef.current || isSavingImage) {
       return;
@@ -103,6 +123,74 @@ export function TimetableCard({
       setShareCopied(true);
     } catch {
       setShareCopied(false);
+    }
+  }
+
+  function handleToggleServerPanel(): void {
+    setIsServerPanelOpen((open) => !open);
+    setServerSaveError("");
+  }
+
+  /**
+   * Saves this timetable to the server under a short code a friend can look up later — unlike
+   * "친구에게 공유"(URL 링크), this is a live pointer: whoever holds the code always sees the
+   * latest save, not a frozen snapshot. If this browser already has a code from a previous save
+   * (localStorage), it updates that same entry using its editToken instead of creating a new one.
+   */
+  async function handleSaveToServer(): Promise<void> {
+    if (isSavingToServer) {
+      return;
+    }
+    setIsSavingToServer(true);
+    setServerSaveError("");
+    try {
+      const existingCode = getMyShareCode(window.localStorage) ?? undefined;
+      const existingEditToken = getMyEditToken(window.localStorage) ?? undefined;
+      const label = ownerLabelInput.trim() || "이름 없음";
+      const response = await fetch("/api/friend-timetable", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: existingCode,
+          editToken: existingEditToken,
+          ownerLabel: label,
+          courses: timetable.courses,
+        }),
+      });
+      const payload: unknown = await response.json();
+      if (!response.ok) {
+        throw new Error(readServerSaveApiError(payload));
+      }
+      const result = readServerSaveResponse(payload);
+      if (!result) {
+        throw new Error("응답 형식이 올바르지 않습니다.");
+      }
+      setMySave(window.localStorage, {
+        code: result.code,
+        editToken: result.editToken ?? existingEditToken ?? "",
+        label,
+      });
+      setSavedServerCode(result.code);
+      setServerCodeCopied(false);
+      track("friend_timetable_saved");
+    } catch (error) {
+      setServerSaveError(
+        error instanceof Error ? error.message : "저장하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      );
+    } finally {
+      setIsSavingToServer(false);
+    }
+  }
+
+  async function handleCopyServerCode(): Promise<void> {
+    if (!savedServerCode) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(savedServerCode);
+      setServerCodeCopied(true);
+    } catch {
+      setServerCodeCopied(false);
     }
   }
 
@@ -241,8 +329,51 @@ export function TimetableCard({
           <button onClick={handleToggleShare} type="button">
             {isShareOpen ? "공유 링크 닫기" : "친구에게 공유"}
           </button>
+          <button onClick={handleToggleServerPanel} type="button">
+            {isServerPanelOpen ? "서버 저장 닫기" : "친구에게 서버로 공유"}
+          </button>
           {saveImageError ? <span className={styles.saveImageError}>{saveImageError}</span> : null}
         </div>
+        {isServerPanelOpen ? (
+          <div className={styles.sharePanel}>
+            <p className={styles.sharePanelHint}>
+              코드 하나로 언제든 최신 시간표를 확인할 수 있게 서버에 저장해요. 로그인은 필요 없어요.
+            </p>
+            <div className={styles.shareLinkRow}>
+              <input
+                className={styles.shareLinkInput}
+                maxLength={24}
+                placeholder="표시할 이름(예: 재성)"
+                value={ownerLabelInput}
+                onChange={(event) => setOwnerLabelDraft(event.target.value)}
+              />
+              <button disabled={isSavingToServer} onClick={() => void handleSaveToServer()} type="button">
+                {isSavingToServer ? "저장 중…" : savedServerCode ? "다시 저장" : "저장"}
+              </button>
+            </div>
+            {serverSaveError ? <p className={styles.saveImageError}>{serverSaveError}</p> : null}
+            {savedServerCode ? (
+              <div className={styles.shareLinkRow}>
+                <input
+                  className={styles.shareLinkInput}
+                  onFocus={(event) => event.currentTarget.select()}
+                  readOnly
+                  type="text"
+                  value={savedServerCode}
+                />
+                <button onClick={() => void handleCopyServerCode()} type="button">
+                  {serverCodeCopied ? "복사됨" : "복사"}
+                </button>
+              </div>
+            ) : null}
+            {savedServerCode ? (
+              <p className={styles.sharePanelHint}>
+                이 코드를 친구에게 알려주세요. <Link href="/friends">친구 시간표 페이지</Link>에서 내
+                저장을 관리하거나 친구 코드를 추가할 수 있어요.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         {isShareOpen && shareUrl ? (
           <div className={styles.sharePanel}>
             <p className={styles.sharePanelHint}>
@@ -290,4 +421,34 @@ export function formatMinutes(minutes: number): string {
 
 function sanitizeFileName(name: string): string {
   return name.replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, "-").trim() || "timetable";
+}
+
+function readServerSaveApiError(payload: unknown): string {
+  if (
+    typeof payload === "object" &&
+    payload !== null &&
+    "error" in payload &&
+    typeof (payload as { error?: unknown }).error === "object" &&
+    (payload as { error?: unknown }).error !== null
+  ) {
+    const message = (payload as { error: { message?: unknown } }).error.message;
+    if (typeof message === "string" && message) {
+      return message;
+    }
+  }
+  return "요청을 처리하지 못했습니다.";
+}
+
+function readServerSaveResponse(payload: unknown): { code: string; editToken?: string } | null {
+  if (typeof payload !== "object" || payload === null) {
+    return null;
+  }
+  const record = payload as { code?: unknown; editToken?: unknown };
+  if (typeof record.code !== "string" || !record.code) {
+    return null;
+  }
+  return {
+    code: record.code,
+    editToken: typeof record.editToken === "string" ? record.editToken : undefined,
+  };
 }

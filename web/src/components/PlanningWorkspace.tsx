@@ -198,7 +198,7 @@ export function PlanningWorkspace() {
         ? docSubstep === "course_history"
           ? 1
           : 2
-        : step + 1; // step 3→3, 4→4, 5→5 once 2-1/2-2 have taken indices 1/2
+        : step; // step 3→3, 4→4, 5→5 once 2-1/2-2 have taken indices 1/2
   const VISUAL_SLOT_COUNT = 6;
   const connectorProgress = (visualSlotIndex / (VISUAL_SLOT_COUNT - 1)) * 100;
   const currentDocumentConfirmed = Boolean(confirmedProfiles[docSubstep]);

@@ -2457,23 +2457,138 @@ cd web && npm run build
   미정, 규나 조원이 `uiux-redesign-6` 이상을 또 만들었는지 미확인, GitHub PR #1/GA4 맞춤
   정의 등록 여부 미확인, 정현 조원 `YJH-1023/h` 연결 안 됨, AI 필러 후보 수 축소 보류.
 
+## ⏸️ 2026-07-20(5) Claude Code — 진행단계 연결선 off-by-one 수정, 친구 시간표 서버 저장/조회 기능(Vercel Blob) 신규 구현
+
+> 이 섹션이 지금 이 저장소의 최신 상태다. 위쪽 섹션들은 그 시점까지의 이력이다. 사용자가
+> 스크린샷으로 연결선 버그(3에서 4까지, 4에서 5까지 과도하게 채워짐)를 재차 리포트했고, 그
+> 직후 "친구 추가 기능을 서버/DB에 연결해서 진행하자"는 요청으로 여러 세션째 후순위로
+> 미뤄뒀던 기능("[[friend_sharing_roadmap]]" 메모리, `CURRENT_STATE.md:1891-1897` 참고)을
+> 이번에 실제로 구현했다. 코드는 완성·검증까지 마쳤지만 **커밋/푸시/배포는 아직 하지 않았다**
+> — 사용자의 명시적 요청을 기다리는 중(이 세션 내내 유지된 규칙).
+
+### 이번에 한 일
+
+**1. 진행단계 연결선 off-by-one 버그 수정**
+- 직전 섹션(2026-07-20(4))에서 6슬롯 구조로 재설계하며 `visualSlotIndex` 계산식에
+  `step === 3/4/5`일 때 `step + 1`을 쓰는 오타가 있었다(주석엔 "step 3→3, 4→4, 5→5"라고
+  적어놓고 실제 코드는 `step + 1`이라 3→4, 4→5, 5→6으로 계산됨) — 그래서 3단계에 있을 때
+  진행선이 4단계까지, 4단계에 있을 때 5단계까지 과도하게 채워졌다. `step + 1` → `step`으로
+  수정.
+- `web/src/components/PlanningWorkspace.tsx`
+
+**2. 친구 시간표 서버 저장/조회 기능 (신규)**
+- **요구사항**: "코드를 저장해두면 접속할 때마다 친구의 최신 시간표를 볼 수 있어야 한다"
+  (스냅샷이 아니라 살아있는 데이터), 내가 저장한 내 시간표도 같은 방식으로 다시 볼 수
+  있어야 한다. 로그인 없음.
+- **기술 선택**: Vercel KV/Upstash Redis는 마켓플레이스 통합이라 `accept-terms` 단계가
+  대화형 터미널 확인을 요구해 이 비대화형 환경에서 설정할 수 없었다. **Vercel Blob**은
+  1st-party 제품이라 `vercel blob create-store --access private --yes` CLI로 직접
+  프로비저닝 가능했고(실제로 대화형 승인 없이 성공), `put(pathname, body, {addRandomSuffix:
+  false, allowOverwrite:true})`로 고정 경로 덮어쓰기, `get(pathname, {access})`로 URL 없이
+  경로만으로 재조회가 가능해 요구사항에 정확히 맞았다.
+- **데이터 모델**: `friend-timetables/{8자리 코드}.json`(private access)에
+  `{version, ownerLabel, editTokenHash, courses, updatedAt}` 저장. `meetings`/`fixedEvents`는
+  저장하지 않음(기존 `timetable-share.ts`의 링크 공유와 동일한 결정 — TimetableCard가
+  `course.schedule`에서 직접 요일/시간을 다시 계산하므로 불필요).
+- **보안**: 코드(친구에게 공유, 헷갈리는 문자 0/O/1/I/L 제외한 8자)와 별개로, 최초 저장 시
+  `editToken`(UUID)을 발급해 클라이언트 localStorage에만 보관 — 이후 같은 코드를 덮어쓰려면
+  이 토큰이 일치해야 함(서버는 해시만 저장). 로그인 없는 서비스에서 "코드를 아는 사람 =
+  주인"이 되는 걸 막는 최소한의 장치. 코드 형식은 서버가 blob 경로에 쓰기 전 정규식으로
+  검증(`isValidFriendCode`)해 경로 조작(path traversal) 방지.
+- **공통 리팩터링**: `CourseCandidate`를 안전하게 파싱하는 로직이 `timetable-share.ts`와
+  `timetable-recommendations/route.ts`에 각각 따로 있던 것을 `web/src/lib/timetable.ts`의
+  `parseCourseCandidate`로 통합해 세 곳(신규 기능 포함) 모두 재사용하도록 정리.
+- **새 파일**:
+  - `web/src/lib/friend-timetable-blob.ts` — 코드/토큰 생성, `saveFriendTimetable`
+    (신규 생성 시 충돌 나면 최대 5회 재시도)/`getFriendTimetable`/`deleteFriendTimetable`.
+  - `web/src/app/api/friend-timetable/route.ts`(POST 저장/갱신),
+    `web/src/app/api/friend-timetable/[code]/route.ts`(GET 조회, DELETE 삭제).
+  - `web/src/lib/friend-list-storage.ts` — 브라우저 로컬의 "내 코드/토큰/표시이름"과
+    "친구 목록"(코드+닉네임 쌍) — 실제 시간표 데이터는 항상 서버에서 새로 받아오므로 목록
+    자체만 로컬에 남아도 데이터가 오래되지 않는다.
+  - `web/src/lib/use-local-storage-item.ts` — `useSyncExternalStore` 기반 SSR-안전
+    localStorage 읽기 훅. **왜 필요했나**: `useState`+`useEffect`로 마운트 시 localStorage를
+    읽어 state에 반영하는 흔한 패턴이 이 프로젝트의 `react-hooks/set-state-in-effect` 린트
+    규칙(React Compiler 관련)에 걸렸다 — "effect 안에서 동기적으로 setState 호출 금지".
+    `useSyncExternalStore`의 `getServerSnapshot`이 정확히 이 경우(SSR 시 기본값, 클라이언트
+    하이드레이션 후 실제 값으로 전환)를 위해 존재하는 훅이라 이걸로 교체해 해결했다.
+  - `web/src/app/friends/page.tsx` — 내 코드 표시/복사/삭제, 코드로 친구 추가, 친구 목록
+    (각 항목이 자기 코드로 최신 시간표를 fetch해 기존 `TimetableCard`로 렌더).
+- **기존 파일 수정**: `TimetableCard.tsx`에 "친구에게 서버로 공유" 버튼(기존 "이미지로
+  저장"/"친구에게 공유"와 같은 자기완결형 패턴, 부모 prop 변경 없음) + 저장 결과 패널(코드
+  복사, `/friends` 링크). `page.tsx` footer에 "친구 시간표 보기" 링크.
+- **테스트 4개 파일 신규**: `friend-list-storage.test.ts`(로컬 저장 헬퍼),
+  `friend-timetable-blob.test.ts`(`@vercel/blob`을 인메모리 Map으로 모킹, 생성/충돌/갱신/
+  잘못된 토큰 거부/삭제/코드 검증), `friend-timetable/route.test.ts`,
+  `friend-timetable/[code]/route.test.ts`(HTTP 레이어, `friend-timetable-blob.ts` 함수
+  모킹). 164개 → **201개**로 증가.
+
+### 문제 상황 · 해결 과정
+- **인코딩 버그처럼 보였던 셸 아티팩트**: `curl -d '{"ownerLabel":"스모크테스트",...}'`로 실제
+  Blob 스토어에 저장 후 조회했을 때 한글이 깨져 나와서(Node `console.log`로도 깨짐 확인) 처음엔
+  블롭 쓰기/읽기 코드의 인코딩 버그로 의심했다. **Node.js 스크립트 안에서 POST+GET 왕복
+  전체를 실행**해 비교한 결과 완벽하게 보존됨을 확인 — 원인은 Windows Git Bash에서 `curl -d`
+  인자로 한글을 직접 넘길 때 셸/curl이 UTF-8이 아닌 인코딩으로 전송한 것이었다(서버 코드와
+  무관). 이후 모든 스모크 테스트를 Node `fetch` 스크립트로 전환해 생성→조회→수정→잘못된
+  토큰 거부→삭제→삭제 후 404까지 실제 Blob 스토어 대상으로 전부 확인했다.
+- **`react-hooks/set-state-in-effect` 린트 충돌**: 흔한 "마운트 시 localStorage 읽기" 패턴이
+  이 프로젝트 린트 설정에서 막혀 있었다(기존 `OnboardingGuide.tsx`는 이 문제를 아예 state가
+  필요 없는 imperative effect로 우회했었는데, 이번엔 실제로 렌더에 쓸 state가 필요해 같은
+  우회가 불가능했다). `useSyncExternalStore`로 교체해 해결(위 참고). 편집 가능한 입력창
+  (내 표시 이름)은 "사용자가 아직 안 건드렸으면 저장된 값을 보여주고, 한 번이라도 타이핑하면
+  그 이후로는 로컬 draft가 우선"하는 패턴으로 외부 동기화와 사용자 입력이 충돌하지 않게 했다.
+
+### 실행한 명령어
+```
+vercel blob create-store skku-timetable-friends --access private --yes
+vercel env pull  # (repo root에서 실행돼 root .env.local에 저장된 것을 web/.env.local로 수동 병합)
+cd web && npm install @vercel/blob
+cd web && npm run lint && npm run typecheck && npm run test && npm run build
+cd web && npm run dev  # 백그라운드, 아래 스모크 테스트용
+node -e "..."  # 실제 Blob 스토어 대상 생성/조회/수정/삭제 전체 왕복 확인 (7단계 전부 통과)
+```
+- 품질 게이트 4개 모두 통과. 테스트 164 → 201개(신규 37개).
+- 스모크 테스트 후 생성한 테스트 blob 전부 삭제로 정리 완료(잔여물 없음).
+
+### ⚠️ 남은 문제 / 막힌 곳
+- **커밋/푸시/배포 대기 중** — 코드는 완성·검증됐지만 사용자의 명시적 "커밋/배포해줘" 요청이
+  아직 없어 그대로 두었다. 다음 세션(또는 이 세션 후속)에서 요청이 오면 바로 진행 가능한
+  상태.
+- **알려진 설계상 한계**(기능 자체에 내재된 트레이드오프, 버그 아님): 다른 기기/브라우저에서는
+  editToken이 없어 기존 코드를 갱신할 수 없고 새 코드를 새로 받아야 한다. 코드에 만료(TTL)가
+  없어 데모 이후에도 blob이 계속 남는다(수동 삭제 API는 있지만 자동 정리는 없음). 로그인이
+  없어 코드 무작위 대입으로 남의 저장을 조회당할 이론적 위험이 있으나, 시간표 데이터 자체엔
+  개인정보가 없어(과목·시간뿐) 프로젝트의 기존 원칙과 일치한다.
+- **여전히 브라우저 직접 검증 미완료** — API 레벨(curl/Node 스크립트)로는 실제 Blob 스토어
+  대상 전체 왕복을 확인했지만, `/friends` 페이지의 실제 클릭 흐름(코드 추가 폼, 친구 카드
+  렌더, TimetableCard의 새 버튼 UI)은 이 환경에 브라우저가 없어 코드 리뷰로만 확인했다.
+- 나머지 미해결 항목은 직전 섹션과 동일(진전 없음): GA4 새 측정 ID 대기, `GEMINI_API_KEY`
+  Vercel 삭제는 하네스가 차단해 사용자가 직접 해야 함, 규나 조원이 `uiux-redesign-6` 이상을
+  또 만들었는지 미확인, GitHub PR #1/GA4 맞춤 정의 등록 여부 미확인, 정현 조원
+  `YJH-1023/h` 연결 안 됨, AI 필러 후보 수 축소 보류.
+
 ## ▶️ Recommended Next Step (다음 도구가 이어서 할 일)
 
 1. 시작 즉시 `git status --short`와 `git log --oneline -5`를 읽는다. **최우선 확인 사항**:
-   a. **브라우저로 직접 열어서 클릭해본다** — `cd web && npm run dev` 후
-      `http://localhost:3000`. 이번 세션에 새로 바뀐 부분 위주로: 진행단계에서 2-1/2-2 각각에
-      있을 때 초록 선이 정확히 그 원까지만 채워지는지(6슬롯 재구성으로 고쳤다고 보지만 실측
-      필요), 과목 담기의 "다른 전공 과목 찾기" 입력창이 옆 전공 칩과 크기가 비슷해졌는지,
-      I-Campus 과목이 격자 시간표 안에서 노란 상자 없이 자연스럽게 붙어 보이는지. 여러
-      세션째 브라우저 직접 검증이 안 됐다.
-   b. 규나 조원이 `uiux-redesign-6` 이상 새 브랜치를 또 만들었는지 확인한다. 병합 시 반드시
+   a. **사용자에게 친구 시간표 기능 커밋/푸시/배포 여부를 확인한다** — 코드는 이미 완성·
+      검증(품질 게이트 + 실제 Blob 스토어 대상 API 왕복 테스트) 상태다. 요청이 오면 바로
+      진행. `.env.local`(web/)에 `BLOB_READ_WRITE_TOKEN`이 이미 있지만, **Vercel
+      프로덕션 배포 환경에도 이 값이 자동으로 연결돼 있는지 배포 후 반드시 확인**할 것
+      (`vercel blob create-store`가 프로젝트에 연결까지 했다고 보고했지만 실배포에서
+      검증되지 않음).
+   b. **브라우저로 직접 열어서 클릭해본다** — `cd web && npm run dev` 후
+      `http://localhost:3000`. 우선순위: (i) 진행단계 3/4/5에서 연결선이 이제 정확히 그
+      원까지만 채워지는지(off-by-one 수정 검증), (ii) `/friends` 페이지 전체 흐름 — 시간표
+      카드에서 "친구에게 서버로 공유" → 코드 발급 → `/friends`에서 내 코드 확인/복사 →
+      다른 코드를 친구로 추가해 실제로 목록에 뜨는지 → 목록에서 제거 → 내 저장 삭제까지.
+      여러 세션째 브라우저 직접 검증이 안 됐다 — 이번엔 신규 기능 전체 UX가 검증 안 된
+      상태라 특히 중요하다.
+   c. 규나 조원이 `uiux-redesign-6` 이상 새 브랜치를 또 만들었는지 확인한다. 병합 시 반드시
       별도 워크트리에서 품질 게이트 + diff를 직접 읽고 검증한 뒤 진행할 것.
-   c. 사용자가 GA4 새 측정 ID를 전달했는지 확인 — 받았다면
+   d. 사용자가 GA4 새 측정 ID를 전달했는지 확인 — 받았다면
       `web/src/lib/analytics-config.ts`의 `GA_MEASUREMENT_ID` 교체 + 배포.
-   d. 사용자에게 `GEMINI_API_KEY` Vercel 환경변수를 직접 지웠는지 확인(하네스가 차단해서
+   e. 사용자에게 `GEMINI_API_KEY` Vercel 환경변수를 직접 지웠는지 확인(하네스가 차단해서
       내가 못 지움).
-   e. "친구와 시간표 맞추기" 기능 진행 여부를 사용자에게 물어본다(방 코드 + Vercel KV
-      기반으로 설계 논의는 끝나있음).
 2. 공식 루브릭(`docs/08`) 대비 데모 증거(파이프라인 도식, LLM 비교, Upstage 적용 전후 수치)를
    준비한다. `docs/05_미해결_과제.md` P16 참조. 데모데이(2026-07-25)가 임박했다.
 3. [중간점검 후 검토] 교양/전공과목 캐싱은 인메모리 TTL이다(`web/src/lib/cache-store.ts`).
