@@ -200,7 +200,7 @@ export function PlanningWorkspace() {
       : step === 3
         ? planSubstep === "select"
           ? "과목 담기 (1/2)"
-          : "유효 시간표 확인 (2/2)"
+          : "과목 담기 (2/2)"
         : step === 4
           ? aiSubstep === "setup"
             ? "AI 추천 조건 (1/2)"

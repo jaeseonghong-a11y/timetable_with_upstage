@@ -1268,22 +1268,26 @@ export function TimetablePlanner({
   return (
     <section className={styles.planner} aria-label="시간표 조합">
       {showSelect ? (
-        <div className={styles.notice}>
-          <div>
-            <strong>{query ? queryLabel : "개설강좌 조회 전"}</strong>
-            <span>
-              {query
-                ? "필요한 과목과 분반을 담아 주세요. 시간표 결과는 다음 화면에서 확인합니다."
-                : "위 기본정보를 입력하면 해당 소속의 실제 개설강좌가 여기에 표시됩니다."}
-            </span>
+        <div className={styles.stepIntro}>
+          <div className={styles.stepHeading}>
+            <h2>STEP 3 · 과목 담기</h2>
+            {isLoading || isElectiveLoading ? (
+              <span className={styles.loadingBadge}>
+                {isElectiveLoading
+                  ? "교양 강좌 조회 중… (처음 조회는 최대 10초 정도 걸릴 수 있어요)"
+                  : "성대 강좌 조회 중…"}
+              </span>
+            ) : query ? (
+              <span className={styles.contextBadge}>{queryLabel}</span>
+            ) : (
+              <span className={styles.contextBadge}>개설강좌 조회 전</span>
+            )}
           </div>
-          {isLoading || isElectiveLoading ? (
-            <span className={styles.loadingBadge}>
-              {isElectiveLoading
-                ? "교양 강좌 조회 중… (처음 조회는 최대 10초 정도 걸릴 수 있어요)"
-                : "성대 강좌 조회 중…"}
-            </span>
-          ) : null}
+          <p className={styles.stepLead}>
+            {query
+              ? "필요한 과목과 분반을 담아 주세요. 시간표 결과는 다음 화면에서 확인합니다."
+              : "위 기본정보를 입력하면 해당 소속의 실제 개설강좌가 여기에 표시됩니다."}
+          </p>
         </div>
       ) : null}
       {showResults ? (
@@ -1326,7 +1330,7 @@ export function TimetablePlanner({
         {showSelect ? (
         <aside className={styles.controls}>
           <fieldset>
-            <legend>과목 담기</legend>
+            <legend className={styles.sectionTitle}>과목 담기</legend>
             <div className={styles.sourceTabs} role="tablist" aria-label="과목 분류">
               <button
                 aria-selected={courseSource === "major"}
@@ -1360,16 +1364,16 @@ export function TimetablePlanner({
                 value={activeDestination}
                 onChange={(event) => setActiveDestination(event.target.value)}
               >
-                <option value="required">필수 과목 · 모든 조합에 포함</option>
+                <option value="required">필수 과목 (모든 조합에 포함)</option>
                 {choiceGroups.map((choiceGroup) => (
                   <option key={choiceGroup.id} value={choiceGroup.id}>
-                    {choiceGroup.title} · {choiceGroup.minSubjects}~{choiceGroup.maxSubjects}과목 선택
+                    {choiceGroup.title} ({choiceGroup.minSubjects}~{choiceGroup.maxSubjects}과목 선택)
                   </option>
                 ))}
               </select>
               <small>
-                체크박스는 지금 선택한 위치에 들어있는 과목만 표시합니다. 다른 위치에 이미 담긴
-                과목은 체크 해제 상태로 보이며, 눌러서 이 위치로 옮길 수 있습니다.
+                위에서 고른 위치에 새 과목이 담깁니다. 선택 그룹 추가·수정은 아래 ‘담은 과목 확인’에서
+                할 수 있습니다.
               </small>
             </label>
             {courseSource === "major" && majorProgramTabs.length > 1 ? (
@@ -1663,11 +1667,11 @@ export function TimetablePlanner({
               {!query ? <p className={styles.courseEmpty}>먼저 기본정보를 입력해 주세요.</p> : null}
             </div>
 
-            <section className={styles.selectionPlanEditor} aria-label="담은 과목 정리">
+            <section className={styles.selectionPlanEditor} aria-label="담은 과목 확인">
               <div className={styles.selectionPlanHeading}>
                 <div>
-                  <strong>담은 과목 정리</strong>
-                  <small>과목을 선택하면 여기서 그룹 이동과 분반 선택을 할 수 있습니다.</small>
+                  <strong className={styles.sectionTitle}>담은 과목 확인</strong>
+                  <small>분반 선택, 선택 그룹 이름 변경, 그룹 이동을 할 수 있습니다.</small>
                 </div>
                 <button type="button" onClick={addChoiceGroup}>+ 선택 그룹 추가</button>
               </div>

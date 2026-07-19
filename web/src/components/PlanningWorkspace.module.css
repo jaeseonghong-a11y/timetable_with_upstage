@@ -34,7 +34,7 @@
 
 .progressHeader strong {
   display: block;
-  color: var(--accent-strong);
+  color: var(--text-primary);
   font-size: clamp(18px, 2.4vw, 22px);
   letter-spacing: -0.04em;
   line-height: 1.25;
