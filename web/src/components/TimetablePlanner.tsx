@@ -1178,51 +1178,60 @@ export function TimetablePlanner({
   return (
     <section className={styles.planner} aria-label="시간표 조합">
       {showSelect ? (
-        <div className={styles.notice}>
-          <div>
-            <strong>{query ? queryLabel : "개설강좌 조회 전"}</strong>
-            <span>
-              {query
-                ? "필요한 과목과 분반을 담아 주세요. 시간표 결과는 다음 화면에서 확인합니다."
-                : "위 기본정보를 입력하면 해당 소속의 실제 개설강좌가 여기에 표시됩니다."}
-            </span>
+        <div className={styles.stepIntro}>
+          <div className={styles.stepHeading}>
+            <h2>STEP 3 · 과목 담기</h2>
+            {isLoading || isElectiveLoading ? (
+              <span className={styles.loadingBadge}>
+                {isElectiveLoading
+                  ? "교양 강좌 조회 중… (처음 조회는 최대 10초 정도 걸릴 수 있어요)"
+                  : "성대 강좌 조회 중…"}
+              </span>
+            ) : query ? (
+              <span className={styles.contextBadge}>{queryLabel}</span>
+            ) : (
+              <span className={styles.contextBadge}>개설강좌 조회 전</span>
+            )}
           </div>
-          {isLoading || isElectiveLoading ? (
-            <span className={styles.loadingBadge}>
-              {isElectiveLoading
-                ? "교양 강좌 조회 중… (처음 조회는 최대 10초 정도 걸릴 수 있어요)"
-                : "성대 강좌 조회 중…"}
-            </span>
-          ) : null}
+          <p className={styles.stepLead}>
+            {query
+              ? "필요한 과목과 분반을 담아 주세요. 시간표 결과는 다음 화면에서 확인합니다."
+              : "위 기본정보를 입력하면 해당 소속의 실제 개설강좌가 여기에 표시됩니다."}
+          </p>
         </div>
       ) : null}
       {showResults ? (
-        <div className={styles.notice}>
-          <div>
-            <strong>유효 시간표 확인</strong>
-            <span>요일·학점 조건을 조정하며, 담아 둔 과목으로 만들 수 있는 시간표를 확인합니다.</span>
+        <div className={styles.stepIntro}>
+          <div className={styles.stepHeading}>
+            <h2>유효 시간표 확인</h2>
           </div>
+          <p className={styles.stepLead}>
+            요일, 시간, 학점 조건을 조정하여 담아 둔 과목으로 만들 수 있는 시간표를
+            확인합니다.
+          </p>
         </div>
       ) : null}
       {showAiSetup ? (
-        <div className={styles.notice}>
-          <div>
-            <strong>{isRecommending ? "AI 분석 중" : "AI 추천 조건"}</strong>
-            <span>
-              {isRecommending
-                ? "AI가 분석 중입니다... 완료되면 결과 화면으로 이동합니다."
-                : "선호 조건을 고른 뒤 추천을 받으면, 다음 화면에서 결과 카드를 확인합니다."}
-            </span>
+        <div className={styles.stepIntro}>
+          <div className={styles.stepHeading}>
+            <h2>STEP 4 · AI 시간표 추천</h2>
+            {isRecommending ? <span className={styles.loadingBadge}>분석 중…</span> : null}
           </div>
-          {isRecommending ? <span className={styles.loadingBadge}>분석 중…</span> : null}
+          <p className={styles.stepLead}>
+            {isRecommending
+              ? "AI가 분석 중입니다... 완료되면 결과 화면으로 이동합니다."
+              : "선호 조건을 고른 뒤 추천을 받으면, 다음 화면에서 결과 카드를 확인합니다."}
+          </p>
         </div>
       ) : null}
       {showAiResults ? (
-        <div className={styles.notice}>
-          <div>
-            <strong>AI 추천 결과</strong>
-            <span>앞에서 담은 과목을 유지한 채, 조건에 맞는 상위 후보를 보여줍니다.</span>
+        <div className={styles.stepIntro}>
+          <div className={styles.stepHeading}>
+            <h2>STEP 4 · AI 추천 결과</h2>
           </div>
+          <p className={styles.stepLead}>
+            앞에서 담은 과목을 유지한 채, 조건에 맞는 상위 후보를 보여줍니다.
+          </p>
         </div>
       ) : null}
       {showSelect && collectionError ? (
@@ -1236,7 +1245,7 @@ export function TimetablePlanner({
         {showSelect ? (
         <aside className={styles.controls}>
           <fieldset>
-            <legend>과목 담기</legend>
+            <legend className={styles.sectionTitle}>과목 담기</legend>
             <div className={styles.sourceTabs} role="tablist" aria-label="과목 분류">
               <button
                 aria-selected={courseSource === "major"}
@@ -1328,9 +1337,15 @@ export function TimetablePlanner({
                 ) : null}
               </div>
             ) : null}
-            <label className={styles.assignmentTarget}>
-              <span>새로 선택한 과목을 담을 곳</span>
+            <div className={styles.assignmentTarget}>
+              <div className={styles.assignmentTargetHeader}>
+                <span>새로 선택한 과목을 담을 곳</span>
+                <button type="button" onClick={addChoiceGroup}>
+                  + 선택 그룹 추가
+                </button>
+              </div>
               <select
+                aria-label="새로 선택한 과목을 담을 곳"
                 value={activeDestination}
                 onChange={(event) => setActiveDestination(event.target.value)}
               >
@@ -1342,10 +1357,10 @@ export function TimetablePlanner({
                 ))}
               </select>
               <small>
-                체크박스는 지금 선택한 위치에 들어있는 과목만 표시합니다. 다른 위치에 이미 담긴
-                과목은 체크 해제 상태로 보이며, 눌러서 이 위치로 옮길 수 있습니다.
+                위에서 고른 곳에 새 과목이 담깁니다. 버튼을 눌러 선택 그룹을 추가할 수
+                있습니다.
               </small>
-            </label>
+            </div>
             <label className={styles.courseSearch}>
               <span className={styles.srOnly}>과목 검색</span>
               <input
@@ -1525,13 +1540,12 @@ export function TimetablePlanner({
               {!query ? <p className={styles.courseEmpty}>먼저 기본정보를 입력해 주세요.</p> : null}
             </div>
 
-            <section className={styles.selectionPlanEditor} aria-label="담은 과목 정리">
+            <section className={styles.selectionPlanEditor} aria-label="담은 과목 확인">
               <div className={styles.selectionPlanHeading}>
                 <div>
-                  <strong>담은 과목 정리</strong>
-                  <small>과목을 선택하면 여기서 그룹 이동과 분반 선택을 할 수 있습니다.</small>
+                  <strong className={styles.sectionTitle}>담은 과목 확인</strong>
+                  <small>분반 선택, 선택 그룹 이름 변경, 그룹 이동을 할 수 있습니다.</small>
                 </div>
-                <button type="button" onClick={addChoiceGroup}>+ 선택 그룹 추가</button>
               </div>
 
               <div className={styles.choiceGroupRules}>
@@ -1905,7 +1919,6 @@ export function TimetablePlanner({
               </div>
             ) : (
               <>
-            <h3>AI 추천 조건</h3>
             <p className={styles.recommendationHint}>
               필수·선택 과목에 더해 부족한 학점만큼 관련 교양을 자동으로 채운 뒤, 아래 조건에
               맞는 상위 후보를 골라 보여줍니다(이미 담은 과목은 그대로 유지). 기수강 과목은
@@ -1993,7 +2006,6 @@ export function TimetablePlanner({
 
           {showAiResults ? (
           <div className={styles.recommendationSection}>
-            <h3>AI 추천 결과</h3>
             {aiExplanationFailed && recommendations ? (
               <p className={styles.recommendationNotice}>
                 Solar 추천 이유 생성에 실패해 가중치 기준 순위만 표시합니다.

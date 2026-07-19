@@ -46,6 +46,27 @@
   letter-spacing: 0.02em;
 }
 
+.kindLead {
+  display: grid;
+  gap: 6px;
+  max-width: 760px;
+}
+
+.kindLead h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.kindLead p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .eyebrow,
 .sectionHeading p,
 .reviewHeading p {

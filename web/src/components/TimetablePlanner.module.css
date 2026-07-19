@@ -2,7 +2,7 @@
   width: 100%;
   min-width: 0;
   max-width: 1120px;
-  margin: 0 auto;
+  margin: 0 auto 28px;
   border: 1px solid var(--border-subtle);
   border-radius: 24px;
   overflow: hidden;
@@ -10,35 +10,51 @@
   box-shadow: 0 18px 50px rgb(32 63 67 / 8%);
 }
 
-.notice {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.stepIntro {
+  display: grid;
   gap: 10px;
-  padding: 14px 24px;
+  padding: 28px 28px 20px;
   border-bottom: 1px solid var(--border-subtle);
-  background: var(--surface-note);
-  color: var(--text-secondary);
-  font-size: 14px;
 }
 
-.notice > div:first-child {
+.stepHeading {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
 }
 
-.notice strong {
+.stepHeading h2 {
+  margin: 0;
   color: var(--accent-strong);
+  font-size: clamp(24px, 3.2vw, 32px);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.25;
 }
 
+.stepLead {
+  margin: 0;
+  max-width: 760px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.contextBadge,
 .loadingBadge {
   padding: 7px 10px;
   border-radius: 999px;
-  background: var(--surface-card);
+  background: var(--surface-note);
   color: var(--accent-strong);
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.loadingBadge {
+  background: var(--surface-page);
 }
 
 .collectionError {
@@ -77,6 +93,19 @@
   color: var(--text-primary);
   font-size: 15px;
   font-weight: 700;
+}
+
+.sectionTitle {
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.controls legend.sectionTitle {
+  margin-bottom: 14px;
+  font-size: 18px;
+  font-weight: 800;
 }
 
 .sourceTabs {
@@ -224,10 +253,31 @@
   background: var(--surface-note);
 }
 
-.assignmentTarget > span {
+.assignmentTargetHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.assignmentTargetHeader > span {
   color: var(--text-primary);
   font-size: 12px;
   font-weight: 800;
+}
+
+.assignmentTargetHeader button {
+  flex: none;
+  padding: 6px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-card);
+  color: var(--accent-strong);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
 }
 
 .assignmentTarget select,
@@ -485,6 +535,12 @@
   color: var(--text-primary);
   font-size: 15px;
   font-weight: 700;
+}
+
+.selectionPlanHeading strong.sectionTitle {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
 }
 
 .selectionPlanHeading small,
@@ -1396,12 +1452,6 @@
   }
 }
 
-.recommendationSection h3 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 800;
-}
-
 .recommendationHint {
   margin: 0;
   color: var(--text-secondary);
@@ -1557,14 +1607,12 @@
 }
 
 @media (max-width: 520px) {
-  .notice {
-    flex-direction: column;
-    align-items: flex-start;
+  .stepIntro {
+    padding: 22px 22px 16px;
   }
 
   .controls,
   .results {
     padding: 22px;
   }
-
 }

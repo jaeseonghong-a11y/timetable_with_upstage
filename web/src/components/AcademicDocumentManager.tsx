@@ -29,15 +29,17 @@ const KIND_DETAILS: Record<
 > = {
   course_history: {
     label: "수강/취득과목",
-    heading: "이미 들은 과목을 확인하세요.",
-    description: "재수강할 과목은 토글로 다시 추천 후보에 포함할 수 있습니다.",
+    heading: "수강·취득 과목 첨부하기",
+    description:
+      "이미 이수한 과목을 확인해 주세요. 확인된 과목은 이후 과목 후보에서 제외됩니다. 재수강이 필요한 과목은 문서 분석 결과 목록에서 ‘재수강 예정’으로 표시해 주세요. 해당 과목만 다시 후보에 포함됩니다.",
     attachGuide:
       "성균관대학교 GLS → 학적/개인영역 → 졸업자가진단 → 졸업요건충족현황조회 → 수강/취득 과목 출력 → PDF 저장 → 업로드",
   },
   graduation_requirements: {
     label: "졸업요건충족현황",
-    heading: "남은 졸업요건을 확인하세요.",
-    description: "복합값과 영역별 중복학점은 추측하지 않고 확인 항목으로 남깁니다.",
+    heading: "졸업요건 충족현황 첨부하기",
+    description:
+      "남은 졸업요건을 확인해 주세요. 복합값과 영역별 중복학점은 추측하지 않으며, 확인이 필요한 항목은 검토 목록에 남깁니다.",
     attachGuide:
       "성균관대학교 GLS → 학적/개인영역 → 졸업자가진단 → 졸업요건충족현황조회 → 영역별 학점취득/수강현황 부분 스크린샷 → 붙여넣기, 혹은 저장 후 업로드",
   },
@@ -344,6 +346,11 @@ export function AcademicDocumentManager({
         <p className={styles.upstageBadge}>with Upstage Document Parse + Solar</p>
       </div>
 
+      <div className={styles.kindLead}>
+        <h3>{detail.heading}</h3>
+        <p>{detail.description}</p>
+      </div>
+
       <div className={styles.privacyNotice}>
         <p>
           업로드한 파일은 분석을 위해 <strong>외부 API(Upstage)</strong>로 전송됩니다.
@@ -397,12 +404,8 @@ export function AcademicDocumentManager({
         </div>
       ) : null}
 
-      <div className={styles.documentIntro}>
-        <div>
-          <h3>{detail.heading}</h3>
-          <p>{detail.description}</p>
-        </div>
-        {profile ? (
+      {profile ? (
+        <div className={styles.documentIntro}>
           <div className={styles.documentStatusActions}>
             <span className={isConfirmed ? styles.confirmedBadge : styles.draftBadge}>
               {isConfirmed ? "확정된 데이터" : "확인 중인 초안"}
@@ -420,8 +423,8 @@ export function AcademicDocumentManager({
               {isResultCollapsed ? "내용 펼치기" : "내용 접기"}
             </button>
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       <p className={styles.attachGuide}>
         <strong>어디서 받나요?</strong> {detail.attachGuide}
