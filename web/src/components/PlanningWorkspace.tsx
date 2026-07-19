@@ -221,7 +221,7 @@ export function PlanningWorkspace() {
     (step === 4 && aiSubstep === "setup");
   const nextLabel =
     step === 3 && planSubstep === "select"
-      ? "유효 시간표 확인"
+      ? "유효 시간표 확인 (교양 추천 비포함)"
       : step === 4 && aiSubstep === "setup"
         ? aiRecommendAction.isRunning
           ? "추천 생성 중…"

@@ -832,21 +832,11 @@ export function TimetablePlanner({
     const parsed = Number(electiveRecommendationCredits);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
   }, [electiveRecommendationCredits]);
-  const derivedCreditRange = useMemo(() => {
-    const base = estimateCreditRangeFromPlan(manualSelectionPlanSubjects);
-    if (!base) {
-      return reservedElectiveCredits > 0
-        ? { minCredits: reservedElectiveCredits, maxCredits: reservedElectiveCredits }
-        : null;
-    }
-    if (reservedElectiveCredits === 0) {
-      return base;
-    }
-    return {
-      minCredits: base.minCredits + reservedElectiveCredits,
-      maxCredits: base.maxCredits + reservedElectiveCredits,
-    };
-  }, [manualSelectionPlanSubjects, reservedElectiveCredits]);
+  // 비포함 = 담은 과목만(유효 시간표). 포함 = 비포함 + 교양 추천(AI 추천).
+  const derivedCreditRange = useMemo(
+    () => estimateCreditRangeFromPlan(manualSelectionPlanSubjects),
+    [manualSelectionPlanSubjects],
+  );
   const [previousDerivedCreditRange, setPreviousDerivedCreditRange] = useState(derivedCreditRange);
   if (previousDerivedCreditRange !== derivedCreditRange) {
     setPreviousDerivedCreditRange(derivedCreditRange);
@@ -858,14 +848,24 @@ export function TimetablePlanner({
       setMaximumCredits(formatCredits(derivedCreditRange.maxCredits));
     }
   }
+  const excludedCreditRangeLabel = `${minimumCredits || "?"}~${maximumCredits || "?"}학점`;
+  const includedMinCredits =
+    minimumCredits === "" || !Number.isFinite(Number(minimumCredits))
+      ? null
+      : Number(minimumCredits) + reservedElectiveCredits;
+  const includedMaxCredits =
+    maximumCredits === "" || !Number.isFinite(Number(maximumCredits))
+      ? null
+      : Number(maximumCredits) + reservedElectiveCredits;
+  const includedCreditRangeLabel = `${
+    includedMinCredits === null ? "?" : formatCredits(includedMinCredits)
+  }~${includedMaxCredits === null ? "?" : formatCredits(includedMaxCredits)}학점`;
 
   const result = useMemo(() => {
     if (selectedCourseGroups.length === 0) {
       return { entries: [], error: null };
     }
     try {
-      // Step 3 only has manually bagged courses — subtract reserved AI-elective credits so the
-      // elevated "desired range" still leaves valid combinations for the current bag alone.
       const parsedMin = minimumCredits === "" ? Number.NaN : Number(minimumCredits);
       const parsedMax = maximumCredits === "" ? Number.NaN : Number(maximumCredits);
       const timetables = generateTimetablesForSelectionPlan(
@@ -873,12 +873,8 @@ export function TimetablePlanner({
           requiredSubjects: manualSelectionPlanSubjects.requiredSubjects,
           choiceBags: manualSelectionPlanSubjects.choiceBags,
           creditRange: {
-            minCredits: Number.isFinite(parsedMin)
-              ? Math.max(0, parsedMin - reservedElectiveCredits)
-              : parsedMin,
-            maxCredits: Number.isFinite(parsedMax)
-              ? Math.max(0, parsedMax - reservedElectiveCredits)
-              : parsedMax,
+            minCredits: parsedMin,
+            maxCredits: parsedMax,
           },
         },
         {
@@ -915,7 +911,6 @@ export function TimetablePlanner({
     manualSelectionPlanSubjects,
     maximumCredits,
     minimumCredits,
-    reservedElectiveCredits,
     sectionIdToGroup,
     selectedCourseGroups,
     unavailableDays,
@@ -1162,6 +1157,17 @@ export function TimetablePlanner({
     setRecommendationError("");
     try {
       const filler = await buildAiFillerSubjects();
+      const parsedMin = minimumCredits === "" ? Number.NaN : Number(minimumCredits);
+      const parsedMax = maximumCredits === "" ? Number.NaN : Number(maximumCredits);
+      // Elevate the Step 3 bag range by the reserved 교양 추천 credits for AI fill only.
+      const aiCreditRange = {
+        minCredits: Number.isFinite(parsedMin)
+          ? parsedMin + reservedElectiveCredits
+          : parsedMin,
+        maxCredits: Number.isFinite(parsedMax)
+          ? parsedMax + reservedElectiveCredits
+          : parsedMax,
+      };
       const timetables = generateTimetablesForSelectionPlan(
         {
           requiredSubjects: manualSelectionPlanSubjects.requiredSubjects,
@@ -1169,10 +1175,7 @@ export function TimetablePlanner({
             ...manualSelectionPlanSubjects.choiceBags,
             ...(filler.bag ? [filler.bag] : []),
           ],
-          creditRange: {
-            minCredits: minimumCredits === "" ? Number.NaN : Number(minimumCredits),
-            maxCredits: maximumCredits === "" ? Number.NaN : Number(maximumCredits),
-          },
+          creditRange: aiCreditRange,
         },
         {
           unavailableDays,
@@ -1344,10 +1347,10 @@ export function TimetablePlanner({
       {showResults ? (
         <div className={styles.stepIntro}>
           <div className={styles.stepHeading}>
-            <h2>유효 시간표 확인</h2>
+            <h2>유효 시간표 확인 (교양 추천 비포함)</h2>
           </div>
           <p className={styles.stepLead}>
-            요일, 시간, 학점 조건을 조정하여 담아 둔 과목으로 만들 수 있는 시간표를 확인합니다.
+            요일, 시간 조건을 조정하여 담아 둔 과목으로 만들 수 있는 시간표를 확인합니다.
           </p>
         </div>
       ) : null}
@@ -1786,7 +1789,8 @@ export function TimetablePlanner({
                           <span aria-hidden="true">학점</span>
                         </label>
                         <small>
-                          AI 추천 시 이 학점만큼 원하는 학점 범위(최소·최대)에 더해집니다.
+                          아래 학점 범위의 ‘교양 추천 포함’에 더해지며, AI 시간표 추천에만
+                          사용됩니다.
                         </small>
                       </div>
                     </div>
@@ -1879,6 +1883,30 @@ export function TimetablePlanner({
                     : [electiveRecommendationBlock, ...choiceGroupBlocks];
                 })()}
               </div>
+
+              <fieldset className={styles.creditRangeFieldset}>
+                <legend>학점 범위</legend>
+                <div className={styles.creditRangeRows}>
+                  <div className={styles.creditRangeRow}>
+                    <div className={styles.creditRangeRowLabel}>
+                      <strong>교양 추천 비포함</strong>
+                      <small>유효 시간표 확인</small>
+                    </div>
+                    <span className={styles.creditRangeRowValue}>{excludedCreditRangeLabel}</span>
+                  </div>
+                  <div className={styles.creditRangeRow}>
+                    <div className={styles.creditRangeRowLabel}>
+                      <strong>교양 추천 포함</strong>
+                      <small>AI 시간표 추천</small>
+                    </div>
+                    <span className={styles.creditRangeRowValue}>{includedCreditRangeLabel}</span>
+                  </div>
+                </div>
+                <small>
+                  담은 필수·선택 과목 학점으로 자동 계산됩니다. 교양 추천 학점을 바꾸면 포함
+                  범위만 달라집니다.
+                </small>
+              </fieldset>
             </section>
           </fieldset>
         </aside>
@@ -1967,39 +1995,6 @@ export function TimetablePlanner({
               ))}
             </select>
           </label>
-
-          <fieldset>
-            <legend>원하는 학점 범위</legend>
-            <div className={styles.creditRangeInputs}>
-              <label>
-                <span>최소</span>
-                <input
-                  inputMode="numeric"
-                  min="0"
-                  step="1"
-                  type="number"
-                  value={minimumCredits}
-                  onChange={(event) => setMinimumCredits(event.target.value)}
-                />
-              </label>
-              <span aria-hidden="true">~</span>
-              <label>
-                <span>최대</span>
-                <input
-                  inputMode="numeric"
-                  min="0"
-                  step="1"
-                  type="number"
-                  value={maximumCredits}
-                  onChange={(event) => setMaximumCredits(event.target.value)}
-                />
-              </label>
-            </div>
-            <small>
-              필수 과목 학점, 선택 그룹 학점 범위, 교양 과목 추천 학점을 반영해 자동으로
-              채웁니다. 필요하면 직접 수정할 수 있습니다.
-            </small>
-          </fieldset>
         </aside>
         ) : null}
 
@@ -2048,7 +2043,7 @@ export function TimetablePlanner({
           ) : null}
           {!result.error && effectiveSelectedGroupIds.length > 0 && result.entries.length === 0 ? (
             <p className={styles.empty}>
-              조건을 만족하는 조합이 없습니다. 학점·요일·시작 시간이나 과목 그룹을 조정해 보세요.
+              조건을 만족하는 조합이 없습니다. 요일·시작 시간이나 과목 그룹을 조정해 보세요.
             </p>
           ) : null}
           {!result.error && result.entries.length > 0 && filteredEntries.length === 0 ? (

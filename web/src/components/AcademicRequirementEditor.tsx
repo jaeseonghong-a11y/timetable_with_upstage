@@ -23,11 +23,24 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
   // 목록 전체를 하나의 단위로만 접고 편다 (개별 요건 접기는 없음). 수강내역 편집기와 같은
   // 이유로, 새 분석 결과가 들어올 때(sourceDocumentId 변경)마다 접힌 상태로 시작한다.
   const [isListCollapsed, setIsListCollapsed] = useState(true);
+  const [showUnmetGeneralOnly, setShowUnmetGeneralOnly] = useState(false);
   const [lastSourceDocumentId, setLastSourceDocumentId] = useState(sourceDocumentId);
   if (sourceDocumentId !== lastSourceDocumentId) {
     setLastSourceDocumentId(sourceDocumentId);
     setIsListCollapsed(true);
+    setShowUnmetGeneralOnly(false);
   }
+
+  function isUnmetGeneralRequirement(requirement: Requirement): boolean {
+    return requirement.scope === "general" && requirement.status === "unmet";
+  }
+
+  const visibleRequirements = profile.requirements
+    .map((requirement, index) => ({ requirement, index }))
+    .filter(
+      ({ requirement }) => !showUnmetGeneralOnly || isUnmetGeneralRequirement(requirement),
+    );
+  const unmetGeneralCount = profile.requirements.filter(isUnmetGeneralRequirement).length;
 
   function updateRequirement(index: number, requirement: Requirement): void {
     onChange({
@@ -96,9 +109,29 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
       <div className={styles.sectionHeading}>
         <div>
           <p>졸업요건</p>
-          <h3>{profile.requirements.length}개</h3>
+          <h3>
+            {showUnmetGeneralOnly
+              ? `미충족 교양 ${visibleRequirements.length}개 / 전체 ${profile.requirements.length}개`
+              : `${profile.requirements.length}개`}
+          </h3>
         </div>
         <div className={styles.sectionControls}>
+          <label className={styles.unmetOnlyToggle}>
+            <input
+              checked={showUnmetGeneralOnly}
+              type="checkbox"
+              onChange={(event) => {
+                setShowUnmetGeneralOnly(event.target.checked);
+                if (event.target.checked) {
+                  setIsListCollapsed(false);
+                }
+              }}
+            />
+            <span>
+              미충족 교양 과목만 보기
+              {unmetGeneralCount > 0 ? ` (${unmetGeneralCount})` : ""}
+            </span>
+          </label>
           <button type="button" onClick={() => setIsListCollapsed(true)}>
             전체 접기
           </button>
@@ -123,9 +156,11 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
           <span>▶ 접힘</span>
           <span>펼치려면 클릭</span>
         </button>
+      ) : visibleRequirements.length === 0 ? (
+        <p className={styles.dataEmpty}>미충족 교양 요건이 없습니다.</p>
       ) : (
         <ol className={styles.courseCardGrid}>
-          {profile.requirements.map((requirement, index) => {
+          {visibleRequirements.map(({ requirement, index }) => {
             const blockingReviewReasonCount = requirement.reviewReasons.filter(
               (reason) => !isNonBlockingRequirementReview(requirement, reason),
             ).length;

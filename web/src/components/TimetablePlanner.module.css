@@ -81,6 +81,8 @@
   display: flex;
   flex-direction: column;
   gap: 28px;
+  align-self: start;
+  width: 100%;
   padding: 28px;
   border-right: 1px solid var(--border-subtle);
 }
@@ -1071,39 +1073,78 @@
   font: inherit;
 }
 
-.creditRangeInputs {
+.creditRangeFieldset {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: end;
   gap: 8px;
+  margin: 20px 0 0;
+  padding: 16px 0 0;
+  border: 0;
+  border-top: 1px solid var(--border-subtle);
+  min-width: 0;
 }
 
-.creditRangeInputs label {
-  display: grid;
-  gap: 5px;
+.creditRangeFieldset legend {
+  float: left;
+  width: 100%;
+  margin: 0 0 8px;
+  padding: 0;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
 }
 
-.creditRangeInputs label span,
-.controls fieldset > small {
+.creditRangeFieldset > small {
+  margin: 0;
   color: var(--text-secondary);
   font-size: 11px;
   line-height: 1.45;
 }
 
-.creditRangeInputs input {
-  width: 100%;
-  min-width: 0;
-  padding: 10px 9px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 9px;
-  background: var(--surface-card);
-  color: var(--text-primary);
-  font: inherit;
+.creditRangeRows {
+  display: grid;
+  gap: 8px;
 }
 
-.creditRangeInputs + small {
-  display: block;
-  margin-top: 7px;
+.creditRangeRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-page);
+}
+
+.creditRangeRowLabel {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.creditRangeRowLabel strong {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.creditRangeRowLabel small {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.creditRangeRowValue {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.controls fieldset > small {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 .results {

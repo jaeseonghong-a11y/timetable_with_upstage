@@ -648,6 +648,24 @@
   border-radius: 10px;
 }
 
+.unmetOnlyToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+}
+
+.unmetOnlyToggle input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent-strong);
+}
+
 .collapsedCard {
   gap: 7px;
   background: var(--surface-card);
