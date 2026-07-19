@@ -309,6 +309,7 @@ export function PlanningWorkspace() {
             {step} / {STEPS.length}
           </span>
         </div>
+        <div className={styles.stepListWrap}>
         <ol
           className={styles.stepList}
           style={{ ["--connector-progress" as string]: String(connectorProgress) }}
@@ -355,6 +356,26 @@ export function PlanningWorkspace() {
             ),
           )}
         </ol>
+        {/* 3(과목 담기) → 5(AI 추천) 지름길: 4(유효 시간표 확인)를 건너뛸 수 있음을 곡선으로 표시.
+            step 3에 있을 때만 강조해, "여기서 바로 건너뛸 수 있다"는 안내로 읽히게 한다. */}
+        <svg
+          className={styles.skipArc}
+          data-active={step === 3}
+          viewBox="0 0 100 24"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <path
+            className={styles.skipArcPath}
+            d="M50 4 Q70 26 90 6"
+            fill="none"
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+        <span className={styles.skipArcLabel} data-active={step === 3} aria-hidden="true">
+          유효 시간표 건너뛰기
+        </span>
+        </div>
       </div>
 
       <div className={styles.stepPanel}>
@@ -420,6 +441,12 @@ export function PlanningWorkspace() {
           {step === 2 ? (
             <button type="button" onClick={skipCurrentDocument}>
               건너뛰기
+            </button>
+          ) : null}
+          {step === 3 ? (
+            // 유효 시간표 확인(4)을 건너뛰고 AI 추천(5)으로 바로 이동하는 지름길.
+            <button type="button" onClick={() => goToStep(5)}>
+              유효 시간표 건너뛰고 AI 추천
             </button>
           ) : null}
           {showNextButton ? (

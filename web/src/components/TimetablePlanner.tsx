@@ -1370,13 +1370,27 @@ export function TimetablePlanner({
       const payload = await postJson("/api/timetable-recommendations", {
         timetables: dayFiltered,
         weights: recommendationWeights,
-        requirements,
+        // 필수(고정) 과목 제목 — Solar가 추천 이유를 이 과목들이 아니라 '추가로 담긴' 과목에
+        // 집중해서 쓰도록 알려준다.
+        requiredCourseTitles: manualSelectionPlanSubjects.requiredSubjects.map(
+          (subject) => subject.title,
+        ),
         customPreference: customPreference.trim() || undefined,
       });
       const parsed = readRecommendationResponse(payload);
-      setRecommendations(parsed.recommendations);
+      // 졸업요건 기여도는 Solar에 맡기지 않고 여기서 각 후보의 실제 교양 과목 영역으로 계산한다
+      // ("계산은 코드로") — 후보마다 담긴 교양이 다르므로 기여 문구도 후보별로 달라지고, 실제로
+      // 미충족 영역에 해당하는 과목이 없으면 null(미표시)이 된다.
+      const withContribution = parsed.recommendations.map((recommendation) => ({
+        ...recommendation,
+        requirementContribution: describeRequirementContribution(
+          candidateMap.get(recommendation.candidateId)?.extras ?? [],
+          unmetGeneralLabels,
+        ),
+      }));
+      setRecommendations(withContribution);
       setAiExplanationFailed(parsed.aiExplanationFailed);
-      if (parsed.recommendations.length > 0) {
+      if (withContribution.length > 0) {
         onRecommendationsReady?.();
       }
     } catch (error) {
@@ -1586,7 +1600,9 @@ export function TimetablePlanner({
                 할 수 있습니다.
               </small>
             </label>
-            {courseSource === "major" && majorProgramTabs.length > 1 ? (
+            {courseSource === "major" ? (
+              <div className={styles.majorFilters}>
+            {majorProgramTabs.length > 1 ? (
               <div className={styles.electiveAreaFilter}>
                 <span>전공</span>
                 <div className={styles.areaChoices} aria-label="전공 선택">
@@ -1645,7 +1661,6 @@ export function TimetablePlanner({
                 </div>
               </div>
             ) : null}
-            {courseSource === "major" ? (
               <div className={styles.electiveAreaFilter}>
                 <span>다른 전공 과목 찾기</span>
                 <DepartmentAddCombobox
@@ -1667,6 +1682,7 @@ export function TimetablePlanner({
                     {extraDepartmentError}
                   </p>
                 ) : null}
+              </div>
               </div>
             ) : null}
             {courseSource === "elective" ? (
@@ -1900,7 +1916,14 @@ export function TimetablePlanner({
                           }
                         />
                       )
-                      : null}
+                      : displayedGroup
+                        ? null
+                        : (
+                          // 분반 미리보기가 아직 로드되지 않은 항목은 접힌 분반 요약과 같은 높이의
+                          // 자리를 미리 잡아 둔다 — 스크롤 중 분반이 로드되며 요약이 나타날 때 아래
+                          // 항목들의 체크박스가 밀려 내려가는 레이아웃 시프트를 막는다.
+                          <div className={styles.sectionDetailsPlaceholder} aria-hidden="true" />
+                        )}
                   </ElectivePreviewBoundary>
                 );
               })}
@@ -2437,7 +2460,9 @@ function ElectivePreviewBoundary({
           observer.disconnect();
         }
       },
-      { rootMargin: "800px 0px" },
+      // 뷰포트 위·아래로 넉넉히 앞당겨 분반 미리보기를 시작한다 — 화면에 실제로 닿기 훨씬 전에
+      // 로드를 걸어, 스크롤이 도착했을 땐 이미 분반 요약이 준비돼 있게 한다(자리확보와 함께 시프트↓).
+      { rootMargin: "1400px 0px" },
     );
     observer.observe(element);
     return () => observer.disconnect();
@@ -2658,6 +2683,31 @@ async function postJson(url: string, body: unknown, signal?: AbortSignal): Promi
 }
 
 /** Lists the non-required subjects a generated timetable drew from each choice group. */
+/**
+ * Grounds "졸업요건 기여" entirely in the candidate's own courses instead of trusting Solar:
+ * looks at the timetable's extra(교양) courses, keeps those whose 영역 actually matches an unmet
+ * general requirement, and names them. Returns null when nothing genuinely contributes — which is
+ * exactly what stops the old "실제로는 기여 안 하는데 기여한다고 함"(예: 근거 없는 DS기반) 문제.
+ * Required(고정) 과목은 extras에 포함되지 않으므로 자연히 제외된다.
+ */
+function describeRequirementContribution(
+  extras: readonly TimetableExtra[],
+  unmetGeneralLabels: readonly string[],
+): string | null {
+  if (unmetGeneralLabels.length === 0) {
+    return null;
+  }
+  const contributing = extras.filter((extra) =>
+    areaMatchesUnmetLabels(extra.classification, unmetGeneralLabels),
+  );
+  if (contributing.length === 0) {
+    return null;
+  }
+  const areaLabels = [...new Set(contributing.map((extra) => extra.classification))].join("·");
+  const courseNames = [...new Set(contributing.map((extra) => `"${extra.title}"`))].join(", ");
+  return `교양 과목 ${courseNames}이(가) ${areaLabels} 영역 졸업요건 충족에 도움이 됩니다.`;
+}
+
 function describeTimetableExtras(
   timetable: Timetable,
   sectionIdToGroup: ReadonlyMap<string, PlannerCourseGroup>,

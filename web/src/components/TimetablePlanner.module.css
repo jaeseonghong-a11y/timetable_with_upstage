@@ -186,6 +186,29 @@
   line-height: 1.55;
 }
 
+/* 전공 선택 + 다른 전공 과목 찾기 두 칸을 좁게 묶는다 — 각 칸은 버튼 몇 개/검색창 하나뿐이라
+   패널 전체 폭을 다 쓰면 지나치게 커 보인다. 넓은 화면에선 두 칸을 나란히(2열) 놓아 세로 길이도
+   줄인다. */
+.majorFilters {
+  display: grid;
+  gap: 10px 14px;
+  max-width: 480px;
+  padding-top: 4px;
+}
+
+@media (min-width: 560px) {
+  .majorFilters {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+/* 좁아진 칸 안에서는 전공 버튼을 1열로 세워 학과명이 잘리지 않게 한다. */
+.majorFilters .areaChoices {
+  grid-template-columns: minmax(0, 1fr);
+  max-height: 168px;
+}
+
 .electiveAreaFilter {
   display: grid;
   gap: 7px;
@@ -371,6 +394,15 @@
 .singleCourseSection {
   margin: -4px 0 8px 28px;
   padding: 0 9px;
+  border-radius: 8px;
+  background: var(--surface-page);
+}
+
+/* 분반 미리보기 로드 전, 접힌 분반 요약(.courseSectionDetails > summary)과 같은 높이의 자리를
+   미리 확보해 레이아웃 시프트를 방지한다. 로드되면 실제 요약이 같은 위치·배경으로 대체된다. */
+.sectionDetailsPlaceholder {
+  margin: -4px 0 8px 28px;
+  min-height: 30px;
   border-radius: 8px;
   background: var(--surface-page);
 }

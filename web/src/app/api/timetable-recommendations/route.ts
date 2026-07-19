@@ -29,13 +29,6 @@ const WEIGHT_ID_SET = new Set<WeightId>([
 ]);
 const IMPORTANCE_SET = new Set<WeightImportance>(["low", "medium", "high"]);
 
-interface RequirementSummary {
-  scope: string;
-  label: string;
-  status: string;
-  remainingCredits: number | null;
-}
-
 interface TimetableRecommendationItem {
   candidateId: string;
   rank: number;
@@ -51,7 +44,6 @@ interface SolarExplanation {
   candidateId: string;
   rank: number | null;
   reason: string;
-  requirementContribution: string | null;
   customPreferenceNote: string | null;
 }
 
@@ -85,9 +77,7 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
   const weights = parseWeights(body.weights);
-  const unmetRequirements = parseRequirementSummaries(body.requirements).filter(
-    (requirement) => requirement.status !== "satisfied",
-  );
+  const requiredCourseTitles = parseCourseTitleList(body.requiredCourseTitles);
   const customPreference = parseCustomPreference(body.customPreference);
 
   const scored = scoreTimetables(timetables, weights).slice(0, MAX_RECOMMENDATIONS);
@@ -103,7 +93,7 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const explanations = await requestRecommendationExplanations(
       scored,
-      unmetRequirements,
+      requiredCourseTitles,
       customPreference,
       apiKey,
     );
@@ -147,7 +137,9 @@ function applyExplanations(
       timetable: entry.timetable,
       scoreBreakdown: entry.breakdown,
       reason: explanation?.reason ?? null,
-      requirementContribution: explanation?.requirementContribution ?? null,
+      // 졸업요건 기여도는 각 과목의 교양 영역을 아는 클라이언트가 결정론적으로 계산한다("계산은
+      // 코드로") — Solar가 근거 없이 특정 영역(예: DS기반) 충족을 지어내던 문제를 원천 차단.
+      requirementContribution: null,
       customPreferenceNote: explanation?.customPreferenceNote ?? null,
     };
   });
@@ -255,10 +247,9 @@ const RECOMMENDATION_EXPLANATION_SCHEMA: SolarJsonSchema = {
             position: { type: "integer" },
             rank: { type: "integer" },
             reason: { type: "string" },
-            requirementContribution: { type: ["string", "null"] },
             customPreferenceNote: { type: ["string", "null"] },
           },
-          required: ["position", "rank", "reason", "requirementContribution", "customPreferenceNote"],
+          required: ["position", "rank", "reason", "customPreferenceNote"],
           additionalProperties: false,
         },
       },
@@ -270,25 +261,30 @@ const RECOMMENDATION_EXPLANATION_SCHEMA: SolarJsonSchema = {
 
 async function requestRecommendationExplanations(
   scored: readonly ScoredTimetable[],
-  unmetRequirements: readonly RequirementSummary[],
+  requiredCourseTitles: readonly string[],
   customPreference: string | undefined,
   apiKey: string,
 ): Promise<SolarExplanation[]> {
+  const requiredTitleSet = new Set(requiredCourseTitles);
   const systemPrompt = [
     "당신은 성균관대 시간표 추천 서비스의 설명 엔진입니다.",
-    "이미 결정론적으로 정렬된 시간표 후보 목록과 학생의 졸업요건 미충족 현황이 주어집니다.",
+    "이미 결정론적으로 정렬된 시간표 후보 목록이 주어집니다.",
     "각 후보에 대해 한국어 2~3문장으로 추천 이유를 작성하세요.",
-    "아래 입력(courses, scoreHighlights, unmetRequirements, customPreference)에 실제로 존재하는",
+    "아래 입력(addedCourses, scoreHighlights, customPreference)에 실제로 존재하는",
     "정보만 근거로 쓰세요. 교수의 평판·경력·인기도·학생 선호도·강의평가처럼 입력에 없는 사실은",
     "단정적으로도 추측으로도 절대 언급하지 마세요.",
-    "여러 후보가 필수과목 구성은 같고 과목 1개의 분반(교수)만 다른 경우, 그 후보들 사이의 실질적",
+    "추천 이유(reason)는 학생이 이미 '필수'로 고정한 과목(requiredCourseTitles)이 아니라, 그 위에",
+    "추가로 선택·보충된 과목(각 후보의 addedCourses)과 전체 시간표 배치(scoreHighlights: 공강·점심",
+    "시간 등)가 왜 좋은지에 초점을 맞춰 쓰세요. 필수 과목 자체의 장단점은 언급하지 마세요.",
+    "addedCourses가 비어 있는 후보는 시간표 배치(scoreHighlights)만으로 이유를 쓰세요.",
+    "여러 후보가 addedCourses는 같고 과목 1개의 분반(교수)만 다른 경우, 그 후보들 사이의 실질적",
     "차이가 시간표 배치 외에는 없다는 것을 있는 그대로 말하되, 그 후보에서 어느 과목이 어느",
     "분반·교수인지는 반드시 구체적으로 밝혀서 문장 자체는 후보마다 다르게 쓰세요. 근거 없는",
     "차별점을 지어내지 마세요.",
     "서로 다른 candidates(position)에 같은 reason 문장을 그대로 반복하지 마세요. 모든 reason은",
-    "그 후보의 실제 과목명·분반(교수)·요일·시간 중 최소 하나를 구체적으로 담아 다른 후보의",
-    "reason과 문자 그대로 겹치지 않게 쓰세요.",
-    '각 원소 형식: {"position": number, "rank": number, "reason": string, "requirementContribution": string 또는 null, "customPreferenceNote": string 또는 null}',
+    "그 후보의 실제 addedCourses 과목명·분반(교수)·요일·시간 또는 scoreHighlights 중 최소 하나를",
+    "구체적으로 담아 다른 후보의 reason과 문자 그대로 겹치지 않게 쓰세요.",
+    '각 원소 형식: {"position": number, "rank": number, "reason": string, "customPreferenceNote": string 또는 null}',
     "position은 입력 candidates 배열에서 그 후보의 1부터 시작하는 순번을 그대로 옮겨 적으세요. 절대 새로 만들지 마세요.",
     "rank는 1부터 후보 개수까지 각각 한 번씩만 사용하세요. customPreference가 없으면 position과 동일한 값을 rank로 사용하세요.",
     "customPreference가 있으면 그 조건에 더 부합하는 후보일수록 낮은 rank(더 상위)를 부여하고, customPreferenceNote에 그 이유를 설명하세요. 없으면 customPreferenceNote는 null로 두세요.",
@@ -296,25 +292,25 @@ async function requestRecommendationExplanations(
     "공강은 그날 수업이 단 1개도 없는 날만 뜻합니다. 온라인 수업이 있는 날은 공강이 아닙니다.",
     "수업 사이 빈 시간이나 온라인만 있는 날을 공강이라고 쓰지 마세요.",
     "예: 수업이 하나도 없는 공강일 조건을 만족합니다. / 점심시간 확보 조건에 맞습니다.",
-    "requirementContribution에는 교양 추천 과목이 미충족 졸업요건 중 어느 항목(영역) 충족에",
-    "도움이 되는지 쓰세요. 예: 교양 추천 과목으로 사회/역사 영역 졸업요건 충족에 도움이 됩니다.",
-    "해당사항이 없으면 requirementContribution은 null로 두세요.",
+    "졸업요건 기여도는 시스템이 따로 계산하므로 reason에 졸업요건 충족 여부는 쓰지 마세요.",
   ].join("\n");
 
   const userPrompt = JSON.stringify({
+    requiredCourseTitles,
     candidates: scored.map((entry, index) => ({
       position: index + 1,
-      courses: entry.timetable.courses.map((course) => ({
-        title: course.title,
-        professor: course.professor ?? null,
-        schedule: course.schedule,
-        courseType: course.courseType ?? null,
-      })),
+      addedCourses: entry.timetable.courses
+        .filter((course) => !requiredTitleSet.has(course.title))
+        .map((course) => ({
+          title: course.title,
+          professor: course.professor ?? null,
+          schedule: course.schedule,
+          courseType: course.courseType ?? null,
+        })),
       scoreHighlights: entry.breakdown
         .filter((item) => item.weightedScore !== 0)
         .map((item) => ({ weight: item.weightId, weightedScore: item.weightedScore })),
     })),
-    unmetRequirements,
     customPreference: customPreference ?? null,
   });
 
@@ -372,10 +368,6 @@ function parseSolarExplanations(
       candidateId: scored[entry.position - 1]!.candidateId,
       rank: typeof entry.rank === "number" && Number.isInteger(entry.rank) ? entry.rank : null,
       reason: entry.reason.trim(),
-      requirementContribution:
-        typeof entry.requirementContribution === "string" && entry.requirementContribution.trim()
-          ? entry.requirementContribution.trim()
-          : null,
       customPreferenceNote:
         typeof entry.customPreferenceNote === "string" && entry.customPreferenceNote.trim()
           ? entry.customPreferenceNote.trim()
@@ -501,23 +493,18 @@ function parseWeightConfig(value: unknown): RecommendationWeight["config"] {
     : { thresholdMinutes, direction };
 }
 
-function parseRequirementSummaries(value: unknown): RequirementSummary[] {
+/** 필수(고정) 과목 제목 목록 — 추천 이유를 이 과목들이 아닌 '추가된' 과목에 집중시키는 데 쓴다. */
+function parseCourseTitleList(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
   }
-  const summaries: RequirementSummary[] = [];
+  const titles = new Set<string>();
   for (const entry of value) {
-    if (!isRecord(entry) || typeof entry.label !== "string" || typeof entry.status !== "string") {
-      continue;
+    if (typeof entry === "string" && entry.trim()) {
+      titles.add(entry.trim());
     }
-    summaries.push({
-      scope: typeof entry.scope === "string" ? entry.scope : "other",
-      label: entry.label,
-      status: entry.status,
-      remainingCredits: typeof entry.remainingCredits === "number" ? entry.remainingCredits : null,
-    });
   }
-  return summaries;
+  return [...titles];
 }
 
 function parseCustomPreference(value: unknown): string | undefined {

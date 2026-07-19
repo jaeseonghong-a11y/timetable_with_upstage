@@ -441,7 +441,11 @@ export function AcademicDocumentManager({
         </div>
       )}
 
-      {allDocumentReviewCount > 0 ? (
+      {/* 위저드(kindControlled)에서는 한 번에 한 문서만 보여주므로, 여러 문서를 합친 "전체 동의"
+          배너는 지금 화면과 무관한 다른 문서(예: 졸업요건 화면에 뜨는 수강/취득과목)의 검토까지
+          끌어와 혼란을 준다. 각 문서 화면에는 편집기 안에 자기 문서용 "검토내용 전체 동의"가 이미
+          있으므로, 위저드에서는 이 통합 배너를 감춘다. */}
+      {!kindControlled && allDocumentReviewCount > 0 ? (
         <div className={styles.allReviewConsent}>
           <div>
             <strong>불러온 문서의 검토내용 전체 동의</strong>

@@ -77,11 +77,11 @@ describe("POST /api/timetable-recommendations", () => {
     expect(body.recommendations.every((entry) => entry.reason === null)).toBe(true);
   });
 
-  it("attaches Solar reasons and requirement contributions on the happy path", async () => {
+  it("attaches Solar reasons on the happy path; requirement contribution stays null (computed client-side)", async () => {
     const solarResult = JSON.stringify({
       explanations: [
-        { position: 1, rank: 1, reason: "공강이 더 많습니다.", requirementContribution: "전공필수 충족", customPreferenceNote: null },
-        { position: 2, rank: 2, reason: "요일이 몰려 있습니다.", requirementContribution: null, customPreferenceNote: null },
+        { position: 1, rank: 1, reason: "공강이 더 많습니다.", customPreferenceNote: null },
+        { position: 2, rank: 2, reason: "요일이 몰려 있습니다.", customPreferenceNote: null },
       ],
     });
     const fetchMock = vi
@@ -95,7 +95,7 @@ describe("POST /api/timetable-recommendations", () => {
       jsonRequest({
         timetables: [weekdayFilledTimetable, spaciousTimetable],
         weights: [{ id: "free_days", enabled: true, importance: "medium" }],
-        requirements: [{ label: "전공필수", status: "unmet", remainingCredits: 3 }],
+        requiredCourseTitles: ["과목 A1"],
       }),
     );
     const body = (await response.json()) as {
@@ -113,7 +113,8 @@ describe("POST /api/timetable-recommendations", () => {
       candidateId: "B1",
       rank: 1,
       reason: "공강이 더 많습니다.",
-      requirementContribution: "전공필수 충족",
+      // 졸업요건 기여도는 라우트가 아니라 클라이언트에서 각 과목 영역으로 계산 → 라우트는 항상 null.
+      requirementContribution: null,
     });
     expect(body.recommendations[1]).toMatchObject({ candidateId: "A1", rank: 2 });
 
