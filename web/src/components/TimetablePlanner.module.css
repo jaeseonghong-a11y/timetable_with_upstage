@@ -12,8 +12,8 @@
 
 .stepIntro {
   display: grid;
-  gap: 10px;
-  padding: 28px 28px 20px;
+  gap: 8px;
+  padding: 24px 28px 16px;
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -93,6 +93,10 @@
 .aiOnlyGrid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+}
+
+.aiOnlyGrid .results {
+  padding: 16px 28px 28px;
 }
 
 .controls {
@@ -1406,8 +1410,8 @@
 
 .recommendationSection {
   display: grid;
-  gap: 12px;
-  margin-top: 24px;
+  gap: 10px;
+  margin-top: 0;
   padding: 16px;
   border: 1px solid var(--border-subtle);
   border-radius: 14px;
@@ -1481,15 +1485,18 @@
 
 .recommendationSection h3 {
   margin: 0;
-  font-size: 14px;
+  color: var(--text-primary);
+  font-size: 18px;
   font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.25;
 }
 
 .recommendationHint {
   margin: 0;
   color: var(--text-secondary);
   font-size: 12px;
-  line-height: 1.6;
+  line-height: 1.55;
 }
 
 .recommendationWeights {
