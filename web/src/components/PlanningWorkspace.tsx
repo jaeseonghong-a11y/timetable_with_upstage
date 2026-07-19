@@ -317,10 +317,7 @@ export function PlanningWorkspace() {
           {stepListSlots.map((slot) =>
             "group" in slot ? (
               <li key={slot.key}>
-                <div
-                  className={styles.subStepGroup}
-                  data-active={slot.group.some((entry) => entry.isActive)}
-                >
+                <div className={styles.subStepGroup}>
                   {slot.group.map((entry) => (
                     <button
                       aria-current={entry.isActive ? "step" : undefined}
@@ -361,13 +358,13 @@ export function PlanningWorkspace() {
         <svg
           className={styles.skipArc}
           data-active={step === 3}
-          viewBox="0 0 100 24"
+          viewBox="0 0 100 34"
           preserveAspectRatio="none"
           aria-hidden="true"
         >
           <path
             className={styles.skipArcPath}
-            d="M50 4 Q70 26 90 6"
+            d="M50 4 Q70 30 90 4"
             fill="none"
             vectorEffect="non-scaling-stroke"
           />

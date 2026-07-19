@@ -142,14 +142,45 @@ function normalize(value: number, min: number, max: number): number {
   return max === min ? 0.5 : (value - min) / (max - min);
 }
 
+/**
+ * 수업이든 사용자가 등록한 고정 일정(알바 등)이든 그 요일에 뭔가 있으면 "점유"로 센다 —
+ * `TimetablePlanner.tsx`의 `isDayFree`(요일 필터에 쓰이는 공강 판정)와 동일한 정의. 예전엔
+ * `timetable.meetings`만 보고 `fixedEvents`를 빠뜨려서, 수업은 없지만 고정 일정이 있는 요일을
+ * 공강으로 잘못 계산했다 — AI 추천 근거에 "화요일 공강"처럼 실제로는 고정 일정이 있는 요일을
+ * 공강이라고 잘못 말하는 버그의 실제 원인이었다.
+ */
 function activeDays(timetable: Timetable): ReadonlySet<Weekday> {
-  return new Set(timetable.meetings.map((meeting) => meeting.day));
+  const days = new Set(timetable.meetings.map((meeting) => meeting.day));
+  for (const event of timetable.fixedEvents) {
+    days.add(event.day);
+  }
+  return days;
 }
 
-/** 공강 = 그날 수업이 단 1개도 없는 날. 온라인 수업이 있는 날은 공강이 아니다(meetings에 잡히면 occupied). */
+/** 공강 = 그날 수업도 고정 일정도 단 1개도 없는 날. */
 function countFreeDays(timetable: Timetable): number {
   const days = activeDays(timetable);
   return WEEKDAYS.filter((day) => !days.has(day)).length;
+}
+
+const WEEKDAY_KOREAN_LABELS: Record<Weekday, string> = {
+  mon: "월요일",
+  tue: "화요일",
+  wed: "수요일",
+  thu: "목요일",
+  fri: "금요일",
+  sat: "토요일",
+  sun: "일요일",
+};
+
+/**
+ * countFreeDays와 동일한 기준으로 실제 공강 요일의 한글 이름 목록을 반환한다. AI 추천 설명
+ * 프롬프트가 Solar에게 "이 요일들만 공강"이라는 사실 근거를 직접 쥐여줘서, 모델이 스스로
+ * 요일을 추론하다 틀리는 대신 주어진 목록만 그대로 옮기게 한다("계산은 코드로").
+ */
+export function getFreeDayLabels(timetable: Timetable): string[] {
+  const days = activeDays(timetable);
+  return WEEKDAYS.filter((day) => !days.has(day)).map((day) => WEEKDAY_KOREAN_LABELS[day]);
 }
 
 function countActiveDays(timetable: Timetable): number {
@@ -170,9 +201,16 @@ function groupMeetingsByDay(meetings: readonly Meeting[]): Map<Weekday, Meeting[
   return byDay;
 }
 
-/** Merges each day's meetings into contiguous blocks, grouped by day. */
+/**
+ * Merges each day's meetings into contiguous blocks, grouped by day — fixedEvents(고정 일정)도
+ * `meetings`와 동일한 {day,startMinutes,endMinutes} 모양이라 그대로 합쳐 넣는다. 뺐다면 점심
+ * 시간대에 고정 일정이 있어도 "점심시간 확보"로, 저녁까지 이어지는 고정 일정이 있어도 "연강
+ * 없음"으로 잘못 계산됐을 것 — activeDays와 같은 이유(위 주석 참고)로 일관되게 반영한다.
+ */
 function mergedBlocksByDay(timetable: Timetable): Map<Weekday, Meeting[]> {
-  return groupMeetingsByDay(mergeMeetingsForDisplay(timetable.meetings));
+  return groupMeetingsByDay(
+    mergeMeetingsForDisplay([...timetable.meetings, ...timetable.fixedEvents]),
+  );
 }
 
 function backToBackScore(timetable: Timetable, config: RecommendationWeight["config"]): number {
@@ -240,7 +278,10 @@ function countCoursesByFormat(timetable: Timetable, online: boolean): number {
 
 function totalDailySpanMinutes(timetable: Timetable): number {
   let total = 0;
-  for (const meetings of groupMeetingsByDay(timetable.meetings).values()) {
+  for (const meetings of groupMeetingsByDay([
+    ...timetable.meetings,
+    ...timetable.fixedEvents,
+  ]).values()) {
     const start = Math.min(...meetings.map((meeting) => meeting.startMinutes));
     const end = Math.max(...meetings.map((meeting) => meeting.endMinutes));
     total += end - start;

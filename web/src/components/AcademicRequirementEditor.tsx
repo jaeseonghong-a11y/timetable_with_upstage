@@ -160,7 +160,11 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
           onClick={() => setIsListCollapsed(false)}
         >
           <span>▶ 접힘</span>
-          <span>펼치려면 클릭</span>
+          {needsReviewCount > 0 ? (
+            <span className={styles.needsReviewBadge}>확인 필요 {needsReviewCount}</span>
+          ) : (
+            <span>펼치려면 클릭</span>
+          )}
         </button>
       ) : visibleRequirements.length === 0 ? (
         <p className={styles.dataEmpty}>미충족 교양 요건이 없습니다.</p>
@@ -182,7 +186,9 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
                 </div>
                 <div className={styles.cardActions}>
                   {blockingReviewReasonCount > 0 ? (
-                    <span>확인 필요 {blockingReviewReasonCount}</span>
+                    <span className={styles.needsReviewBadge}>
+                      확인 필요 {blockingReviewReasonCount}
+                    </span>
                   ) : null}
                   <button
                     className={styles.deleteButton}

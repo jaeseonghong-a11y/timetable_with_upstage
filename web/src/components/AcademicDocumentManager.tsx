@@ -128,8 +128,13 @@ export function AcademicDocumentManager({
   onAnalysisStateChange,
 }: Props = {}) {
   const [internalKind, setInternalKind] = useState<AcademicDocumentKind>("course_history");
-  const [file, setFile] = useState<File>();
-  const [fileInputMethod, setFileInputMethod] = useState<FileInputMethod>();
+  // 문서 종류(kind)별로 따로 기억한다 — "다시 분석하기"가 재업로드 없이 그대로 재분석할 수
+  // 있어야 하는데, 단일 file 상태였다면 2-1↔2-2를 오가며 kind가 바뀔 때마다 파일이 초기화돼
+  // 이미 분석해 둔 문서로 돌아와도 다시 올려야 했다.
+  const [filesByKind, setFilesByKind] = useState<Partial<Record<AcademicDocumentKind, File>>>({});
+  const [fileInputMethodsByKind, setFileInputMethodsByKind] = useState<
+    Partial<Record<AcademicDocumentKind, FileInputMethod>>
+  >({});
   const [hasConsented, setHasConsented] = useState(false);
   const [profiles, setProfiles] = useState<ProfilesByKind>({});
   const [acknowledgements, setAcknowledgements] = useState<AcknowledgementsByKind>({});
@@ -141,12 +146,12 @@ export function AcademicDocumentManager({
 
   const kind = activeKind ?? internalKind;
   const kindControlled = activeKind !== undefined;
+  const file = filesByKind[kind];
+  const fileInputMethod = fileInputMethodsByKind[kind];
   const [previousActiveKind, setPreviousActiveKind] = useState(activeKind);
   if (previousActiveKind !== activeKind) {
     setPreviousActiveKind(activeKind);
     if (activeKind !== undefined) {
-      setFile(undefined);
-      setFileInputMethod(undefined);
       setError("");
     }
   }
@@ -178,8 +183,6 @@ export function AcademicDocumentManager({
       return;
     }
     setInternalKind(nextKind);
-    setFile(undefined);
-    setFileInputMethod(undefined);
     setError("");
   }
 
@@ -189,20 +192,20 @@ export function AcademicDocumentManager({
   ): void => {
     setError("");
     if (!nextFile) {
-      setFile(undefined);
-      setFileInputMethod(undefined);
+      setFilesByKind((current) => ({ ...current, [kind]: undefined }));
+      setFileInputMethodsByKind((current) => ({ ...current, [kind]: undefined }));
       return;
     }
     const validationError = validateAcademicDocumentFile(nextFile);
     if (validationError) {
-      setFile(undefined);
-      setFileInputMethod(undefined);
+      setFilesByKind((current) => ({ ...current, [kind]: undefined }));
+      setFileInputMethodsByKind((current) => ({ ...current, [kind]: undefined }));
       setError(validationError);
       return;
     }
-    setFile(nextFile);
-    setFileInputMethod(inputMethod);
-  }, []);
+    setFilesByKind((current) => ({ ...current, [kind]: nextFile }));
+    setFileInputMethodsByKind((current) => ({ ...current, [kind]: inputMethod }));
+  }, [kind]);
 
   useEffect(() => {
     if (kind !== "graduation_requirements") {

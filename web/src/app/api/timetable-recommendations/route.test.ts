@@ -250,4 +250,39 @@ describe("POST /api/timetable-recommendations", () => {
     expect(body.recommendations[1]?.reason).not.toBe(sameSentence);
     expect(body.recommendations[1]?.reason).toContain("이교수");
   });
+
+  it("replaces a reason that hallucinates a free day a fixed event actually blocks", async () => {
+    // Regression for the reported bug: a day with no course meetings but a fixed event (알바 등)
+    // is not free, yet Solar can still claim it is. The route must not ship that claim as-is.
+    const solarResult = JSON.stringify({
+      explanations: [
+        { position: 1, rank: 1, reason: "수요일에 공강이 있어 여유롭습니다.", customPreferenceNote: null },
+      ],
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({ choices: [{ message: { role: "assistant", content: solarResult } }] }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const timetableWithWednesdayFixedEvent = {
+      courses: [{ id: "W1", title: "과목 W1", schedule: "" }],
+      meetings: [{ day: "mon", startMinutes: 600, endMinutes: 660 }],
+      fixedEvents: [
+        { id: "f1", label: "알바", day: "wed", startMinutes: 1080, endMinutes: 1200 },
+      ],
+    };
+
+    const response = await POST(
+      jsonRequest({
+        timetables: [timetableWithWednesdayFixedEvent],
+        weights: [{ id: "free_days", enabled: true, importance: "medium" }],
+      }),
+    );
+    const body = (await response.json()) as { recommendations: Array<{ reason: string | null }> };
+
+    expect(body.recommendations[0]?.reason).not.toContain("수요일");
+    expect(body.recommendations[0]?.reason).toContain("화요일");
+  });
 });

@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import type { CourseCandidate, Meeting, Timetable, Weekday } from "./timetable";
+import type { CourseCandidate, FixedEvent, Meeting, Timetable, Weekday } from "./timetable";
 import {
   DEFAULT_RECOMMENDATION_WEIGHTS,
+  getFreeDayLabels,
   getTimetableCandidateId,
   scoreTimetables,
   type RecommendationWeight,
@@ -16,8 +17,16 @@ function course(id: string, courseType?: string): CourseCandidate {
   return { id, title: id, schedule: "", courseType };
 }
 
-function timetable(courses: CourseCandidate[], meetings: Meeting[]): Timetable {
-  return { courses, meetings, fixedEvents: [] };
+function timetable(
+  courses: CourseCandidate[],
+  meetings: Meeting[],
+  fixedEvents: FixedEvent[] = [],
+): Timetable {
+  return { courses, meetings, fixedEvents };
+}
+
+function fixedEvent(day: Weekday, startMinutes: number, endMinutes: number): FixedEvent {
+  return { id: `fixed-${day}-${startMinutes}`, label: "알바", day, startMinutes, endMinutes };
 }
 
 function weight(
@@ -153,5 +162,49 @@ describe("timetable-scoring", () => {
     expect(ids.has("free_days")).toBe(true);
     expect(ids.has("prefer_in_person")).toBe(true);
     expect(ids.has("prefer_online")).toBe(true);
+  });
+
+  // Regression: a day with zero course meetings but a fixed personal event (알바 등) must not be
+  // treated as free — this was the root cause of the AI recommendation once claiming a Wednesday
+  // free day that was actually blocked by a fixed event.
+  it("does not count a day that only has a fixed event as free under free_days", () => {
+    const onlyFixedEventOnWednesday = timetable(
+      [course("A1")],
+      [meeting("mon", 600, 660)],
+      [fixedEvent("wed", 1080, 1200)],
+    );
+    const trulyFreeWednesday = timetable([course("B1")], [meeting("mon", 600, 660)]);
+
+    const [first] = scoreTimetables(
+      [onlyFixedEventOnWednesday, trulyFreeWednesday],
+      [weight("free_days")],
+    );
+    expect(first?.candidateId).toBe(getTimetableCandidateId(trulyFreeWednesday));
+  });
+});
+
+describe("getFreeDayLabels", () => {
+  it("lists every weekday with no meeting as free", () => {
+    const t = timetable([course("A1")], [meeting("mon", 600, 660)]);
+    expect(getFreeDayLabels(t)).toEqual(["화요일", "수요일", "목요일", "금요일"]);
+  });
+
+  it("excludes a day that only has a fixed event, not a course meeting", () => {
+    const t = timetable([course("A1")], [meeting("mon", 600, 660)], [fixedEvent("wed", 1080, 1200)]);
+    expect(getFreeDayLabels(t)).toEqual(["화요일", "목요일", "금요일"]);
+  });
+
+  it("returns an empty list when every weekday is occupied", () => {
+    const t = timetable(
+      [course("A1")],
+      [
+        meeting("mon", 600, 660),
+        meeting("tue", 600, 660),
+        meeting("wed", 600, 660),
+        meeting("thu", 600, 660),
+        meeting("fri", 600, 660),
+      ],
+    );
+    expect(getFreeDayLabels(t)).toEqual([]);
   });
 });

@@ -1,6 +1,7 @@
-import type { CourseCandidate, Meeting, Timetable, Weekday } from "../../../lib/timetable";
+import type { CourseCandidate, FixedEvent, Meeting, Timetable, Weekday } from "../../../lib/timetable";
 import {
   DEFAULT_RECOMMENDATION_WEIGHTS,
+  getFreeDayLabels,
   scoreTimetables,
   type RecommendationWeight,
   type ScoreBreakdown,
@@ -12,7 +13,7 @@ import { requestSolarCompletion, type SolarJsonSchema } from "../../../lib/upsta
 
 type ApiErrorCode = "invalid_request";
 
-const MAX_RECOMMENDATIONS = 8;
+const MAX_RECOMMENDATIONS = 5;
 const MAX_TIMETABLES = 500;
 const MAX_CUSTOM_PREFERENCE_CHARACTERS = 500;
 
@@ -289,9 +290,14 @@ async function requestRecommendationExplanations(
     "rank는 1부터 후보 개수까지 각각 한 번씩만 사용하세요. customPreference가 없으면 position과 동일한 값을 rank로 사용하세요.",
     "customPreference가 있으면 그 조건에 더 부합하는 후보일수록 낮은 rank(더 상위)를 부여하고, customPreferenceNote에 그 이유를 설명하세요. 없으면 customPreferenceNote는 null로 두세요.",
     "reason에는 scoreHighlights / 사용자 선택 가중치가 실제로 어떻게 만족됐는지 쓰세요.",
-    "공강은 그날 수업이 단 1개도 없는 날만 뜻합니다. 온라인 수업이 있는 날은 공강이 아닙니다.",
-    "수업 사이 빈 시간이나 온라인만 있는 날을 공강이라고 쓰지 마세요.",
-    "예: 수업이 하나도 없는 공강일 조건을 만족합니다. / 점심시간 확보 조건에 맞습니다.",
+    "공강 요일을 언급할 때는 반드시 그 후보의 freeDays 배열에 있는 요일만 말하세요.",
+    "freeDays에 없는 요일은 공강이라고 절대 쓰지 마세요 — 그 요일에 수업이 없어 보여도",
+    "고정 일정(알바 등)이 있어서 freeDays에서 빠졌을 수 있으니, 스스로 요일을 추론하지 말고",
+    "freeDays 배열 값을 그대로만 사용하세요. freeDays가 빈 배열이면 공강 요일이 없다는",
+    "뜻이니 공강을 언급하지 마세요.",
+    "온라인 수업이 있는 날, 수업 사이 빈 시간, 고정 일정만 있는 날을 공강이라고 쓰지 마세요.",
+    "예: freeDays가 [\"화요일\",\"목요일\"]이면 '화요일, 목요일에 공강이 있습니다'처럼 그 요일",
+    "이름을 그대로 옮겨 쓰세요. freeDays에 없는 요일을 공강으로 지어내면 안 됩니다.",
     "졸업요건 기여도는 시스템이 따로 계산하므로 reason에 졸업요건 충족 여부는 쓰지 마세요.",
   ].join("\n");
 
@@ -307,6 +313,9 @@ async function requestRecommendationExplanations(
           schedule: course.schedule,
           courseType: course.courseType ?? null,
         })),
+      // 실제 공강 요일의 사실 근거 — Solar가 스스로 추론하다 틀리는 대신(수업만 없고 고정
+      // 일정이 있는 요일을 공강으로 착각하는 등) 이 목록만 그대로 옮겨 쓰게 한다.
+      freeDays: getFreeDayLabels(entry.timetable),
       scoreHighlights: entry.breakdown
         .filter((item) => item.weightedScore !== 0)
         .map((item) => ({ weight: item.weightId, weightedScore: item.weightedScore })),
@@ -320,7 +329,53 @@ async function requestRecommendationExplanations(
     apiKey,
     RECOMMENDATION_EXPLANATION_SCHEMA,
   );
-  return parseSolarExplanations(content, scored);
+  const explanations = parseSolarExplanations(content, scored);
+  // 프롬프트로 못 막은 나머지 경우를 대비한 안전망: 실제 freeDays에 없는 요일을 "공강"이라고
+  // 언급한 문장이 나오면(위 지시를 어기고 스스로 추론해버린 경우) 통째로 코드가 만든 문장으로
+  // 대체한다 — "그럴듯하지만 틀릴 수 있는 문장"보다 "덜 화려해도 항상 맞는 문장"을 우선한다.
+  return sanitizeFreeDayClaims(explanations, scored);
+}
+
+const WEEKDAY_KOREAN_NAMES = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"];
+
+/** 실제로는 공강이 아닌 요일을 "공강"이라고 주장하는 reason이 있으면 코드가 만든 문장으로 교체. */
+function sanitizeFreeDayClaims(
+  explanations: readonly SolarExplanation[],
+  scored: readonly ScoredTimetable[],
+): SolarExplanation[] {
+  const byId = new Map(scored.map((entry) => [entry.candidateId, entry]));
+  return explanations.map((explanation) => {
+    const entry = byId.get(explanation.candidateId);
+    if (!entry) {
+      return explanation;
+    }
+    const freeDays = getFreeDayLabels(entry.timetable);
+    if (!reasonClaimsWrongFreeDay(explanation.reason, freeDays)) {
+      return explanation;
+    }
+    return { ...explanation, reason: buildFreeDayFallbackReason(freeDays) };
+  });
+}
+
+function reasonClaimsWrongFreeDay(reason: string, actualFreeDays: readonly string[]): boolean {
+  const freeDaySet = new Set(actualFreeDays);
+  return WEEKDAY_KOREAN_NAMES.some((day) => {
+    if (freeDaySet.has(day)) {
+      return false;
+    }
+    const dayIndex = reason.indexOf(day);
+    if (dayIndex === -1) {
+      return false;
+    }
+    const window = reason.slice(Math.max(0, dayIndex - 12), dayIndex + day.length + 12);
+    return window.includes("공강");
+  });
+}
+
+function buildFreeDayFallbackReason(freeDays: readonly string[]): string {
+  return freeDays.length > 0
+    ? `${freeDays.join(", ")}에 공강이 있고, 선택하신 조건에 맞게 정렬된 시간표입니다.`
+    : "선택하신 조건에 맞게 정렬된 시간표입니다.";
 }
 
 function parseSolarExplanations(
@@ -418,8 +473,18 @@ function parseTimetable(value: unknown): Timetable | null {
     }
     meetings.push(meeting);
   }
-  // Fixed events (알바 등) don't affect scoring/explanation, so they're not part of this wire format.
-  return { courses, meetings, fixedEvents: [] };
+  // fixedEvents(알바 등 고정 일정)는 free_days/lunch_break/back_to_back/daily_span 채점에 실제로
+  // 영향을 준다 — 수업이 없어도 고정 일정이 있으면 그 요일은 공강이 아니다(timetable-scoring.ts
+  // 참고). 예전엔 "채점에 영향 없다"고 보고 빼버려서, 수업만 없고 실은 고정 일정이 있는 요일을
+  // AI 추천 근거가 공강이라고 잘못 말하는 버그의 실제 원인이었다. 형식이 안 맞는 개별 항목만
+  // 건너뛴다(fixedEvents 자체가 없는 요청도 계속 정상 동작해야 하므로 전체를 거부하지 않음).
+  const fixedEvents: FixedEvent[] = Array.isArray(value.fixedEvents)
+    ? value.fixedEvents.flatMap((entry) => {
+        const parsed = parseFixedEvent(entry);
+        return parsed ? [parsed] : [];
+      })
+    : [];
+  return { courses, meetings, fixedEvents };
 }
 
 function parseCourseCandidate(value: unknown): CourseCandidate | null {
@@ -454,6 +519,27 @@ function parseMeeting(value: unknown): Meeting | null {
     return null;
   }
   return { day: value.day as Weekday, startMinutes: value.startMinutes, endMinutes: value.endMinutes };
+}
+
+function parseFixedEvent(value: unknown): FixedEvent | null {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    typeof value.label !== "string" ||
+    typeof value.day !== "string" ||
+    !WEEKDAY_SET.has(value.day as Weekday) ||
+    typeof value.startMinutes !== "number" ||
+    typeof value.endMinutes !== "number"
+  ) {
+    return null;
+  }
+  return {
+    id: value.id,
+    label: value.label,
+    day: value.day as Weekday,
+    startMinutes: value.startMinutes,
+    endMinutes: value.endMinutes,
+  };
 }
 
 function parseWeights(value: unknown): RecommendationWeight[] {
