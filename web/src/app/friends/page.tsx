@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import { MergedTimetableView } from "@/components/MergedTimetableView";
 import { TimetableCard } from "@/components/TimetableCard";
 import timetableStyles from "@/components/TimetablePlanner.module.css";
 import {
@@ -16,6 +17,7 @@ import {
   removeFriend,
   type FriendEntry,
 } from "@/lib/friend-list-storage";
+import type { MergedTimetableSource } from "@/lib/merged-timetable";
 import { SITE_NAME } from "@/lib/site-config";
 import type { Timetable } from "@/lib/timetable";
 import { useLocalStorageItem } from "@/lib/use-local-storage-item";
@@ -29,6 +31,10 @@ interface FriendView {
   timetable?: Timetable;
   error?: string;
 }
+
+/** Reserved id for "내 시간표" in the merge-selection set — friend codes never collide with this
+ * since they're always exactly 8 characters from a fixed alphabet (see friend-timetable-blob.ts). */
+const ME_SOURCE_ID = "me";
 
 export default function FriendsPage() {
   // SSR/hydration-safe reads of this browser's localStorage — see use-local-storage-item.ts for
@@ -50,6 +56,7 @@ export default function FriendsPage() {
   const [isDeletingMine, setIsDeletingMine] = useState(false);
   const [deleteMineError, setDeleteMineError] = useState("");
   const [copyFeedback, setCopyFeedback] = useState(false);
+  const [myView, setMyView] = useState<FriendView | undefined>(undefined);
 
   const [friendViews, setFriendViews] = useState<Record<string, FriendView>>({});
   const [newNickname, setNewNickname] = useState("");
@@ -57,35 +64,60 @@ export default function FriendsPage() {
   const [addError, setAddError] = useState("");
   const [isAdding, setIsAdding] = useState(false);
 
-  async function loadFriend(code: string): Promise<void> {
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
+  function toggleSelected(id: string): void {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+  const mergedSources = useMemo<MergedTimetableSource[]>(() => {
+    const sources: MergedTimetableSource[] = [];
+    if (selectedIds.has(ME_SOURCE_ID) && myView?.status === "ready" && myView.timetable) {
+      sources.push({
+        id: ME_SOURCE_ID,
+        label: storedMyLabel || "나",
+        timetable: myView.timetable,
+      });
+    }
+    for (const friend of friends) {
+      const view = friendViews[friend.code];
+      if (selectedIds.has(friend.code) && view?.status === "ready" && view.timetable) {
+        sources.push({
+          id: friend.code,
+          label: friend.nickname || view.ownerLabel || friend.code,
+          timetable: view.timetable,
+        });
+      }
+    }
+    return sources;
+  }, [friendViews, friends, myView, selectedIds, storedMyLabel]);
+
+  async function fetchTimetableView(code: string): Promise<FriendView> {
     try {
       const response = await fetch(`/api/friend-timetable/${code}`);
       const payload: unknown = await response.json();
       if (!response.ok) {
-        setFriendViews((current) => ({
-          ...current,
-          [code]: { status: "error", error: readApiError(payload) },
-        }));
-        return;
+        return { status: "error", error: readApiError(payload) };
       }
       const view = readFriendTimetableResponse(payload);
       if (!view) {
-        setFriendViews((current) => ({
-          ...current,
-          [code]: { status: "error", error: "응답 형식이 올바르지 않습니다." },
-        }));
-        return;
+        return { status: "error", error: "응답 형식이 올바르지 않습니다." };
       }
-      setFriendViews((current) => ({
-        ...current,
-        [code]: { status: "ready", ownerLabel: view.ownerLabel, timetable: view.timetable },
-      }));
+      return { status: "ready", ownerLabel: view.ownerLabel, timetable: view.timetable };
     } catch {
-      setFriendViews((current) => ({
-        ...current,
-        [code]: { status: "error", error: "불러오지 못했습니다. 잠시 후 다시 시도해 주세요." },
-      }));
+      return { status: "error", error: "불러오지 못했습니다. 잠시 후 다시 시도해 주세요." };
     }
+  }
+
+  async function loadFriend(code: string): Promise<void> {
+    const view = await fetchTimetableView(code);
+    setFriendViews((current) => ({ ...current, [code]: view }));
   }
 
   useEffect(() => {
@@ -100,6 +132,15 @@ export default function FriendsPage() {
     // skipped via the friendViews membership check above rather than being listed as a dependency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [friends]);
+
+  useEffect(() => {
+    // Same "start fetch, only setState after it resolves" shape as the friends effect above —
+    // myView stays undefined (rendered as loading) until fetchTimetableView's promise settles.
+    if (myCode && myView === undefined) {
+      void fetchTimetableView(myCode).then(setMyView);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myCode]);
 
   async function handleAddFriend(event: React.FormEvent): Promise<void> {
     event.preventDefault();
@@ -184,6 +225,7 @@ export default function FriendsPage() {
       }
       clearMySave(window.localStorage);
       setMyCodeDeleted(true);
+      setMyView(undefined);
     } catch {
       setDeleteMineError("삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.");
     } finally {
@@ -202,25 +244,51 @@ export default function FriendsPage() {
       <section className={styles.myCodeSection}>
         <h2>내 코드</h2>
         {myCode ? (
-          <div className={styles.myCodeCard}>
-            <div>
-              <span className={styles.myCodeValue}>{myCode}</span>
-              {storedMyLabel ? <small>{storedMyLabel}</small> : null}
+          <>
+            <div className={styles.myCodeCard}>
+              <div>
+                <span className={styles.myCodeValue}>{myCode}</span>
+                {storedMyLabel ? <small>{storedMyLabel}</small> : null}
+              </div>
+              <div className={styles.myCodeActions}>
+                <button type="button" onClick={() => void handleCopyMyCode()}>
+                  {copyFeedback ? "복사됨" : "코드 복사"}
+                </button>
+                <button
+                  className={styles.dangerButton}
+                  disabled={isDeletingMine}
+                  type="button"
+                  onClick={() => void handleDeleteMine()}
+                >
+                  {isDeletingMine ? "삭제 중…" : "저장 삭제"}
+                </button>
+              </div>
             </div>
-            <div className={styles.myCodeActions}>
-              <button type="button" onClick={() => void handleCopyMyCode()}>
-                {copyFeedback ? "복사됨" : "코드 복사"}
-              </button>
-              <button
-                className={styles.dangerButton}
-                disabled={isDeletingMine}
-                type="button"
-                onClick={() => void handleDeleteMine()}
-              >
-                {isDeletingMine ? "삭제 중…" : "저장 삭제"}
-              </button>
-            </div>
-          </div>
+            {!myView || myView.status === "loading" ? (
+              <p className={styles.emptyHint}>불러오는 중…</p>
+            ) : myView.status === "error" ? (
+              <p className={styles.error}>{myView.error}</p>
+            ) : myView.timetable ? (
+              <>
+                <label className={styles.mergeCheckbox}>
+                  <input
+                    checked={selectedIds.has(ME_SOURCE_ID)}
+                    type="checkbox"
+                    onChange={() => toggleSelected(ME_SOURCE_ID)}
+                  />
+                  <span>겹쳐보기에 포함</span>
+                </label>
+                <ol className={`${timetableStyles.timetableList} ${styles.friendList}`}>
+                  <TimetableCard
+                    extras={[]}
+                    heading={storedMyLabel || "내 시간표"}
+                    index={0}
+                    timetable={myView.timetable}
+                  />
+                </ol>
+              </>
+            ) : null}
+          </>
         ) : (
           <p className={styles.emptyHint}>
             아직 저장한 시간표가 없어요. 시간표 카드의 &ldquo;친구에게 서버로 공유&rdquo; 버튼을 먼저
@@ -279,12 +347,22 @@ export default function FriendsPage() {
                   ) : view.status === "error" ? (
                     <p className={styles.error}>{view.error}</p>
                   ) : view.timetable ? (
-                    <TimetableCard
-                      extras={[]}
-                      heading={friend.nickname || view.ownerLabel || "친구의 시간표"}
-                      index={0}
-                      timetable={view.timetable}
-                    />
+                    <>
+                      <label className={styles.mergeCheckbox}>
+                        <input
+                          checked={selectedIds.has(friend.code)}
+                          type="checkbox"
+                          onChange={() => toggleSelected(friend.code)}
+                        />
+                        <span>겹쳐보기에 포함</span>
+                      </label>
+                      <TimetableCard
+                        extras={[]}
+                        heading={friend.nickname || view.ownerLabel || "친구의 시간표"}
+                        index={0}
+                        timetable={view.timetable}
+                      />
+                    </>
                   ) : null}
                 </li>
               );
@@ -292,6 +370,17 @@ export default function FriendsPage() {
           </ol>
         )}
       </section>
+
+      {mergedSources.length > 0 ? (
+        <section className={styles.mergedSection}>
+          <h2>겹쳐보기 ({mergedSources.length}명)</h2>
+          <p className={styles.mergeHint}>
+            색칠된 시간은 선택한 사람 중 누군가 수업이 있는 시간이에요. 흰 칸이 다같이 비는
+            시간이에요. 같은 과목을 함께 듣는 경우엔 과목명이 그대로 표시돼요.
+          </p>
+          <MergedTimetableView sources={mergedSources} />
+        </section>
+      ) : null}
 
       <footer className={pageStyles.footer}>
         <Link href="/">{SITE_NAME}으로 돌아가기</Link>

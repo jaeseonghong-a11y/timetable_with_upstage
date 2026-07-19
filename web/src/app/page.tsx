@@ -9,13 +9,15 @@ export default function Home() {
     <main className={styles.page}>
       <OnboardingGuide />
       <section className={styles.hero}>
-        <h1>SKKU TIMETABLE</h1>
+        <div className={styles.heroTop}>
+          <h1>SKKU TIMETABLE</h1>
+          <Link className={styles.friendsButton} href="/friends">
+            내 시간표 · 친구 시간표 보기
+          </Link>
+        </div>
       </section>
       <PlanningWorkspace />
       <footer className={styles.footer}>
-        <p>
-          <Link href="/friends">친구 시간표 보기</Link>
-        </p>
         <p>
           오류 제보·문의: <a href="mailto:jaeseong.hong@gmail.com">jaeseong.hong@gmail.com</a>
         </p>

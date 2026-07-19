@@ -5,13 +5,41 @@
   margin: 0 auto 32px;
 }
 
+.mergedSection {
+  max-width: 900px;
+  margin: 0 auto 32px;
+}
+
 .myCodeSection h2,
 .addFriendSection h2,
-.friendListSection h2 {
+.friendListSection h2,
+.mergedSection h2 {
   margin: 0 0 12px;
   color: var(--text-primary);
   font-size: 18px;
   letter-spacing: -0.02em;
+}
+
+.mergeHint {
+  margin: 0 0 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.mergeCheckbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mergeCheckbox input {
+  accent-color: var(--accent-strong);
 }
 
 .myCodeCard {

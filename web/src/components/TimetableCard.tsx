@@ -27,9 +27,11 @@ export const DAYS: ReadonlyArray<{ id: Weekday; label: string }> = [
   { id: "fri", label: "금" },
 ];
 
-const TIMETABLE_START_MINUTES = 8 * 60;
-const TIMETABLE_END_MINUTES = 22 * 60;
-const PIXELS_PER_MINUTE = 0.8;
+// Exported so other weekly-grid views (e.g. MergedTimetableView) share the exact same coordinate
+// system instead of redefining these magic numbers and risking drift.
+export const TIMETABLE_START_MINUTES = 8 * 60;
+export const TIMETABLE_END_MINUTES = 22 * 60;
+export const PIXELS_PER_MINUTE = 0.8;
 
 export interface TimetableExtra {
   groupTitle: string;

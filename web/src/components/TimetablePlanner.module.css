@@ -1377,6 +1377,20 @@
   color: #69591f;
 }
 
+/* 겹쳐보기(MergedTimetableView) 전용: 특정 과목으로 특정할 필요 없는 "누군가 바쁜 시간"을 단색
+   으로만 채운다 — 같이 듣는 과목(공유 수업)은 이 블록 위에 .courseBlock을 그대로 덧그려 이름이
+   보이게 하고, 그 외 시간은 이 블록만 남아 "누구 수업인지는 몰라도 비어있진 않다"는 것만
+   전달한다. */
+.busyBlock {
+  position: absolute;
+  right: 3px;
+  left: 3px;
+  z-index: 0;
+  min-height: 20px;
+  border-radius: 5px;
+  background: repeating-linear-gradient(135deg, #d8dde0, #d8dde0 6px, #ced4d8 6px, #ced4d8 12px);
+}
+
 .fixedEventBlock {
   position: absolute;
   right: 3px;
