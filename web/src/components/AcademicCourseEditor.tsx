@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import type { AcademicProfile, CompletedCourse } from "@/lib/academic-profile";
 import { formatTermLabel, groupCompletedCoursesForReview } from "@/lib/course-history-grouping";
@@ -11,9 +11,55 @@ interface Props {
 }
 
 export function AcademicCourseEditor({ profile, onChange }: Props) {
-  const groupedCourses = groupCompletedCoursesForReview(profile.completedCourses);
+  const [courseSearch, setCourseSearch] = useState("");
+  const groupedCourses = useMemo(
+    () => groupCompletedCoursesForReview(profile.completedCourses),
+    [profile.completedCourses],
+  );
   const classifications = groupedCourses.map((group) => group.classification);
   const sourceDocumentId = profile.sourceDocuments[0]?.id;
+  const searchQuery = courseSearch.trim().toLowerCase();
+
+  const filteredGroups = useMemo(() => {
+    if (!searchQuery) {
+      return groupedCourses;
+    }
+    return groupedCourses
+      .map((group) => ({
+        ...group,
+        yearGroups: group.yearGroups
+          .map((yearGroup) => ({
+            ...yearGroup,
+            termGroups: yearGroup.termGroups
+              .map((termGroup) => ({
+                ...termGroup,
+                entries: termGroup.entries.filter(({ course }) => matchesCourseSearch(course, searchQuery)),
+              }))
+              .filter((termGroup) => termGroup.entries.length > 0),
+          }))
+          .filter((yearGroup) => yearGroup.termGroups.length > 0),
+      }))
+      .filter((group) => group.yearGroups.length > 0);
+  }, [groupedCourses, searchQuery]);
+
+  const visibleCourseCount = useMemo(
+    () =>
+      filteredGroups.reduce(
+        (total, group) =>
+          total +
+          group.yearGroups.reduce(
+            (yearTotal, yearGroup) =>
+              yearTotal +
+              yearGroup.termGroups.reduce(
+                (termTotal, termGroup) => termTotal + termGroup.entries.length,
+                0,
+              ),
+            0,
+          ),
+        0,
+      ),
+    [filteredGroups],
+  );
 
   // Collapsing only ever applies per 이수구분 group now, never per individual course. Starts
   // fully collapsed so the first thing shown after analysis is a manageable overview, not every
@@ -25,6 +71,7 @@ export function AcademicCourseEditor({ profile, onChange }: Props) {
   if (sourceDocumentId !== lastSourceDocumentId) {
     setLastSourceDocumentId(sourceDocumentId);
     setCollapsedGroups(new Set(classifications));
+    setCourseSearch("");
   }
 
   function toggleGroupCollapsed(classification: string): void {
@@ -39,8 +86,8 @@ export function AcademicCourseEditor({ profile, onChange }: Props) {
     });
   }
 
-  function setAllGroupsCollapsed(collapsed: boolean, classifications: readonly string[]): void {
-    setCollapsedGroups(collapsed ? new Set(classifications) : new Set());
+  function setAllGroupsCollapsed(collapsed: boolean, nextClassifications: readonly string[]): void {
+    setCollapsedGroups(collapsed ? new Set(nextClassifications) : new Set());
   }
 
   function updateCourse(index: number, course: CompletedCourse): void {
@@ -53,8 +100,8 @@ export function AcademicCourseEditor({ profile, onChange }: Props) {
   }
 
   function addCourse(): void {
-    const sourceDocumentId = profile.sourceDocuments[0]?.id;
-    if (!sourceDocumentId) {
+    const nextSourceDocumentId = profile.sourceDocuments[0]?.id;
+    if (!nextSourceDocumentId) {
       return;
     }
     onChange({
@@ -73,7 +120,7 @@ export function AcademicCourseEditor({ profile, onChange }: Props) {
           completionStatus: "earned",
           recommendationPolicy: "exclude",
           flags: [],
-          sourceDocumentId,
+          sourceDocumentId: nextSourceDocumentId,
           reviewReasons: [],
         },
       ],
@@ -265,63 +312,103 @@ export function AcademicCourseEditor({ profile, onChange }: Props) {
       {profile.completedCourses.length === 0 ? (
         <p className={styles.dataEmpty}>추출된 과목이 없습니다. 필요하면 수동으로 추가해 주세요.</p>
       ) : (
-        <div className={styles.cardList}>
-          {groupedCourses.map((group) => {
-            const isCollapsed = collapsedGroups.has(group.classification);
-            const groupCount = group.yearGroups.reduce(
-              (total, yearGroup) =>
-                total +
-                yearGroup.termGroups.reduce((subtotal, termGroup) => subtotal + termGroup.entries.length, 0),
-              0,
-            );
-            return (
-              <section className={styles.courseGroupSection} key={group.classification}>
-                <button
-                  aria-expanded={!isCollapsed}
-                  className={styles.courseGroupHeading}
-                  type="button"
-                  onClick={() => toggleGroupCollapsed(group.classification)}
-                >
-                  <span>
-                    {isCollapsed ? "▶" : "▼"} {group.classification}
-                  </span>
-                  <span>{groupCount}개</span>
-                </button>
-                {!isCollapsed
-                  ? group.yearGroups.map((yearGroup) => (
-                      <div className={styles.courseYearGroup} key={yearGroup.year ?? "unknown"}>
-                        <p className={styles.courseYearHeading}>
-                          {yearGroup.year !== null ? `${yearGroup.year}년` : "연도 미상"}
-                        </p>
-                        {yearGroup.termGroups.map((termGroup) => (
-                          <div
-                            className={styles.courseTermGroup}
-                            key={termGroup.term ?? "unknown"}
-                          >
-                            <p className={styles.courseTermHeading}>
-                              {formatTermLabel(termGroup.term)}
+        <>
+          <label className={styles.courseSearchField}>
+            <span className={styles.srOnly}>재수강할 과목명 검색</span>
+            <input
+              placeholder="재수강할 과목명 검색"
+              type="search"
+              value={courseSearch}
+              onChange={(event) => setCourseSearch(event.target.value)}
+            />
+          </label>
+          {searchQuery ? (
+            <p className={styles.courseSearchMeta}>
+              검색 결과 {visibleCourseCount}개 / 전체 {profile.completedCourses.length}개
+            </p>
+          ) : null}
+
+          {filteredGroups.length === 0 ? (
+            <p className={styles.dataEmpty}>검색어와 일치하는 과목이 없습니다.</p>
+          ) : (
+            <div className={styles.cardList}>
+              {filteredGroups.map((group) => {
+                // While searching, keep matching groups open so results are immediately usable.
+                const isCollapsed = searchQuery
+                  ? false
+                  : collapsedGroups.has(group.classification);
+                const groupCount = group.yearGroups.reduce(
+                  (total, yearGroup) =>
+                    total +
+                    yearGroup.termGroups.reduce(
+                      (subtotal, termGroup) => subtotal + termGroup.entries.length,
+                      0,
+                    ),
+                  0,
+                );
+                return (
+                  <section className={styles.courseGroupSection} key={group.classification}>
+                    <button
+                      aria-expanded={!isCollapsed}
+                      className={styles.courseGroupHeading}
+                      type="button"
+                      onClick={() => toggleGroupCollapsed(group.classification)}
+                    >
+                      <span>
+                        {isCollapsed ? "▶" : "▼"} {group.classification}
+                      </span>
+                      <span>{groupCount}개</span>
+                    </button>
+                    {!isCollapsed
+                      ? group.yearGroups.map((yearGroup) => (
+                          <div className={styles.courseYearGroup} key={yearGroup.year ?? "unknown"}>
+                            <p className={styles.courseYearHeading}>
+                              {yearGroup.year !== null ? `${yearGroup.year}년` : "연도 미상"}
                             </p>
-                            <ol className={styles.courseCardGrid}>
-                              {termGroup.entries.map(({ course, index }) =>
-                                renderCourseCard(
-                                  course,
-                                  index,
-                                  displayNumberByIndex.get(index) ?? index + 1,
-                                ),
-                              )}
-                            </ol>
+                            {yearGroup.termGroups.map((termGroup) => (
+                              <div
+                                className={styles.courseTermGroup}
+                                key={termGroup.term ?? "unknown"}
+                              >
+                                <p className={styles.courseTermHeading}>
+                                  {formatTermLabel(termGroup.term)}
+                                </p>
+                                <ol className={styles.courseCardGrid}>
+                                  {termGroup.entries.map(({ course, index }) =>
+                                    renderCourseCard(
+                                      course,
+                                      index,
+                                      displayNumberByIndex.get(index) ?? index + 1,
+                                    ),
+                                  )}
+                                </ol>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    ))
-                  : null}
-              </section>
-            );
-          })}
-        </div>
+                        ))
+                      : null}
+                  </section>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
+}
+
+function matchesCourseSearch(course: CompletedCourse, query: string): boolean {
+  const haystack = [
+    course.courseCode,
+    course.courseName,
+    course.classification,
+    course.area,
+    course.majorScope,
+  ]
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(query);
 }
 
 function numberInputValue(value: number): number | "" {

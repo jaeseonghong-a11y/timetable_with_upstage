@@ -190,10 +190,7 @@ export function StudentProfileForm({ profile, appliedProfile, onChange, onApply 
   return (
     <section className={styles.panel} aria-labelledby="student-profile-heading">
       <div className={styles.heading}>
-        <div>
-          <p>STEP 1 · 기본 정보</p>
-          <h2 id="student-profile-heading">어떤 강좌를 찾을지 먼저 알려 주세요.</h2>
-        </div>
+        <h2 id="student-profile-heading">STEP 1 · 기본 정보 입력</h2>
         {appliedProfile ? (
           <span className={styles.appliedBadge}>{getCourseQueryLabel(appliedProfile)} 적용됨</span>
         ) : null}
