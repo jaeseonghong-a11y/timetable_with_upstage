@@ -195,8 +195,8 @@ export function PlanningWorkspace() {
   const stepTitle =
     step === 2
       ? docSubstep === "course_history"
-        ? "수강/취득과목 (1/2)"
-        : "졸업요건 충족현황 (2/2)"
+        ? "내 기록 적용하기 · 수강/취득과목 (1/2)"
+        : "내 기록 적용하기 · 졸업요건 충족현황 (2/2)"
       : step === 3
         ? planSubstep === "select"
           ? "과목 담기 (1/2)"

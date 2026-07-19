@@ -341,12 +341,6 @@ export function AcademicDocumentManager({
         <div className={styles.heading}>
           <h2 id="academic-document-heading">STEP 2 · 내 기록 적용하기</h2>
         </div>
-        <p className={styles.lead}>
-          수강·취득 과목과 졸업요건을 올리면, 이미 들은 과목은 빼고 남은 요건에 맞춰
-          시간표를 짜는 데 씁니다. 분석 결과는 직접 확인한 뒤 확정해야 다음으로 갈 수
-          있고, 원하지 않으면 건너뛸 수 있습니다. 원본 파일과 전체 분석 결과는 서버에
-          저장하지 않습니다.
-        </p>
         <p className={styles.upstageBadge}>with Upstage Document Parse + Solar</p>
       </div>
 

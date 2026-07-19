@@ -34,13 +34,6 @@
   line-height: 1.25;
 }
 
-.lead {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 15px;
-  line-height: 1.65;
-}
-
 .upstageBadge {
   justify-self: start;
   margin: 0;
