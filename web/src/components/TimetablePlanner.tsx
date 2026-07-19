@@ -203,6 +203,8 @@ export function TimetablePlanner({
   const [fixedEventError, setFixedEventError] = useState("");
   const [minimumCredits, setMinimumCredits] = useState("12");
   const [maximumCredits, setMaximumCredits] = useState("21");
+  /** Reserved credits for AI elective filler — always added to the desired credit range. */
+  const [electiveRecommendationCredits, setElectiveRecommendationCredits] = useState("0");
   const [disabledCourseTypes, setDisabledCourseTypes] = useState<Set<string>>(new Set());
   const [dayOffFilters, setDayOffFilters] = useState<Weekday[]>([]);
   const [courseSearch, setCourseSearch] = useState("");
@@ -826,10 +828,25 @@ export function TimetablePlanner({
     return { requiredSubjects, choiceBags };
   }, [choiceGroups, courseOwners, enabledSectionIds, selectedCourseGroups]);
 
-  const derivedCreditRange = useMemo(
-    () => estimateCreditRangeFromPlan(manualSelectionPlanSubjects),
-    [manualSelectionPlanSubjects],
-  );
+  const reservedElectiveCredits = useMemo(() => {
+    const parsed = Number(electiveRecommendationCredits);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  }, [electiveRecommendationCredits]);
+  const derivedCreditRange = useMemo(() => {
+    const base = estimateCreditRangeFromPlan(manualSelectionPlanSubjects);
+    if (!base) {
+      return reservedElectiveCredits > 0
+        ? { minCredits: reservedElectiveCredits, maxCredits: reservedElectiveCredits }
+        : null;
+    }
+    if (reservedElectiveCredits === 0) {
+      return base;
+    }
+    return {
+      minCredits: base.minCredits + reservedElectiveCredits,
+      maxCredits: base.maxCredits + reservedElectiveCredits,
+    };
+  }, [manualSelectionPlanSubjects, reservedElectiveCredits]);
   const [previousDerivedCreditRange, setPreviousDerivedCreditRange] = useState(derivedCreditRange);
   if (previousDerivedCreditRange !== derivedCreditRange) {
     setPreviousDerivedCreditRange(derivedCreditRange);
@@ -847,13 +864,21 @@ export function TimetablePlanner({
       return { entries: [], error: null };
     }
     try {
+      // Step 3 only has manually bagged courses — subtract reserved AI-elective credits so the
+      // elevated "desired range" still leaves valid combinations for the current bag alone.
+      const parsedMin = minimumCredits === "" ? Number.NaN : Number(minimumCredits);
+      const parsedMax = maximumCredits === "" ? Number.NaN : Number(maximumCredits);
       const timetables = generateTimetablesForSelectionPlan(
         {
           requiredSubjects: manualSelectionPlanSubjects.requiredSubjects,
           choiceBags: manualSelectionPlanSubjects.choiceBags,
           creditRange: {
-            minCredits: minimumCredits === "" ? Number.NaN : Number(minimumCredits),
-            maxCredits: maximumCredits === "" ? Number.NaN : Number(maximumCredits),
+            minCredits: Number.isFinite(parsedMin)
+              ? Math.max(0, parsedMin - reservedElectiveCredits)
+              : parsedMin,
+            maxCredits: Number.isFinite(parsedMax)
+              ? Math.max(0, parsedMax - reservedElectiveCredits)
+              : parsedMax,
           },
         },
         {
@@ -890,6 +915,7 @@ export function TimetablePlanner({
     manualSelectionPlanSubjects,
     maximumCredits,
     minimumCredits,
+    reservedElectiveCredits,
     sectionIdToGroup,
     selectedCourseGroups,
     unavailableDays,
@@ -1280,27 +1306,11 @@ export function TimetablePlanner({
                 : "분반 전체 선택"}
             </button>
           ) : null}
-          <div className={styles.sectionChoices}>
-            {group.candidates.map((candidate) => (
-              <label key={candidate.id}>
-                <input
-                  checked={selectedSections.includes(candidate.id)}
-                  type="checkbox"
-                  onChange={() => toggleSection(group, candidate.id)}
-                />
-                <span>
-                  <strong>{candidate.title}</strong>
-                  <small>
-                    {candidate.professor || "교수 미정"} · {getCourseTypeLabel(candidate)}
-                  </small>
-                  <small>
-                    {candidate.schedule || "시간 미정/온라인"}
-                    {candidate.campus ? ` · ${candidate.campus}` : ""}
-                  </small>
-                </span>
-              </label>
-            ))}
-          </div>
+          <SelectedSectionChoices
+            candidates={group.candidates}
+            selectedSectionIds={selectedSections}
+            onToggleSection={(sectionId) => toggleSection(group, sectionId)}
+          />
         </div>
       </details>
     );
@@ -1750,87 +1760,124 @@ export function TimetablePlanner({
                   </div>
                 </div>
 
-                {choiceGroups.map((choiceGroup) => {
-                  const groupSubjects = selectedCourseGroups.filter(
-                    ({ selectionId }) => courseOwners[selectionId] === choiceGroup.id,
-                  );
-                  return (
-                    <div className={styles.destinationBlock} key={choiceGroup.id}>
-                      <div className={styles.choiceGroupRule}>
-                        <div className={styles.choiceGroupRuleHeader}>
-                          <label>
-                            <span className={styles.srOnly}>선택 그룹 이름</span>
-                            <input
-                              type="text"
-                              value={choiceGroup.title}
-                              onChange={(event) =>
-                                updateChoiceGroup(choiceGroup.id, { title: event.target.value })
-                              }
-                            />
-                          </label>
-                          <strong>{groupSubjects.length}개</strong>
-                        </div>
-                        <div className={styles.cardinalityInputs}>
-                          <p className={styles.cardinalityLabel}>
-                            이 그룹에서 시간표에 넣을 과목 수 (예: 1개~2개면, 선택 그룹에 담긴
-                            과목 중 1개 또는 2개가 시간표에 포함됩니다)
-                          </p>
-                          <div className={styles.cardinalityFields}>
-                            <label>
-                              <span className={styles.srOnly}>최소 과목 수</span>
-                              <span className={styles.cardinalityField}>
-                                <input
-                                  min="0"
-                                  max="20"
-                                  type="number"
-                                  value={choiceGroup.minSubjects}
-                                  onChange={(event) =>
-                                    updateChoiceGroup(choiceGroup.id, {
-                                      minSubjects: Number(event.target.value),
-                                    })
-                                  }
-                                />
-                                <span aria-hidden="true">개</span>
-                              </span>
-                            </label>
-                            <span aria-hidden="true">~</span>
-                            <label>
-                              <span className={styles.srOnly}>최대 과목 수</span>
-                              <span className={styles.cardinalityField}>
-                                <input
-                                  min="0"
-                                  max="20"
-                                  type="number"
-                                  value={choiceGroup.maxSubjects}
-                                  onChange={(event) =>
-                                    updateChoiceGroup(choiceGroup.id, {
-                                      maxSubjects: Number(event.target.value),
-                                    })
-                                  }
-                                />
-                                <span aria-hidden="true">개</span>
-                              </span>
-                            </label>
-                          </div>
-                        </div>
-                        <button
-                          aria-label={`${choiceGroup.title} 삭제`}
-                          className={styles.removeChoiceGroup}
-                          type="button"
-                          onClick={() => removeChoiceGroup(choiceGroup.id)}
-                        >
-                          삭제
-                        </button>
-                      </div>
-                      <div className={styles.selectedSubjectList}>
-                        {groupSubjects.map((group) => renderSelectedSubjectCard(group))}
-                        {groupSubjects.length === 0 ? (
-                          <p className={styles.groupEmpty}>아직 담은 과목이 없습니다.</p>
-                        ) : null}
+                {(() => {
+                  const choiceGroupIds = new Set(choiceGroups.map((group) => group.id));
+                  const hasChoiceSubjects = selectedCourseGroups.some(({ selectionId }) => {
+                    const owner = courseOwners[selectionId];
+                    return Boolean(owner && owner !== "required" && choiceGroupIds.has(owner));
+                  });
+                  const electiveRecommendationBlock = (
+                    <div className={styles.destinationBlock} key="elective-recommendation">
+                      <div className={styles.requiredRule}>
+                        <span>교양 과목 추천 받기</span>
+                        <label className={styles.electiveCreditInput}>
+                          <span className={styles.srOnly}>추천받을 교양 학점</span>
+                          <input
+                            inputMode="numeric"
+                            min="0"
+                            max="21"
+                            step="1"
+                            type="number"
+                            value={electiveRecommendationCredits}
+                            onChange={(event) =>
+                              setElectiveRecommendationCredits(event.target.value)
+                            }
+                          />
+                          <span aria-hidden="true">학점</span>
+                        </label>
+                        <small>
+                          AI 추천 시 이 학점만큼 원하는 학점 범위(최소·최대)에 더해집니다.
+                        </small>
                       </div>
                     </div>
                   );
-                })}
+                  const choiceGroupBlocks = choiceGroups.map((choiceGroup) => {
+                    const groupSubjects = selectedCourseGroups.filter(
+                      ({ selectionId }) => courseOwners[selectionId] === choiceGroup.id,
+                    );
+                    return (
+                      <div className={styles.destinationBlock} key={choiceGroup.id}>
+                        <div className={styles.choiceGroupRule}>
+                          <div className={styles.choiceGroupRuleHeader}>
+                            <label>
+                              <span className={styles.srOnly}>선택 그룹 이름</span>
+                              <input
+                                type="text"
+                                value={choiceGroup.title}
+                                onChange={(event) =>
+                                  updateChoiceGroup(choiceGroup.id, {
+                                    title: event.target.value,
+                                  })
+                                }
+                              />
+                            </label>
+                            <strong>{groupSubjects.length}개</strong>
+                          </div>
+                          <div className={styles.cardinalityInputs}>
+                            <p className={styles.cardinalityLabel}>
+                              이 그룹에서 시간표에 넣을 과목 수 (예: 1개~2개면, 선택 그룹에 담긴
+                              과목 중 1개 또는 2개가 시간표에 포함됩니다)
+                            </p>
+                            <div className={styles.cardinalityFields}>
+                              <label>
+                                <span className={styles.srOnly}>최소 과목 수</span>
+                                <span className={styles.cardinalityField}>
+                                  <input
+                                    min="0"
+                                    max="20"
+                                    type="number"
+                                    value={choiceGroup.minSubjects}
+                                    onChange={(event) =>
+                                      updateChoiceGroup(choiceGroup.id, {
+                                        minSubjects: Number(event.target.value),
+                                      })
+                                    }
+                                  />
+                                  <span aria-hidden="true">개</span>
+                                </span>
+                              </label>
+                              <span aria-hidden="true">~</span>
+                              <label>
+                                <span className={styles.srOnly}>최대 과목 수</span>
+                                <span className={styles.cardinalityField}>
+                                  <input
+                                    min="0"
+                                    max="20"
+                                    type="number"
+                                    value={choiceGroup.maxSubjects}
+                                    onChange={(event) =>
+                                      updateChoiceGroup(choiceGroup.id, {
+                                        maxSubjects: Number(event.target.value),
+                                      })
+                                    }
+                                  />
+                                  <span aria-hidden="true">개</span>
+                                </span>
+                              </label>
+                            </div>
+                          </div>
+                          <button
+                            aria-label={`${choiceGroup.title} 삭제`}
+                            className={styles.removeChoiceGroup}
+                            type="button"
+                            onClick={() => removeChoiceGroup(choiceGroup.id)}
+                          >
+                            삭제
+                          </button>
+                        </div>
+                        <div className={styles.selectedSubjectList}>
+                          {groupSubjects.map((group) => renderSelectedSubjectCard(group))}
+                          {groupSubjects.length === 0 ? (
+                            <p className={styles.groupEmpty}>아직 담은 과목이 없습니다.</p>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  });
+                  return hasChoiceSubjects
+                    ? [...choiceGroupBlocks, electiveRecommendationBlock]
+                    : [electiveRecommendationBlock, ...choiceGroupBlocks];
+                })()}
               </div>
             </section>
           </fieldset>
@@ -1949,8 +1996,8 @@ export function TimetablePlanner({
               </label>
             </div>
             <small>
-              필수 과목 학점과 선택 그룹의 학점 범위(예: 1개~2개)를 반영해 자동으로 채웁니다.
-              교양 과목 추천을 받고 싶다면 학점 최대 범위를 올려 주세요.
+              필수 과목 학점, 선택 그룹 학점 범위, 교양 과목 추천 학점을 반영해 자동으로
+              채웁니다. 필요하면 직접 수정할 수 있습니다.
             </small>
           </fieldset>
         </aside>
@@ -2235,6 +2282,19 @@ function ElectivePreviewBoundary({
   );
 }
 
+function filterCandidatesByProfessor(
+  candidates: readonly CourseCandidate[],
+  professorSearch: string,
+): CourseCandidate[] {
+  const query = professorSearch.trim().toLowerCase();
+  if (!query) {
+    return [...candidates];
+  }
+  return candidates.filter((candidate) =>
+    (candidate.professor || "교수 미정").toLowerCase().includes(query),
+  );
+}
+
 function CourseSectionDetails({
   group,
   selectedSectionIds,
@@ -2248,6 +2308,12 @@ function CourseSectionDetails({
   onDeselectAllSections: () => void;
   onToggleSection: (sectionId: string) => void;
 }) {
+  const [professorSearch, setProfessorSearch] = useState("");
+  const filteredCandidates = useMemo(
+    () => filterCandidatesByProfessor(group.candidates, professorSearch),
+    [group.candidates, professorSearch],
+  );
+
   if (group.candidates.length === 1) {
     return (
       <div className={styles.singleCourseSection}>
@@ -2259,6 +2325,7 @@ function CourseSectionDetails({
   const allSelected = group.candidates.every((candidate) =>
     selectedSectionIds.includes(candidate.id),
   );
+  const searchActive = professorSearch.trim().length > 0;
 
   return (
     <details className={styles.courseSectionDetails}>
@@ -2270,6 +2337,20 @@ function CourseSectionDetails({
             : `${group.candidates.length}개 분반`}
         </small>
       </summary>
+      <label className={styles.professorSearchField}>
+        <span className={styles.srOnly}>교수명 검색</span>
+        <input
+          placeholder="교수명 검색"
+          type="search"
+          value={professorSearch}
+          onChange={(event) => setProfessorSearch(event.target.value)}
+        />
+      </label>
+      {searchActive ? (
+        <p className={styles.professorSearchMeta}>
+          검색 결과 {filteredCandidates.length}개 / 전체 {group.candidates.length}개
+        </p>
+      ) : null}
       <div className={styles.sectionBulkActions}>
         <button
           type="button"
@@ -2278,20 +2359,89 @@ function CourseSectionDetails({
           {allSelected ? "분반 전체 선택 해제" : "분반 전체 선택"}
         </button>
       </div>
-      <div className={styles.courseSectionRows}>
-        {group.candidates.map((candidate) => {
-          const checked = selectedSectionIds.includes(candidate.id);
-          return (
-            <CourseSectionChoice
-              candidate={candidate}
-              checked={checked}
-              key={candidate.id}
-              onToggle={() => onToggleSection(candidate.id)}
-            />
-          );
-        })}
-      </div>
+      {filteredCandidates.length === 0 ? (
+        <p className={styles.professorSearchEmpty}>검색어와 일치하는 교수가 없습니다.</p>
+      ) : (
+        <div className={styles.courseSectionRows}>
+          {filteredCandidates.map((candidate) => {
+            const checked = selectedSectionIds.includes(candidate.id);
+            return (
+              <CourseSectionChoice
+                candidate={candidate}
+                checked={checked}
+                key={candidate.id}
+                onToggle={() => onToggleSection(candidate.id)}
+              />
+            );
+          })}
+        </div>
+      )}
     </details>
+  );
+}
+
+function SelectedSectionChoices({
+  candidates,
+  selectedSectionIds,
+  onToggleSection,
+}: {
+  candidates: readonly CourseCandidate[];
+  selectedSectionIds: readonly string[];
+  onToggleSection: (sectionId: string) => void;
+}) {
+  const [professorSearch, setProfessorSearch] = useState("");
+  const filteredCandidates = useMemo(
+    () => filterCandidatesByProfessor(candidates, professorSearch),
+    [candidates, professorSearch],
+  );
+  const searchActive = professorSearch.trim().length > 0;
+
+  return (
+    <div className={styles.selectedSectionChoices}>
+      {candidates.length > 1 ? (
+        <>
+          <label className={styles.professorSearchField}>
+            <span className={styles.srOnly}>교수명 검색</span>
+            <input
+              placeholder="교수명 검색"
+              type="search"
+              value={professorSearch}
+              onChange={(event) => setProfessorSearch(event.target.value)}
+            />
+          </label>
+          {searchActive ? (
+            <p className={styles.professorSearchMeta}>
+              검색 결과 {filteredCandidates.length}개 / 전체 {candidates.length}개
+            </p>
+          ) : null}
+        </>
+      ) : null}
+      {filteredCandidates.length === 0 ? (
+        <p className={styles.professorSearchEmpty}>검색어와 일치하는 교수가 없습니다.</p>
+      ) : (
+        <div className={styles.sectionChoices}>
+          {filteredCandidates.map((candidate) => (
+            <label key={candidate.id}>
+              <input
+                checked={selectedSectionIds.includes(candidate.id)}
+                type="checkbox"
+                onChange={() => onToggleSection(candidate.id)}
+              />
+              <span>
+                <strong>{candidate.title}</strong>
+                <small>
+                  {candidate.professor || "교수 미정"} · {getCourseTypeLabel(candidate)}
+                </small>
+                <small>
+                  {candidate.schedule || "시간 미정/온라인"}
+                  {candidate.campus ? ` · ${candidate.campus}` : ""}
+                </small>
+              </span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
