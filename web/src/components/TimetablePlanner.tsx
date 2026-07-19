@@ -11,7 +11,7 @@ import {
   shouldShowSectionDetails,
   type CourseCandidateGroup,
 } from "@/lib/course-candidates";
-import { findSkkuDepartment } from "@/lib/skku-departments";
+import { findSkkuDepartment, type SkkuDepartment } from "@/lib/skku-departments";
 import {
   SKKU_ELECTIVE_AREA_DEFINITIONS,
   type SkkuCampus,
@@ -50,6 +50,7 @@ import {
   type WeightImportance,
 } from "@/lib/timetable-scoring";
 
+import { DepartmentAddCombobox } from "./DepartmentAddCombobox";
 import { DAYS, formatCredits, formatMinutes, TimetableCard, type TimetableExtra } from "./TimetableCard";
 import styles from "./TimetablePlanner.module.css";
 
@@ -107,6 +108,20 @@ const RECOMMENDATION_STAGES = [
   "조건에 맞는 시간표 후보를 추리는 중…",
   "Solar가 추천 이유를 작성하는 중…",
 ] as const;
+
+/**
+ * Stage 1 (the Solar call) is the real bottleneck and has no sub-progress to report, so a single
+ * static label sitting there for several seconds reads as stuck. This rotates a few lightly
+ * on-brand quips on a timer while stage 1 is in flight — atmosphere, not a progress claim, same
+ * spirit as AcademicDocumentManager's long-wait flavors.
+ */
+const RECOMMENDATION_STAGE1_FLAVORS = [
+  "Solar가 후보를 하나씩 읽어보는 중…",
+  "졸업요건과 견주어 보는 중…",
+  "그럴듯한 이유를 다듬는 중…",
+  "거의 다 됐어요, 조금만 더…",
+] as const;
+const RECOMMENDATION_STAGE1_FLAVOR_INTERVAL_MS = 2600;
 
 type CourseSource = "major" | "elective";
 
@@ -168,6 +183,37 @@ function hasAnyCourses(collection: unknown): boolean {
   );
 }
 
+/**
+ * Combines two program-course-group lists, merging by course number (group.id) and unioning each
+ * group's programCodes/candidates. Shared by the initial multi-department load and by adding one
+ * more department mid-session (loadExtraDepartment) without disturbing anything else in Step 3.
+ */
+function mergeProgramCourseGroups(
+  existing: readonly ProgramCourseCandidateGroup[],
+  incoming: readonly ProgramCourseCandidateGroup[],
+): ProgramCourseCandidateGroup[] {
+  const merged = new Map<string, ProgramCourseCandidateGroup>(
+    existing.map((group) => [group.id, group]),
+  );
+  for (const group of incoming) {
+    const current = merged.get(group.id);
+    if (!current) {
+      merged.set(group.id, group);
+      continue;
+    }
+    merged.set(group.id, {
+      ...current,
+      programCodes: [...new Set([...current.programCodes, ...group.programCodes])],
+      candidates: [
+        ...new Map(
+          [...current.candidates, ...group.candidates].map((candidate) => [candidate.id, candidate]),
+        ).values(),
+      ],
+    });
+  }
+  return [...merged.values()];
+}
+
 /** How many extra elective subjects the AI recommendation step may consider/add as filler. */
 const MAX_FILLER_SHORTLIST = 8;
 const MAX_FILLER_SUBJECTS = 5;
@@ -202,6 +248,11 @@ export function TimetablePlanner({
   >("all");
   const [courseSource, setCourseSource] = useState<CourseSource>("major");
   const [selectedMajorProgramCode, setSelectedMajorProgramCode] = useState<string>("all");
+  // Departments added ad hoc while browsing Step 3, on top of roadmapProgramCodes from Step 1 —
+  // lets a student pull in another major's courses without going back to change their profile.
+  const [extraProgramCodes, setExtraProgramCodes] = useState<string[]>([]);
+  const [loadingExtraDepartmentCodes, setLoadingExtraDepartmentCodes] = useState<string[]>([]);
+  const [extraDepartmentError, setExtraDepartmentError] = useState("");
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const [choiceGroups, setChoiceGroups] = useState<ChoiceGroupConfig[]>(INITIAL_CHOICE_GROUPS);
   const [activeDestination, setActiveDestination] = useState<CourseDestination>("required");
@@ -255,6 +306,8 @@ export function TimetablePlanner({
       setSelectedElectiveArea("all");
       setCourseSource("major");
       setSelectedMajorProgramCode("all");
+      setExtraProgramCodes([]);
+      setExtraDepartmentError("");
       setSelectedGroupIds([]);
       setChoiceGroups(INITIAL_CHOICE_GROUPS);
       setActiveDestination("required");
@@ -307,24 +360,7 @@ export function TimetablePlanner({
               }))
             : [],
         );
-        const merged = new Map<string, ProgramCourseCandidateGroup>();
-        for (const group of groups) {
-          const existing = merged.get(group.id);
-          if (!existing) {
-            merged.set(group.id, group);
-            continue;
-          }
-          merged.set(group.id, {
-            ...existing,
-            programCodes: [...new Set([...existing.programCodes, ...group.programCodes])],
-            candidates: [
-              ...new Map(
-                [...existing.candidates, ...group.candidates].map((candidate) => [candidate.id, candidate]),
-              ).values(),
-            ],
-          });
-        }
-        setMajorCourseGroups([...merged.values()]);
+        setMajorCourseGroups(mergeProgramCourseGroups([], groups));
       } catch (error) {
         if (isAbortError(error)) {
           return;
@@ -339,6 +375,68 @@ export function TimetablePlanner({
     void loadCourses();
     return () => controller.abort();
   }, [query, roadmapProgramCodes]);
+
+  /**
+   * Adds one more department's courses to the Step-3 catalog without resetting anything else the
+   * student has already picked — unlike loadCourses above, which is a full reset keyed on
+   * [query, roadmapProgramCodes]. Lets someone browse a major they never selected in Step 1.
+   */
+  async function loadExtraDepartment(department: SkkuDepartment): Promise<void> {
+    if (!query || extraProgramCodes.includes(department.code)) {
+      return;
+    }
+    const activeQuery = query;
+    setExtraProgramCodes((codes) => [...codes, department.code]);
+    setLoadingExtraDepartmentCodes((codes) => [...codes, department.code]);
+    setExtraDepartmentError("");
+    try {
+      const settlements = await Promise.allSettled(
+        MAJOR_COURSE_CAMPUSES.map((campus) =>
+          postJson("/api/skku-courses", { ...activeQuery, campus, departmentCode: department.code }),
+        ),
+      );
+      const results = settlements.flatMap((settlement) =>
+        settlement.status === "fulfilled" ? [settlement.value] : [],
+      );
+      if (results.length === 0) {
+        const firstFailure = settlements.find(
+          (settlement): settlement is PromiseRejectedResult => settlement.status === "rejected",
+        );
+        throw firstFailure?.reason ?? new Error("개설강좌를 불러오지 못했습니다.");
+      }
+      const groups = results.flatMap((result) =>
+        hasAnyCourses(result)
+          ? courseGroupsFromCollection(result).map((group) => ({
+              ...group,
+              programCodes: [department.code],
+            }))
+          : [],
+      );
+      setMajorCourseGroups((current) => mergeProgramCourseGroups(current, groups));
+      setSelectedMajorProgramCode(department.code);
+    } catch (error) {
+      setExtraDepartmentError(
+        `${department.name} 과목을 불러오지 못했습니다. ${readThrownMessage(error)}`,
+      );
+      setExtraProgramCodes((codes) => codes.filter((code) => code !== department.code));
+    } finally {
+      setLoadingExtraDepartmentCodes((codes) => codes.filter((code) => code !== department.code));
+    }
+  }
+
+  /** Stops browsing a manually-added department; courses already added to the plan stay put. */
+  function removeExtraDepartment(code: string): void {
+    setExtraProgramCodes((codes) => codes.filter((value) => value !== code));
+    setMajorCourseGroups((groups) =>
+      groups
+        .map((group) => ({
+          ...group,
+          programCodes: group.programCodes.filter((value) => value !== code),
+        }))
+        .filter((group) => group.programCodes.length > 0),
+    );
+    setSelectedMajorProgramCode((current) => (current === code ? "all" : current));
+  }
 
   /**
    * The elective catalog fetch is slow on a cold cache (session login + up to 14 sequential
@@ -777,12 +875,13 @@ export function TimetablePlanner({
   );
   const majorProgramTabs = useMemo(
     () =>
-      roadmapProgramCodes.map((code) => ({
+      [...new Set([...roadmapProgramCodes, ...extraProgramCodes])].map((code) => ({
         code,
         label: findSkkuDepartment(code)?.name ?? code,
         count: majorCourseGroupsBySource.filter((group) => group.programCodes?.includes(code)).length,
+        isExtra: extraProgramCodes.includes(code) && !roadmapProgramCodes.includes(code),
       })),
-    [majorCourseGroupsBySource, roadmapProgramCodes],
+    [extraProgramCodes, majorCourseGroupsBySource, roadmapProgramCodes],
   );
   const visibleMajorCourseGroups = useMemo(
     () =>
@@ -965,8 +1064,26 @@ export function TimetablePlanner({
   >(new Map());
   const [isRecommending, setIsRecommending] = useState(false);
   const [recommendationStage, setRecommendationStage] = useState(0);
+  const [recommendationFlavorIndex, setRecommendationFlavorIndex] = useState(-1);
   const [recommendationError, setRecommendationError] = useState("");
   const [aiExplanationFailed, setAiExplanationFailed] = useState(false);
+
+  useEffect(() => {
+    if (!isRecommending || recommendationStage !== 1) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setRecommendationFlavorIndex(
+        (current) => (current + 1) % RECOMMENDATION_STAGE1_FLAVORS.length,
+      );
+    }, RECOMMENDATION_STAGE1_FLAVOR_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [isRecommending, recommendationStage]);
+
+  const recommendationStageLabel =
+    recommendationStage === 1 && recommendationFlavorIndex >= 0
+      ? RECOMMENDATION_STAGE1_FLAVORS[recommendationFlavorIndex]
+      : RECOMMENDATION_STAGES[recommendationStage];
 
   const timetableListShownFired = useRef(false);
   useEffect(() => {
@@ -1174,6 +1291,7 @@ export function TimetablePlanner({
     const startedAt = performance.now();
     setIsRecommending(true);
     setRecommendationStage(0);
+    setRecommendationFlavorIndex(-1);
     setRecommendationError("");
     try {
       const filler = await buildAiFillerSubjects();
@@ -1374,7 +1492,7 @@ export function TimetablePlanner({
           </div>
           <p className={styles.stepLead}>
             {isRecommending
-              ? `${RECOMMENDATION_STAGES[recommendationStage]} 완료되면 결과 화면으로 이동합니다.`
+              ? `${recommendationStageLabel} 완료되면 결과 화면으로 이동합니다.`
               : "선호 조건을 고른 뒤 추천을 받으면, 다음 화면에서 결과 카드를 확인합니다."}
           </p>
         </div>
@@ -1462,22 +1580,71 @@ export function TimetablePlanner({
                     <span>전체</span>
                     <small>{majorCourseGroupsBySource.length}</small>
                   </button>
-                  {majorProgramTabs.map((tab) => (
-                    <button
-                      aria-pressed={selectedMajorProgramCode === tab.code}
-                      className={selectedMajorProgramCode === tab.code ? styles.activeArea : undefined}
-                      key={tab.code}
-                      type="button"
-                      onClick={() => {
-                        setSelectedMajorProgramCode(tab.code);
-                        setCourseSearch("");
-                      }}
-                    >
-                      <span>{tab.label}</span>
-                      <small>{tab.count}</small>
-                    </button>
-                  ))}
+                  {majorProgramTabs.map((tab) =>
+                    tab.isExtra ? (
+                      <span className={styles.areaChoiceExtra} key={tab.code}>
+                        <button
+                          aria-pressed={selectedMajorProgramCode === tab.code}
+                          className={selectedMajorProgramCode === tab.code ? styles.activeArea : undefined}
+                          type="button"
+                          onClick={() => {
+                            setSelectedMajorProgramCode(tab.code);
+                            setCourseSearch("");
+                          }}
+                        >
+                          <span>{tab.label}</span>
+                          <small>{tab.count}</small>
+                        </button>
+                        <button
+                          aria-label={`${tab.label} 목록에서 제거`}
+                          className={styles.removeExtraTab}
+                          type="button"
+                          onClick={() => removeExtraDepartment(tab.code)}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        aria-pressed={selectedMajorProgramCode === tab.code}
+                        className={selectedMajorProgramCode === tab.code ? styles.activeArea : undefined}
+                        key={tab.code}
+                        type="button"
+                        onClick={() => {
+                          setSelectedMajorProgramCode(tab.code);
+                          setCourseSearch("");
+                        }}
+                      >
+                        <span>{tab.label}</span>
+                        <small>{tab.count}</small>
+                      </button>
+                    ),
+                  )}
                 </div>
+              </div>
+            ) : null}
+            {courseSource === "major" ? (
+              <div className={styles.electiveAreaFilter}>
+                <span>다른 전공 과목 찾기</span>
+                <DepartmentAddCombobox
+                  excludeCodes={[...roadmapProgramCodes, ...extraProgramCodes]}
+                  id="planner-extra-department-search"
+                  placeholder="전공·연계전공·트랙명 또는 코드 검색"
+                  onSelect={(department) => void loadExtraDepartment(department)}
+                />
+                {loadingExtraDepartmentCodes.length > 0 ? (
+                  <small className={styles.electiveCatalogNote}>
+                    {loadingExtraDepartmentCodes
+                      .map((code) => findSkkuDepartment(code)?.name ?? code)
+                      .join(", ")}{" "}
+                    과목을 불러오는 중…
+                  </small>
+                ) : null}
+                {extraDepartmentError ? (
+                  <p className={styles.courseEmpty} role="alert">
+                    {extraDepartmentError}
+                  </p>
+                ) : null}
               </div>
             ) : null}
             {courseSource === "elective" ? (
@@ -2058,7 +2225,7 @@ export function TimetablePlanner({
               <div className={styles.aiLoadingPanel} role="status" aria-live="polite">
                 <span className={styles.aiSpinner} aria-hidden="true" />
                 <strong>AI가 분석 중입니다...</strong>
-                <p>{RECOMMENDATION_STAGES[recommendationStage]} 잠시만 기다려 주세요.</p>
+                <p>{recommendationStageLabel} 잠시만 기다려 주세요.</p>
                 <div className={styles.aiSkeletonList} aria-hidden="true">
                   <div className={styles.aiSkeletonCard} />
                   <div className={styles.aiSkeletonCard} />

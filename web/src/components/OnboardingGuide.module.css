@@ -1,5 +1,16 @@
 .dialog {
+  /* The page's global `* { margin: 0 }` reset cancels <dialog>'s default UA `margin: auto`
+     centering, so positioning has to be explicit here — top-center rather than dead-center,
+     which reads better for a welcome/onboarding modal (doesn't feel like it's blocking the
+     whole viewport, and the page peeking out below reinforces "you're about to use this"). */
+  position: fixed;
+  top: min(64px, 6vh);
+  left: 50%;
+  margin: 0;
+  transform: translateX(-50%);
   width: min(420px, calc(100vw - 32px));
+  max-height: min(88vh, 720px);
+  overflow-y: auto;
   padding: 0;
   border: 0;
   border-radius: 20px;

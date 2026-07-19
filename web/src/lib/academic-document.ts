@@ -394,30 +394,28 @@ function supplementCompletedCoursesFromTable(
   const coursesByCode = new Map<string, CompletedCourse>();
   tableCourses.forEach((tableCourse) => {
     const solarCourse = solarByCode.get(tableCourse.courseCode);
-    coursesByCode.set(
-      tableCourse.courseCode,
-      solarCourse
-        ? {
-            ...tableCourse,
-            ...solarCourse,
-            // Usually the table's own name is authoritative, but it can be blank when Document
-            // Parse split the name into a garbled adjacent row (see extractCourseCodeNamePairs).
-            courseName: tableCourse.courseName || solarCourse.courseName,
-            majorScope: solarCourse.majorScope || tableCourse.majorScope,
-            classification: solarCourse.classification || tableCourse.classification,
-            year: solarCourse.year ?? tableCourse.year,
-            term: solarCourse.term ?? tableCourse.term,
-            credits: solarCourse.credits || tableCourse.credits,
-            area: solarCourse.area || tableCourse.area,
-            completionStatus: tableCourse.completionStatus,
-            flags: tableCourse.flags,
-            reviewReasons: tableCourse.reviewReasons,
-          }
-        : {
-            ...tableCourse,
-            flags: [...tableCourse.flags, "document_parse_table_supplemented"],
-          },
-    );
+    const merged: CompletedCourse = solarCourse
+      ? {
+          ...tableCourse,
+          ...solarCourse,
+          // Usually the table's own name is authoritative, but it can be blank when Document
+          // Parse split the name into a garbled adjacent row (see extractCourseCodeNamePairs).
+          courseName: tableCourse.courseName || solarCourse.courseName,
+          majorScope: solarCourse.majorScope || tableCourse.majorScope,
+          classification: solarCourse.classification || tableCourse.classification,
+          year: solarCourse.year ?? tableCourse.year,
+          term: solarCourse.term ?? tableCourse.term,
+          credits: solarCourse.credits || tableCourse.credits,
+          area: solarCourse.area || tableCourse.area,
+          completionStatus: tableCourse.completionStatus,
+          flags: tableCourse.flags,
+          reviewReasons: tableCourse.reviewReasons,
+        }
+      : {
+          ...tableCourse,
+          flags: [...tableCourse.flags, "document_parse_table_supplemented"],
+        };
+    coursesByCode.set(tableCourse.courseCode, ensureCourseNameFallback(merged));
   });
   profile.completedCourses.forEach((course) => {
     if (!coursesByCode.has(course.courseCode)) {
@@ -436,6 +434,42 @@ function supplementCompletedCoursesFromTable(
       ...profile.completedCourses.filter((course) => !expectedCodeSet.has(course.courseCode)),
     ],
   };
+}
+
+/**
+ * Document Parse occasionally splits a course's name into a garbled adjacent row (see
+ * extractCourseCodeNamePairs), and when Solar's own extraction also missed that course code,
+ * nothing is left to fall back to. Left alone, that row reaches the review screen with a blank
+ * name and only surfaces as a cryptic "N번째 과목명을 입력해 주세요" once the student tries to
+ * confirm — falling back to the course code keeps the row non-empty and flags it up front instead.
+ */
+function ensureCourseNameFallback(course: CompletedCourse): CompletedCourse {
+  if (course.courseName.trim()) {
+    return course;
+  }
+  return {
+    ...course,
+    courseName: course.courseCode,
+    reviewReasons: [
+      ...course.reviewReasons,
+      "과목명을 문서에서 읽지 못해 학수번호로 대신 채웠습니다. 원문과 비교해 정확한 과목명으로 고쳐주세요.",
+    ],
+  };
+}
+
+/**
+ * Live-verified: Document Parse's markdown conversion occasionally renders a merged/rowspan
+ * 이수구분 cell as its own text doubled back-to-back (a real observed case: "선택선택" for a cell
+ * that should just read "선택") — collapse an exact half/half repeat rather than carrying the
+ * garbled doubled text forward into every following row via currentClassification.
+ */
+function dedupeRepeatedText(raw: string | undefined): string {
+  const trimmed = raw?.trim() ?? "";
+  if (trimmed.length < 2 || trimmed.length % 2 !== 0) {
+    return trimmed;
+  }
+  const half = trimmed.length / 2;
+  return trimmed.slice(0, half) === trimmed.slice(half) ? trimmed.slice(0, half) : trimmed;
 }
 
 function parseCompletedCourseTable(
@@ -476,7 +510,7 @@ function parseCompletedCourseTable(
     }
 
     currentMajorScope = cells[0]?.trim() || currentMajorScope;
-    currentClassification = cells[1]?.trim() || currentClassification;
+    currentClassification = dedupeRepeatedText(cells[1]) || currentClassification;
     const rowText = cells.join(" ");
     const years = [...rowText.matchAll(/\b(?:19|20)\d{2}\b/g)].map((match) =>
       Number(match[0]),

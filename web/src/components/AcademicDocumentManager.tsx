@@ -29,7 +29,7 @@ const KIND_DETAILS: Record<
 > = {
   course_history: {
     label: "수강/취득과목",
-    heading: "수강·취득 과목 첨부하기",
+    heading: "수강/취득 과목 첨부하기",
     description:
       "이미 이수한 과목을 확인해 주세요. 확인된 과목은 이후 과목 후보에서 제외됩니다. 재수강이 필요하면 과목 검색 후 재수강을 체크해 주세요.\n해당 과목만 다시 후보에 포함됩니다.",
     attachGuide:
@@ -58,10 +58,26 @@ type FileInputMethod = "picker" | "clipboard";
 const ANALYSIS_STAGES = [
   "파일을 업로드하는 중…",
   "Document Parse로 문서 구조를 읽는 중…",
-  "Solar가 항목을 분석하는 중…",
+  "표와 글자를 줄 맞춰 정리하는 중…",
+  "Solar가 과목·학점을 하나씩 짚어보는 중…",
+  "헷갈리는 항목은 다시 확인하는 중…",
   "결과를 정리하는 중…",
 ] as const;
 const ANALYSIS_STAGE_INTERVAL_MS = 2400;
+
+/**
+ * Once the real stages above run out but the request still hasn't resolved (a long PDF, a busy
+ * moment), looping back through ANALYSIS_STAGES would misleadingly imply it restarted — so this
+ * separate, clearly-atmospheric pool takes over instead. Purely for company during the wait, not
+ * a progress claim.
+ */
+const ANALYSIS_LONG_WAIT_FLAVORS = [
+  "생각보다 꼼꼼하게 보는 중이에요…",
+  "글자 하나, 학점 하나까지 놓치지 않으려는 중…",
+  "졸업까지 얼마나 남았는지도 같이 챙기는 중…",
+  "거의 다 됐어요, 조금만 더 기다려 주세요…",
+] as const;
+const ANALYSIS_LONG_WAIT_INTERVAL_MS = 3000;
 
 interface Props {
   profileDetails?: AcademicProfile["profile"];
@@ -99,6 +115,7 @@ export function AcademicDocumentManager({
   const [error, setError] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStageIndex, setAnalysisStageIndex] = useState(0);
+  const [analysisFlavorIndex, setAnalysisFlavorIndex] = useState(-1);
 
   const kind = activeKind ?? internalKind;
   const kindControlled = activeKind !== undefined;
@@ -197,6 +214,16 @@ export function AcademicDocumentManager({
   }, [isAnalyzing]);
 
   useEffect(() => {
+    if (!isAnalyzing || analysisStageIndex < ANALYSIS_STAGES.length - 1) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setAnalysisFlavorIndex((current) => (current + 1) % ANALYSIS_LONG_WAIT_FLAVORS.length);
+    }, ANALYSIS_LONG_WAIT_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [isAnalyzing, analysisStageIndex]);
+
+  useEffect(() => {
     onAnalysisStateChange?.({
       isAnalyzing,
       hasAnalyzedDocument: Object.keys(profiles).length > 0,
@@ -208,6 +235,7 @@ export function AcademicDocumentManager({
       return;
     }
     setAnalysisStageIndex(0);
+    setAnalysisFlavorIndex(-1);
     setIsAnalyzing(true);
     setError("");
     track("document_upload_start", { doc_type: kind });
@@ -244,8 +272,9 @@ export function AcademicDocumentManager({
       onConfirmedProfileChange?.(kind, undefined);
       setAcknowledgements((current) => ({ ...current, [kind]: [] }));
       setCollapsedResults((current) => ({ ...current, [kind]: false }));
-      setFile(undefined);
-      setFileInputMethod(undefined);
+      // Deliberately keep `file`/`fileInputMethod` set (not cleared) after a successful analysis:
+      // this is what lets "다시 분석하기" re-run the exact same file without forcing a re-upload.
+      // Picking a different file still works the same as always via the file input's own onChange.
       track("document_parse_success", {
         doc_type: kind,
         duration_ms: Math.round(performance.now() - startedAt),
@@ -459,7 +488,11 @@ export function AcademicDocumentManager({
       {isAnalyzing ? (
         <div className={styles.analysisProgress} role="status" aria-live="polite">
           <div className={styles.analysisProgressBar} />
-          <span>{ANALYSIS_STAGES[analysisStageIndex]}</span>
+          <span>
+            {analysisFlavorIndex >= 0
+              ? ANALYSIS_LONG_WAIT_FLAVORS[analysisFlavorIndex]
+              : ANALYSIS_STAGES[analysisStageIndex]}
+          </span>
         </div>
       ) : null}
       {file && !hasConsented ? (

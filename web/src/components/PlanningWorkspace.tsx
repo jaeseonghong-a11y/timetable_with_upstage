@@ -198,21 +198,10 @@ export function PlanningWorkspace() {
   }
 
   const current = STEPS[step - 1]!;
-  // The top progress bar shows 2단계 as two separately-clickable sub-steps (2-1/2-2), so the
-  // connector spans 5 visual slots even though STEPS itself still only has 4 real steps.
-  const TOTAL_VISUAL_STEPS = 5;
-  const visualStepPosition =
-    step === 1
-      ? 0
-      : step === 2
-        ? docSubstep === "course_history"
-          ? 1
-          : 2
-        : step === 3
-          ? 3
-          : 4;
-  /** 0–100 along the connector between first and last step centers. */
-  const connectorProgress = (visualStepPosition / (TOTAL_VISUAL_STEPS - 1)) * 100;
+  /** 0–100 along the connector between first and last step centers — tracks the 4 real steps;
+   * 2-1/2-2 render as one grouped slot (see stepListSlots) so they don't need their own. */
+  const connectorProgress =
+    STEPS.length <= 1 ? 0 : ((step - 1) / (STEPS.length - 1)) * 100;
   const currentDocumentConfirmed = Boolean(confirmedProfiles[docSubstep]);
   const nextBlocked =
     (step === 1 && !appliedProfile) ||
@@ -257,7 +246,7 @@ export function PlanningWorkspace() {
           : "AI 추천 받기"
         : "다음";
 
-  const stepListEntries: Array<{
+  interface StepListButton {
     key: string;
     indexLabel: string;
     label: string;
@@ -265,7 +254,13 @@ export function PlanningWorkspace() {
     isActive: boolean;
     isDone: boolean;
     onClick: () => void;
-  }> = [
+  }
+
+  // 2-1/2-2 render as one grouped slot (tight internal spacing, shared pill background) rather
+  // than a 5th equal-width column, so they read as two halves of step 2 instead of standalone
+  // steps on par with 1/3/4 — narrower gap + shared container is the standard way stepper UIs
+  // signal "these belong together" without a dedicated nested-stepper component.
+  const stepListSlots: Array<StepListButton | { key: string; group: StepListButton[] }> = [
     {
       key: "1",
       indexLabel: "1",
@@ -275,22 +270,27 @@ export function PlanningWorkspace() {
       onClick: () => goToStep(1),
     },
     {
-      key: "2-1",
-      indexLabel: "2-1",
-      label: "내 기록 적용하기",
-      subLabel: "수강/취득 과목",
-      isActive: step === 2 && docSubstep === "course_history",
-      isDone: step > 2 || (step === 2 && docSubstep === "graduation_requirements"),
-      onClick: () => goToDocSubstep("course_history"),
-    },
-    {
-      key: "2-2",
-      indexLabel: "2-2",
-      label: "내 기록 적용하기",
-      subLabel: "졸업요건충족현황",
-      isActive: step === 2 && docSubstep === "graduation_requirements",
-      isDone: step > 2,
-      onClick: () => goToDocSubstep("graduation_requirements"),
+      key: "2-group",
+      group: [
+        {
+          key: "2-1",
+          indexLabel: "2-1",
+          label: "내 기록 적용하기",
+          subLabel: "수강/취득 과목",
+          isActive: step === 2 && docSubstep === "course_history",
+          isDone: step > 2 || (step === 2 && docSubstep === "graduation_requirements"),
+          onClick: () => goToDocSubstep("course_history"),
+        },
+        {
+          key: "2-2",
+          indexLabel: "2-2",
+          label: "내 기록 적용하기",
+          subLabel: "졸업요건충족현황",
+          isActive: step === 2 && docSubstep === "graduation_requirements",
+          isDone: step > 2,
+          onClick: () => goToDocSubstep("graduation_requirements"),
+        },
+      ],
     },
     {
       key: "3",
@@ -328,24 +328,47 @@ export function PlanningWorkspace() {
           className={styles.stepList}
           style={{ ["--connector-progress" as string]: String(connectorProgress) }}
         >
-          {stepListEntries.map((entry) => (
-            <li key={entry.key}>
-              <button
-                aria-current={entry.isActive ? "step" : undefined}
-                data-active={entry.isActive}
-                data-done={entry.isDone}
-                type="button"
-                onClick={entry.onClick}
-              >
-                <span className={styles.stepIndex} aria-hidden="true">
-                  {entry.indexLabel}
-                </span>
-                <span className={entry.subLabel ? styles.stepSubLabel : styles.stepLabel}>
-                  {entry.subLabel ?? entry.label}
-                </span>
-              </button>
-            </li>
-          ))}
+          {stepListSlots.map((slot) =>
+            "group" in slot ? (
+              <li key={slot.key}>
+                <div
+                  className={styles.subStepGroup}
+                  data-active={slot.group.some((entry) => entry.isActive)}
+                >
+                  {slot.group.map((entry) => (
+                    <button
+                      aria-current={entry.isActive ? "step" : undefined}
+                      data-active={entry.isActive}
+                      data-done={entry.isDone}
+                      key={entry.key}
+                      type="button"
+                      onClick={entry.onClick}
+                    >
+                      <span className={styles.stepIndex} aria-hidden="true">
+                        {entry.indexLabel}
+                      </span>
+                      <span className={styles.stepSubLabel}>{entry.subLabel}</span>
+                    </button>
+                  ))}
+                </div>
+              </li>
+            ) : (
+              <li key={slot.key}>
+                <button
+                  aria-current={slot.isActive ? "step" : undefined}
+                  data-active={slot.isActive}
+                  data-done={slot.isDone}
+                  type="button"
+                  onClick={slot.onClick}
+                >
+                  <span className={styles.stepIndex} aria-hidden="true">
+                    {slot.indexLabel}
+                  </span>
+                  <span className={styles.stepLabel}>{slot.label}</span>
+                </button>
+              </li>
+            ),
+          )}
         </ol>
       </div>
 

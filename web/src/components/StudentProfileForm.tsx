@@ -30,6 +30,7 @@ import {
   type YearOption,
 } from "@/lib/student-profile-options";
 
+import { DepartmentAddCombobox } from "./DepartmentAddCombobox";
 import styles from "./StudentProfileForm.module.css";
 
 interface Props {
@@ -65,8 +66,6 @@ export function StudentProfileForm({ profile, appliedProfile, onChange, onApply 
   const [isDepartmentListOpen, setIsDepartmentListOpen] = useState(false);
   const [activeDepartmentCode, setActiveDepartmentCode] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [additionalDepartmentSearch, setAdditionalDepartmentSearch] = useState("");
-  const [isAdditionalDepartmentListOpen, setIsAdditionalDepartmentListOpen] = useState(false);
   const visibleDepartments = useMemo(
     () => filterSkkuDepartments(departmentFilter),
     [departmentFilter],
@@ -74,17 +73,6 @@ export function StudentProfileForm({ profile, appliedProfile, onChange, onApply 
   const departmentGroups = useMemo(
     () => groupSkkuDepartments(visibleDepartments),
     [visibleDepartments],
-  );
-  const additionalDepartmentGroups = useMemo(
-    () =>
-      groupSkkuDepartments(
-        filterSkkuDepartments(additionalDepartmentSearch).filter(
-          (department) =>
-            department.code !== profile.departmentCode &&
-            !(profile.additionalDepartmentCodes ?? []).includes(department.code),
-        ),
-      ),
-    [additionalDepartmentSearch, profile.additionalDepartmentCodes, profile.departmentCode],
   );
   const selectedDepartment = findSkkuDepartment(profile.departmentCode);
 
@@ -332,88 +320,20 @@ export function StudentProfileForm({ profile, appliedProfile, onChange, onApply 
                 ))}
               </div>
             ) : null}
-            <div
-              className={styles.departmentPicker}
-              onBlur={(event) => {
-                if (!event.currentTarget.contains(event.relatedTarget)) {
-                  setIsAdditionalDepartmentListOpen(false);
-                }
-              }}
-            >
-              <div className={styles.departmentControl}>
-                <input
-                  aria-autocomplete="list"
-                  aria-controls="additional-department-options"
-                  aria-expanded={isAdditionalDepartmentListOpen}
-                  autoComplete="off"
-                  placeholder="추가할 전공·연계전공·트랙명 또는 코드 검색"
-                  role="combobox"
-                  type="search"
-                  value={additionalDepartmentSearch}
-                  onChange={(event) => {
-                    setAdditionalDepartmentSearch(event.target.value);
-                    setIsAdditionalDepartmentListOpen(true);
-                  }}
-                  onFocus={() => setIsAdditionalDepartmentListOpen(true)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Escape") {
-                      setIsAdditionalDepartmentListOpen(false);
-                    }
-                  }}
-                />
-                <button
-                  aria-label={isAdditionalDepartmentListOpen ? "추가 전공 목록 닫기" : "추가 전공 목록 열기"}
-                  className={styles.departmentToggle}
-                  type="button"
-                  onClick={() => setIsAdditionalDepartmentListOpen((open) => !open)}
-                  onMouseDown={(event) => event.preventDefault()}
-                >
-                  <span aria-hidden="true">⌄</span>
-                </button>
-              </div>
-              {isAdditionalDepartmentListOpen ? (
-                <div
-                  id="additional-department-options"
-                  aria-label="추가 전공 목록"
-                  className={styles.departmentDropdown}
-                  role="listbox"
-                >
-                  {additionalDepartmentGroups.length ? (
-                    additionalDepartmentGroups.map((group) => (
-                      <div className={styles.departmentGroup} key={group.college} role="group">
-                        <div className={styles.departmentGroupLabel}>{group.college}</div>
-                        {group.departments.map((department) => (
-                          <button
-                            aria-selected={false}
-                            className={styles.departmentOption}
-                            key={department.code}
-                            role="option"
-                            type="button"
-                            onClick={() => {
-                              onChange({
-                                ...profile,
-                                additionalDepartmentCodes: [
-                                  ...(profile.additionalDepartmentCodes ?? []),
-                                  department.code,
-                                ],
-                              });
-                              setAdditionalDepartmentSearch("");
-                              setIsAdditionalDepartmentListOpen(false);
-                            }}
-                            onMouseDown={(event) => event.preventDefault()}
-                          >
-                            <span>{department.name}</span>
-                            <small>{department.code}</small>
-                          </button>
-                        ))}
-                      </div>
-                    ))
-                  ) : (
-                    <p className={styles.departmentEmpty}>추가할 수 있는 전공이 없습니다.</p>
-                  )}
-                </div>
-              ) : null}
-            </div>
+            <DepartmentAddCombobox
+              excludeCodes={[profile.departmentCode, ...(profile.additionalDepartmentCodes ?? [])]}
+              id="student-additional-department-search"
+              placeholder="추가할 전공·연계전공·트랙명 또는 코드 검색"
+              onSelect={(department) =>
+                onChange({
+                  ...profile,
+                  additionalDepartmentCodes: [
+                    ...(profile.additionalDepartmentCodes ?? []),
+                    department.code,
+                  ],
+                })
+              }
+            />
           </div>
         </div>
 
