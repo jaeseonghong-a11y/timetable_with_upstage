@@ -211,4 +211,42 @@ describe("POST /api/timetable-recommendations", () => {
     const response = await POST(jsonRequest({ timetables: [weekdayFilledTimetable, spaciousTimetable] }));
     expect(response.status).toBe(200);
   });
+
+  it("appends a distinguishing detail when Solar repeats the identical reason for two candidates", async () => {
+    // Reproduces a live bug: candidates differing only by one course's professor got byte-identical
+    // reason text from Solar despite being told not to repeat it, so this must not depend on Solar's
+    // compliance — the route itself has to guarantee distinct text.
+    const sameSentence = "월요일에 수업이 배치되어 있습니다.";
+    const solarResult = JSON.stringify({
+      explanations: [
+        { position: 1, rank: 1, reason: sameSentence, requirementContribution: null, customPreferenceNote: null },
+        { position: 2, rank: 2, reason: sameSentence, requirementContribution: null, customPreferenceNote: null },
+      ],
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({ choices: [{ message: { role: "assistant", content: solarResult } }] }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const timetableWithProfessor = (id: string, professor: string) => ({
+      courses: [{ id, title: "회로이론", professor, schedule: "" }],
+      meetings: [{ day: "mon", startMinutes: 600, endMinutes: 660 }],
+    });
+
+    const response = await POST(
+      jsonRequest({
+        timetables: [timetableWithProfessor("X1", "김교수"), timetableWithProfessor("X2", "이교수")],
+        weights: [{ id: "free_days", enabled: true, importance: "medium" }],
+      }),
+    );
+    const body = (await response.json()) as {
+      recommendations: Array<{ candidateId: string; reason: string | null }>;
+    };
+
+    expect(body.recommendations[0]?.reason).toBe(sameSentence);
+    expect(body.recommendations[1]?.reason).not.toBe(sameSentence);
+    expect(body.recommendations[1]?.reason).toContain("이교수");
+  });
 });

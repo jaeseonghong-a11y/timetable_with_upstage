@@ -77,7 +77,14 @@ export function PlanningWorkspace() {
   useEffect(() => initAbandonTracking(), []);
 
   const progressRef = useRef<HTMLDivElement>(null);
+  const isFirstRender = useRef(true);
   useEffect(() => {
+    // Skip on mount: the very first screen should still show the hero title above the progress
+    // header, not jump straight past it. Only step/substep changes from here on scroll up.
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
     progressRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [step, docSubstep, planSubstep, aiSubstep]);
 

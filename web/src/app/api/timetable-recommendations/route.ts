@@ -111,7 +111,7 @@ export async function POST(request: Request): Promise<Response> {
       ? (tryReorderByCustomPreference(scored, explanations) ?? scored)
       : scored;
     return Response.json({
-      recommendations: applyExplanations(ordered, explanations),
+      recommendations: ensureDistinctReasons(applyExplanations(ordered, explanations)),
       aiExplanationFailed: false,
     });
   } catch {
@@ -151,6 +151,58 @@ function applyExplanations(
       customPreferenceNote: explanation?.customPreferenceNote ?? null,
     };
   });
+}
+
+/**
+ * Solar sometimes writes byte-identical `reason` text for candidates that differ only by one
+ * course's section/professor — even when explicitly told not to (verified live: it complies on
+ * some calls and reverts on others). Rather than trust prompt compliance, this deterministically
+ * guarantees no two recommendations ever show the exact same sentence: every repeat gets the
+ * concrete course/professor difference from the first candidate that used that sentence appended,
+ * computed straight from the timetables themselves — "계산은 코드로", not another model call.
+ */
+function ensureDistinctReasons(
+  items: readonly TimetableRecommendationItem[],
+): TimetableRecommendationItem[] {
+  const firstByReason = new Map<string, TimetableRecommendationItem>();
+  return items.map((item) => {
+    if (!item.reason) {
+      return item;
+    }
+    const first = firstByReason.get(item.reason);
+    if (!first) {
+      firstByReason.set(item.reason, item);
+      return item;
+    }
+    const detail = describeDistinguishingDetail(item.timetable, first.timetable);
+    return detail ? { ...item, reason: `${item.reason} ${detail}` } : item;
+  });
+}
+
+/** Names the courses/professors that differ between two timetables, or null if none do. */
+function describeDistinguishingDetail(timetable: Timetable, other: Timetable): string | null {
+  const otherByTitle = new Map(other.courses.map((course) => [course.title, course.professor ?? null]));
+  const notes: string[] = [];
+  for (const course of timetable.courses) {
+    if (!otherByTitle.has(course.title)) {
+      notes.push(`${course.title} 포함`);
+      continue;
+    }
+    const otherProfessor = otherByTitle.get(course.title);
+    if (course.professor && otherProfessor && course.professor !== otherProfessor) {
+      notes.push(`${course.title}이 ${course.professor} 분반`);
+    }
+  }
+  const titles = new Set(timetable.courses.map((course) => course.title));
+  for (const course of other.courses) {
+    if (!titles.has(course.title)) {
+      notes.push(`${course.title} 미포함`);
+    }
+  }
+  if (notes.length === 0) {
+    return null;
+  }
+  return `(다른 추천과 달리 ${notes.slice(0, 2).join(", ")}입니다.)`;
 }
 
 /** Only reorders when Solar returned a rank for every candidate forming a clean 1..N permutation. */
@@ -230,8 +282,12 @@ async function requestRecommendationExplanations(
     "정보만 근거로 쓰세요. 교수의 평판·경력·인기도·학생 선호도·강의평가처럼 입력에 없는 사실은",
     "단정적으로도 추측으로도 절대 언급하지 마세요.",
     "여러 후보가 필수과목 구성은 같고 과목 1개의 분반(교수)만 다른 경우, 그 후보들 사이의 실질적",
-    "차이가 시간표 배치 외에는 없다는 것을 있는 그대로 말하고, 근거 없는 차별점을 지어내지",
-    "마세요.",
+    "차이가 시간표 배치 외에는 없다는 것을 있는 그대로 말하되, 그 후보에서 어느 과목이 어느",
+    "분반·교수인지는 반드시 구체적으로 밝혀서 문장 자체는 후보마다 다르게 쓰세요. 근거 없는",
+    "차별점을 지어내지 마세요.",
+    "서로 다른 candidates(position)에 같은 reason 문장을 그대로 반복하지 마세요. 모든 reason은",
+    "그 후보의 실제 과목명·분반(교수)·요일·시간 중 최소 하나를 구체적으로 담아 다른 후보의",
+    "reason과 문자 그대로 겹치지 않게 쓰세요.",
     '각 원소 형식: {"position": number, "rank": number, "reason": string, "requirementContribution": string 또는 null, "customPreferenceNote": string 또는 null}',
     "position은 입력 candidates 배열에서 그 후보의 1부터 시작하는 순번을 그대로 옮겨 적으세요. 절대 새로 만들지 마세요.",
     "rank는 1부터 후보 개수까지 각각 한 번씩만 사용하세요. customPreference가 없으면 position과 동일한 값을 rank로 사용하세요.",

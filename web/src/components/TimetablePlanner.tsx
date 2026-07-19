@@ -14,6 +14,7 @@ import {
 import { findSkkuDepartment } from "@/lib/skku-departments";
 import {
   SKKU_ELECTIVE_AREA_DEFINITIONS,
+  type SkkuCampus,
   type SkkuCourseQuery,
   type SkkuElectiveArea,
   type SkkuElectiveAreaCode,
@@ -148,6 +149,9 @@ const CAMPUS_OPTIONS: ReadonlyArray<{
   { value: 3, label: "I-CAMPUS", shortLabel: "I-CAMPUS" },
 ];
 
+/** 전공과목은 학생의 주 캠퍼스와 무관하게 두 캠퍼스에 개설된 분반을 모두 조회한다. */
+const MAJOR_COURSE_CAMPUSES: readonly SkkuCampus[] = [1, 2];
+
 const ELECTIVE_PREVIEW_CONCURRENCY = 3;
 
 function createElectivePreviewLanes(): Promise<void>[] {
@@ -266,20 +270,31 @@ export function TimetablePlanner({
         const programCodes = roadmapProgramCodes.length
           ? roadmapProgramCodes
           : [activeQuery.departmentCode];
-        const majorResults = await Promise.all(
-          programCodes.map((departmentCode) =>
-            postJson("/api/skku-courses", { ...activeQuery, departmentCode }, controller.signal),
-          ),
+        // 전공과목은 학생의 주 캠퍼스와 무관하게 그 학과에 개설된 모든 분반을 보여준다(교양은
+        // 별도 캠퍼스 선택을 그대로 따름) — 같은 학과라도 캠퍼스마다 다른 분반이 개설되는 경우가
+        // 흔해서(예: 경영학과가 인문사회캠퍼스에 108개, 자연과학캠퍼스에 1개), 주 캠퍼스만
+        // 조회하면 다른 캠퍼스 분반이 통째로 안 보이게 된다.
+        const majorRequests = programCodes.flatMap((departmentCode) =>
+          MAJOR_COURSE_CAMPUSES.map(async (campus) => ({
+            departmentCode,
+            result: await postJson(
+              "/api/skku-courses",
+              { ...activeQuery, campus, departmentCode },
+              controller.signal,
+            ),
+          })),
         );
-        // A department with zero open sections this term is a normal outcome for a niche
-        // 연계전공/융합트랙 in a 복수전공 combo, not a failure — courseGroupsFromCollection throws
-        // on an empty collection, which would otherwise abort every OTHER selected major's
-        // courses too since they're all merged from one Promise.all batch.
-        const groups = majorResults.flatMap((result, index) =>
+        const majorResults = await Promise.all(majorRequests);
+        // A department with zero open sections this term/campus is a normal outcome (e.g. a
+        // department that only opens sections on the other campus, or a niche 연계전공/융합트랙),
+        // not a failure — courseGroupsFromCollection throws on an empty collection, which would
+        // otherwise abort every OTHER selected major's courses too since they're all merged from
+        // one Promise.all batch.
+        const groups = majorResults.flatMap(({ departmentCode, result }) =>
           hasAnyCourses(result)
             ? courseGroupsFromCollection(result).map((group) => ({
                 ...group,
-                programCodes: [programCodes[index]],
+                programCodes: [departmentCode],
               }))
             : [],
         );
@@ -2473,7 +2488,10 @@ function CourseSectionMetadata({ candidate }: { candidate: CourseCandidate }) {
     <span className={styles.courseSectionRow}>
       <strong>{candidate.section ? `${candidate.section}분반` : "분반 미정"}</strong>
       <span>{candidate.professor || "교수 미정"}</span>
-      <span>{getCourseTypeLabel(candidate)}</span>
+      <span>
+        {getCourseTypeLabel(candidate)}
+        {candidate.campus ? ` · ${candidate.campus}` : ""}
+      </span>
     </span>
   );
 }
