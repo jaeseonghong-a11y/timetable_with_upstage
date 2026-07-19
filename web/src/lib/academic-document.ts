@@ -948,12 +948,6 @@ function normalizeRequirementScope(
   label: string,
   reviewReasons: string[],
 ): RequirementScope {
-  // Prefer SKKU row labels over Solar's scope guess so AI filler / UI stay consistent.
-  const fromLabel = classifyRequirementScopeFromLabel(label);
-  if (fromLabel) {
-    return fromLabel;
-  }
-
   const exact = readEnum(value, REQUIREMENT_SCOPES);
   if (exact) {
     return exact;
@@ -972,43 +966,20 @@ function normalizeRequirementScope(
   if (aliases[normalized]) {
     return aliases[normalized];
   }
-
-  reviewReasons.push("요건 영역을 자동으로 분류하지 못해 기타로 표시했습니다.");
-  return "other";
-}
-
-/** Maps known SKKU graduation-table row titles onto requirement scopes. */
-export function classifyRequirementScopeFromLabel(label: string): RequirementScope | null {
-  const trimmed = label.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  if (
-    trimmed.startsWith("제1전공") ||
-    trimmed === "전공" ||
-    /^전공[\s·\-]/.test(trimmed) ||
-    /국제어/.test(trimmed) ||
-    /총학점/.test(trimmed)
-  ) {
+  if (label.startsWith("제1전공")) {
     return "primary_major";
   }
-
-  if (/^DS\s*기반/i.test(trimmed)) {
+  if (/^DS\s*기반/i.test(label)) {
     return "ds";
   }
-
   if (
-    /소통과\s*사고|소통·사고/.test(trimmed) ||
-    /인간\s*\/?\s*문화/.test(trimmed) ||
-    /사회\s*\/?\s*역사/.test(trimmed) ||
-    /자연\s*\/?\s*과학/.test(trimmed) ||
-    /(교양|의사소통|창의|글로벌|인문사회과학|자연과학기반|성균인성|고전|명저)/.test(trimmed)
+    /(교양|의사소통|창의|글로벌|인문사회과학|자연과학기반|성균인성|고전|명저)/.test(label)
   ) {
     return "general";
   }
 
-  return null;
+  reviewReasons.push("요건 영역을 자동으로 분류하지 못해 기타로 표시했습니다.");
+  return "other";
 }
 
 function normalizeRequirementRule(
