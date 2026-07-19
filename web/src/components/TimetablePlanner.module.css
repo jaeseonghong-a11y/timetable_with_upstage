@@ -556,37 +556,30 @@
   cursor: pointer;
 }
 
-.choiceGroupRules,
+.choiceGroupRules {
+  display: grid;
+  gap: 14px;
+}
+
+.destinationBlock {
+  display: grid;
+  gap: 8px;
+}
+
 .selectedSubjectList {
   display: grid;
   gap: 7px;
+  padding-left: 2px;
 }
 
-.selectedOwnerSections {
-  display: grid;
-  gap: 10px;
-}
-
-.selectedOwnerSection {
-  display: grid;
-  gap: 7px;
-}
-
-.selectedOwnerHeading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 0 0 6px;
-  border: 0;
-  border-bottom: 2px solid var(--border-subtle);
-  background: none;
-  color: var(--text-primary);
-  font: inherit;
+.groupEmpty {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px dashed var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-muted);
   font-size: 12px;
-  font-weight: 800;
-  text-align: left;
-  cursor: pointer;
+  line-height: 1.45;
 }
 
 .requiredRule,
@@ -618,11 +611,19 @@
   font-size: 10px;
 }
 
-.choiceGroupRule > label:first-child {
+.choiceGroupRuleHeader {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px;
   padding-right: 48px;
 }
 
-.choiceGroupRule > label:first-child input {
+.choiceGroupRuleHeader label {
+  min-width: 0;
+}
+
+.choiceGroupRuleHeader input {
   width: 100%;
   padding: 7px 8px;
   border: 1px solid var(--border-subtle);
@@ -632,6 +633,13 @@
   font: inherit;
   font-size: 12px;
   font-weight: 800;
+}
+
+.choiceGroupRuleHeader > strong {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .cardinalityInputs {

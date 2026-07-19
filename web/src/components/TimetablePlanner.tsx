@@ -192,9 +192,6 @@ export function TimetablePlanner({
   const [choiceGroups, setChoiceGroups] = useState<ChoiceGroupConfig[]>(INITIAL_CHOICE_GROUPS);
   const [activeDestination, setActiveDestination] = useState<CourseDestination>("required");
   const [courseOwners, setCourseOwners] = useState<Record<string, CourseDestination>>({});
-  // 담은 과목이 많아지면 한눈에 보기 어려워지므로 그룹(필수/선택그룹)별로 묶고, 각 그룹은 기본
-  // 접힌 상태로 시작한다. 펼친 그룹만 여기 저장한다(비어있으면 전부 접힘).
-  const [expandedOwnerIds, setExpandedOwnerIds] = useState<Set<CourseDestination>>(() => new Set());
   const [enabledSectionIds, setEnabledSectionIds] = useState<Record<string, string[]>>({});
   const [unavailableDays, setUnavailableDays] = useState<Weekday[]>([]);
   const [earliestStart, setEarliestStart] = useState("");
@@ -430,18 +427,6 @@ export function TimetablePlanner({
     if (activeDestination === groupId) {
       setActiveDestination("required");
     }
-  }
-
-  function toggleOwnerExpanded(ownerId: CourseDestination): void {
-    setExpandedOwnerIds((current) => {
-      const next = new Set(current);
-      if (next.has(ownerId)) {
-        next.delete(ownerId);
-      } else {
-        next.add(ownerId);
-      }
-      return next;
-    });
   }
 
   function updateChoiceGroup(
@@ -801,36 +786,6 @@ export function TimetablePlanner({
       ),
     [availableCourseGroups, effectiveSelectedGroupIds],
   );
-  const choiceGroupSubjectCounts = useMemo(
-    () =>
-      new Map(
-        choiceGroups.map((choiceGroup) => [
-          choiceGroup.id,
-          selectedCourseGroups.filter(
-            ({ selectionId }) => courseOwners[selectionId] === choiceGroup.id,
-          ).length,
-        ]),
-      ),
-    [choiceGroups, courseOwners, selectedCourseGroups],
-  );
-  const selectedCourseGroupsByOwner = useMemo(() => {
-    const owners: Array<{ id: CourseDestination; title: string; groups: PlannerCourseGroup[] }> = [
-      { id: "required", title: "필수 과목", groups: [] },
-      ...choiceGroups.map((choiceGroup) => ({
-        id: choiceGroup.id,
-        title: choiceGroup.title,
-        groups: [] as PlannerCourseGroup[],
-      })),
-    ];
-    const ownerById = new Map(owners.map((owner) => [owner.id, owner]));
-    selectedCourseGroups.forEach((group) => {
-      const ownerId = courseOwners[group.selectionId] ?? "required";
-      const owner = ownerById.get(ownerId) ?? ownerById.get("required");
-      owner?.groups.push(group);
-    });
-    return owners.filter((owner) => owner.groups.length > 0);
-  }, [choiceGroups, courseOwners, selectedCourseGroups]);
-
   const sectionIdToGroup = useMemo(() => {
     const map = new Map<string, PlannerCourseGroup>();
     for (const group of selectedCourseGroups) {
@@ -1265,6 +1220,92 @@ export function TimetablePlanner({
 
   const excludedCount = courseGroups.length - availableCourseGroups.length;
 
+  function renderSelectedSubjectCard(group: PlannerCourseGroup): ReactNode {
+    const selectedSections =
+      enabledSectionIds[group.selectionId] ?? getInitialSectionIds(group.candidates);
+    const owner = courseOwners[group.selectionId] ?? "required";
+    return (
+      <details className={styles.selectedSubject} key={group.selectionId}>
+        <summary>
+          <span>
+            <strong>{group.title}</strong>
+            <small>
+              {group.id}
+              {group.credits > 0 ? ` · ${formatCredits(group.credits)}학점` : ""}
+            </small>
+          </span>
+          <small>
+            분반 {selectedSections.length}/{group.candidates.length}
+          </small>
+        </summary>
+        <div className={styles.subjectConfiguration}>
+          <label className={styles.subjectDestination}>
+            <span>과목 위치</span>
+            <select
+              value={owner}
+              onChange={(event) =>
+                setCourseOwners((owners) => ({
+                  ...owners,
+                  [group.selectionId]: event.target.value,
+                }))
+              }
+            >
+              <option value="required">필수 과목</option>
+              {choiceGroups.map((choiceGroup) => (
+                <option key={choiceGroup.id} value={choiceGroup.id}>
+                  {choiceGroup.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            className={styles.removeSelectedCourse}
+            type="button"
+            onClick={() => removeSelectedCourse(group)}
+          >
+            이 과목 선택 해제
+          </button>
+          {group.candidates.length > 1 ? (
+            <button
+              className={styles.selectAllSections}
+              type="button"
+              onClick={() =>
+                selectedSections.length === group.candidates.length
+                  ? deselectAllSections(group)
+                  : selectAllSections(group)
+              }
+            >
+              {selectedSections.length === group.candidates.length
+                ? "분반 전체 선택 해제"
+                : "분반 전체 선택"}
+            </button>
+          ) : null}
+          <div className={styles.sectionChoices}>
+            {group.candidates.map((candidate) => (
+              <label key={candidate.id}>
+                <input
+                  checked={selectedSections.includes(candidate.id)}
+                  type="checkbox"
+                  onChange={() => toggleSection(group, candidate.id)}
+                />
+                <span>
+                  <strong>{candidate.title}</strong>
+                  <small>
+                    {candidate.professor || "교수 미정"} · {getCourseTypeLabel(candidate)}
+                  </small>
+                  <small>
+                    {candidate.schedule || "시간 미정/온라인"}
+                    {candidate.campus ? ` · ${candidate.campus}` : ""}
+                  </small>
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+      </details>
+    );
+  }
+
   return (
     <section className={styles.planner} aria-label="시간표 조합">
       {showSelect ? (
@@ -1291,11 +1332,13 @@ export function TimetablePlanner({
         </div>
       ) : null}
       {showResults ? (
-        <div className={styles.notice}>
-          <div>
-            <strong>유효 시간표 확인</strong>
-            <span>요일·학점 조건을 조정하며, 담아 둔 과목으로 만들 수 있는 시간표를 확인합니다.</span>
+        <div className={styles.stepIntro}>
+          <div className={styles.stepHeading}>
+            <h2>유효 시간표 확인</h2>
           </div>
+          <p className={styles.stepLead}>
+            요일, 시간, 학점 조건을 조정하여 담아 둔 과목으로 만들 수 있는 시간표를 확인합니다.
+          </p>
         </div>
       ) : null}
       {showAiSetup ? (
@@ -1677,198 +1720,116 @@ export function TimetablePlanner({
               </div>
 
               <div className={styles.choiceGroupRules}>
-                <div className={styles.requiredRule}>
-                  <span>필수 과목</span>
-                  <strong>
+                <div className={styles.destinationBlock}>
+                  <div className={styles.requiredRule}>
+                    <span>필수 과목</span>
+                    <strong>
+                      {selectedCourseGroups.filter(
+                        ({ selectionId }) =>
+                          !courseOwners[selectionId] || courseOwners[selectionId] === "required",
+                      ).length}
+                      개
+                    </strong>
+                    <small>모든 시간표에 들어갑니다.</small>
+                  </div>
+                  <div className={styles.selectedSubjectList}>
+                    {selectedCourseGroups
+                      .filter(
+                        ({ selectionId }) =>
+                          !courseOwners[selectionId] || courseOwners[selectionId] === "required",
+                      )
+                      .map((group) => renderSelectedSubjectCard(group))}
                     {selectedCourseGroups.filter(
                       ({ selectionId }) =>
                         !courseOwners[selectionId] || courseOwners[selectionId] === "required",
-                    ).length}개
-                  </strong>
-                  <small>모든 시간표에 들어갑니다.</small>
+                    ).length === 0 ? (
+                      <p className={styles.groupEmpty}>아직 담은 과목이 없습니다.</p>
+                    ) : null}
+                  </div>
                 </div>
-                {choiceGroups.map((choiceGroup) => (
-                  <div className={styles.choiceGroupRule} key={choiceGroup.id}>
-                    <label>
-                      <span className={styles.srOnly}>선택 그룹 이름</span>
-                      <input
-                        type="text"
-                        value={choiceGroup.title}
-                        onChange={(event) =>
-                          updateChoiceGroup(choiceGroup.id, { title: event.target.value })
-                        }
-                      />
-                    </label>
-                    <div className={styles.cardinalityInputs}>
-                      <p className={styles.cardinalityLabel}>
-                        이 그룹에서 시간표에 넣을 과목 수
-                      </p>
-                      <div className={styles.cardinalityFields}>
-                        <label>
-                          <span className={styles.srOnly}>최소 과목 수</span>
-                          <span className={styles.cardinalityField}>
+
+                {choiceGroups.map((choiceGroup) => {
+                  const groupSubjects = selectedCourseGroups.filter(
+                    ({ selectionId }) => courseOwners[selectionId] === choiceGroup.id,
+                  );
+                  return (
+                    <div className={styles.destinationBlock} key={choiceGroup.id}>
+                      <div className={styles.choiceGroupRule}>
+                        <div className={styles.choiceGroupRuleHeader}>
+                          <label>
+                            <span className={styles.srOnly}>선택 그룹 이름</span>
                             <input
-                              min="0"
-                              max="20"
-                              type="number"
-                              value={choiceGroup.minSubjects}
+                              type="text"
+                              value={choiceGroup.title}
                               onChange={(event) =>
-                                updateChoiceGroup(choiceGroup.id, {
-                                  minSubjects: Number(event.target.value),
-                                })
+                                updateChoiceGroup(choiceGroup.id, { title: event.target.value })
                               }
                             />
-                            <span aria-hidden="true">개</span>
-                          </span>
-                        </label>
-                        <span aria-hidden="true">~</span>
-                        <label>
-                          <span className={styles.srOnly}>최대 과목 수</span>
-                          <span className={styles.cardinalityField}>
-                            <input
-                              min="0"
-                              max="20"
-                              type="number"
-                              value={choiceGroup.maxSubjects}
-                              onChange={(event) =>
-                                updateChoiceGroup(choiceGroup.id, {
-                                  maxSubjects: Number(event.target.value),
-                                })
-                              }
-                            />
-                            <span aria-hidden="true">개</span>
-                          </span>
-                        </label>
+                          </label>
+                          <strong>{groupSubjects.length}개</strong>
+                        </div>
+                        <div className={styles.cardinalityInputs}>
+                          <p className={styles.cardinalityLabel}>
+                            이 그룹에서 시간표에 넣을 과목 수 (예: 1개~2개면, 선택 그룹에 담긴
+                            과목 중 1개 또는 2개가 시간표에 포함됩니다)
+                          </p>
+                          <div className={styles.cardinalityFields}>
+                            <label>
+                              <span className={styles.srOnly}>최소 과목 수</span>
+                              <span className={styles.cardinalityField}>
+                                <input
+                                  min="0"
+                                  max="20"
+                                  type="number"
+                                  value={choiceGroup.minSubjects}
+                                  onChange={(event) =>
+                                    updateChoiceGroup(choiceGroup.id, {
+                                      minSubjects: Number(event.target.value),
+                                    })
+                                  }
+                                />
+                                <span aria-hidden="true">개</span>
+                              </span>
+                            </label>
+                            <span aria-hidden="true">~</span>
+                            <label>
+                              <span className={styles.srOnly}>최대 과목 수</span>
+                              <span className={styles.cardinalityField}>
+                                <input
+                                  min="0"
+                                  max="20"
+                                  type="number"
+                                  value={choiceGroup.maxSubjects}
+                                  onChange={(event) =>
+                                    updateChoiceGroup(choiceGroup.id, {
+                                      maxSubjects: Number(event.target.value),
+                                    })
+                                  }
+                                />
+                                <span aria-hidden="true">개</span>
+                              </span>
+                            </label>
+                          </div>
+                        </div>
+                        <button
+                          aria-label={`${choiceGroup.title} 삭제`}
+                          className={styles.removeChoiceGroup}
+                          type="button"
+                          onClick={() => removeChoiceGroup(choiceGroup.id)}
+                        >
+                          삭제
+                        </button>
+                      </div>
+                      <div className={styles.selectedSubjectList}>
+                        {groupSubjects.map((group) => renderSelectedSubjectCard(group))}
+                        {groupSubjects.length === 0 ? (
+                          <p className={styles.groupEmpty}>아직 담은 과목이 없습니다.</p>
+                        ) : null}
                       </div>
                     </div>
-                    <small>{choiceGroupSubjectCounts.get(choiceGroup.id) ?? 0}개 후보</small>
-                    <button
-                      aria-label={`${choiceGroup.title} 삭제`}
-                      className={styles.removeChoiceGroup}
-                      type="button"
-                      onClick={() => removeChoiceGroup(choiceGroup.id)}
-                    >
-                      삭제
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
-
-              {selectedCourseGroupsByOwner.length > 0 ? (
-                <div className={styles.selectedOwnerSections}>
-                  {selectedCourseGroupsByOwner.map((ownerGroup) => {
-                    const isExpanded = expandedOwnerIds.has(ownerGroup.id);
-                    return (
-                      <section className={styles.selectedOwnerSection} key={ownerGroup.id}>
-                        <button
-                          aria-expanded={isExpanded}
-                          className={styles.selectedOwnerHeading}
-                          type="button"
-                          onClick={() => toggleOwnerExpanded(ownerGroup.id)}
-                        >
-                          <span>
-                            {isExpanded ? "▼" : "▶"} {ownerGroup.title}
-                          </span>
-                          <span>{ownerGroup.groups.length}개</span>
-                        </button>
-                        {isExpanded ? (
-                          <div className={styles.selectedSubjectList}>
-                            {ownerGroup.groups.map((group) => {
-                              const selectedSections = enabledSectionIds[group.selectionId]
-                                ?? getInitialSectionIds(group.candidates);
-                              const owner = courseOwners[group.selectionId] ?? "required";
-                              return (
-                                <details className={styles.selectedSubject} key={group.selectionId}>
-                                  <summary>
-                                    <span>
-                                      <strong>{group.title}</strong>
-                                      <small>
-                                        {group.id}
-                                        {group.credits > 0
-                                          ? ` · ${formatCredits(group.credits)}학점`
-                                          : ""}
-                                      </small>
-                                    </span>
-                                    <small>
-                                      {getDestinationLabel(owner, choiceGroups)} · 분반{" "}
-                                      {selectedSections.length}/{group.candidates.length}
-                                    </small>
-                                  </summary>
-                                  <div className={styles.subjectConfiguration}>
-                                    <label className={styles.subjectDestination}>
-                                      <span>과목 위치</span>
-                                      <select
-                                        value={owner}
-                                        onChange={(event) =>
-                                          setCourseOwners((owners) => ({
-                                            ...owners,
-                                            [group.selectionId]: event.target.value,
-                                          }))
-                                        }
-                                      >
-                                        <option value="required">필수 과목</option>
-                                        {choiceGroups.map((choiceGroup) => (
-                                          <option key={choiceGroup.id} value={choiceGroup.id}>
-                                            {choiceGroup.title}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    </label>
-                                    <button
-                                      className={styles.removeSelectedCourse}
-                                      type="button"
-                                      onClick={() => removeSelectedCourse(group)}
-                                    >
-                                      이 과목 선택 해제
-                                    </button>
-                                    {group.candidates.length > 1 ? (
-                                      <button
-                                        className={styles.selectAllSections}
-                                        type="button"
-                                        onClick={() =>
-                                          selectedSections.length === group.candidates.length
-                                            ? deselectAllSections(group)
-                                            : selectAllSections(group)
-                                        }
-                                      >
-                                        {selectedSections.length === group.candidates.length
-                                          ? "분반 전체 선택 해제"
-                                          : "분반 전체 선택"}
-                                      </button>
-                                    ) : null}
-                                    <div className={styles.sectionChoices}>
-                                      {group.candidates.map((candidate) => (
-                                        <label key={candidate.id}>
-                                          <input
-                                            checked={selectedSections.includes(candidate.id)}
-                                            type="checkbox"
-                                            onChange={() => toggleSection(group, candidate.id)}
-                                          />
-                                          <span>
-                                            <strong>{candidate.title}</strong>
-                                            <small>
-                                              {candidate.professor || "교수 미정"} ·{" "}
-                                              {getCourseTypeLabel(candidate)}
-                                            </small>
-                                            <small>
-                                              {candidate.schedule || "시간 미정/온라인"}
-                                              {candidate.campus ? ` · ${candidate.campus}` : ""}
-                                            </small>
-                                          </span>
-                                        </label>
-                                      ))}
-                                    </div>
-                                  </div>
-                                </details>
-                              );
-                            })}
-                          </div>
-                        ) : null}
-                      </section>
-                    );
-                  })}
-                </div>
-              ) : null}
             </section>
           </fieldset>
         </aside>
