@@ -183,10 +183,24 @@ export function PlanningWorkspace() {
   }
 
   const current = STEPS[step - 1]!;
-  /** 0–100 along the connector between first and last step centers — tracks the 5 real steps;
-   * 2-1/2-2 render as one grouped slot (see stepListSlots) so they don't need their own. */
-  const connectorProgress =
-    STEPS.length <= 1 ? 0 : ((step - 1) / (STEPS.length - 1)) * 100;
+  /**
+   * 0–100 along the connector between the first and last VISUAL slot centers. There are 6 visual
+   * slots (1, 2-1, 2-2, 3, 4, 5), not 5 — 2-1/2-2 used to share one grid column as a nested group,
+   * but that group's column-center position never matched either sub-circle's actual x position
+   * (both sat left/right of it), so the fill either overshot past 2-1 or undershot short of 2-2.
+   * Giving 2-1/2-2 their own equal-width slots (see stepListSlots) removes the mismatch entirely:
+   * progress and circle position now come from the exact same 6-way index.
+   */
+  const visualSlotIndex =
+    step === 1
+      ? 0
+      : step === 2
+        ? docSubstep === "course_history"
+          ? 1
+          : 2
+        : step + 1; // step 3→3, 4→4, 5→5 once 2-1/2-2 have taken indices 1/2
+  const VISUAL_SLOT_COUNT = 6;
+  const connectorProgress = (visualSlotIndex / (VISUAL_SLOT_COUNT - 1)) * 100;
   const currentDocumentConfirmed = Boolean(confirmedProfiles[docSubstep]);
   const nextBlocked =
     (step === 1 && !appliedProfile) ||
@@ -227,17 +241,17 @@ export function PlanningWorkspace() {
     key: string;
     indexLabel: string;
     label: string;
-    subLabel?: string;
     isActive: boolean;
     isDone: boolean;
     onClick: () => void;
   }
 
-  // 2-1/2-2 render as one grouped slot (tight internal spacing, shared pill background) rather
-  // than their own equal-width columns, so they read as two halves of step 2 instead of
-  // standalone steps on par with 1/3/4/5 — narrower gap + shared container is the standard way
-  // stepper UIs signal "these belong together" without a dedicated nested-stepper component.
-  const stepListSlots: Array<StepListButton | { key: string; group: StepListButton[] }> = [
+  // 6 equal-width slots (1, 2-1, 2-2, 3, 4, 5) — 2-1/2-2 used to nest inside a shared "2" column,
+  // but that made the progress-line fill (which targets one of N slot centers) land between the
+  // two sub-circles instead of at whichever one was actually current. Standalone slots put every
+  // circle and the fill on the exact same coordinate system, so the line always ends precisely at
+  // the current step.
+  const stepListSlots: StepListButton[] = [
     {
       key: "1",
       indexLabel: "1",
@@ -247,27 +261,20 @@ export function PlanningWorkspace() {
       onClick: () => goToStep(1),
     },
     {
-      key: "2-group",
-      group: [
-        {
-          key: "2-1",
-          indexLabel: "2-1",
-          label: "내 기록 적용하기",
-          subLabel: "수강/취득 과목",
-          isActive: step === 2 && docSubstep === "course_history",
-          isDone: step > 2 || (step === 2 && docSubstep === "graduation_requirements"),
-          onClick: () => goToDocSubstep("course_history"),
-        },
-        {
-          key: "2-2",
-          indexLabel: "2-2",
-          label: "내 기록 적용하기",
-          subLabel: "졸업요건충족현황",
-          isActive: step === 2 && docSubstep === "graduation_requirements",
-          isDone: step > 2,
-          onClick: () => goToDocSubstep("graduation_requirements"),
-        },
-      ],
+      key: "2-1",
+      indexLabel: "2-1",
+      label: "수강/취득 과목",
+      isActive: step === 2 && docSubstep === "course_history",
+      isDone: step > 2 || (step === 2 && docSubstep === "graduation_requirements"),
+      onClick: () => goToDocSubstep("course_history"),
+    },
+    {
+      key: "2-2",
+      indexLabel: "2-2",
+      label: "졸업요건충족현황",
+      isActive: step === 2 && docSubstep === "graduation_requirements",
+      isDone: step > 2,
+      onClick: () => goToDocSubstep("graduation_requirements"),
     },
     {
       key: "3",
@@ -314,47 +321,26 @@ export function PlanningWorkspace() {
           className={styles.stepList}
           style={{ ["--connector-progress" as string]: String(connectorProgress) }}
         >
-          {stepListSlots.map((slot) =>
-            "group" in slot ? (
-              <li key={slot.key}>
-                <div className={styles.subStepGroup}>
-                  {slot.group.map((entry) => (
-                    <button
-                      aria-current={entry.isActive ? "step" : undefined}
-                      data-active={entry.isActive}
-                      data-done={entry.isDone}
-                      key={entry.key}
-                      type="button"
-                      onClick={entry.onClick}
-                    >
-                      <span className={styles.stepIndex} aria-hidden="true">
-                        {entry.indexLabel}
-                      </span>
-                      <span className={styles.stepSubLabel}>{entry.subLabel}</span>
-                    </button>
-                  ))}
-                </div>
-              </li>
-            ) : (
-              <li key={slot.key}>
-                <button
-                  aria-current={slot.isActive ? "step" : undefined}
-                  data-active={slot.isActive}
-                  data-done={slot.isDone}
-                  type="button"
-                  onClick={slot.onClick}
-                >
-                  <span className={styles.stepIndex} aria-hidden="true">
-                    {slot.indexLabel}
-                  </span>
-                  <span className={styles.stepLabel}>{slot.label}</span>
-                </button>
-              </li>
-            ),
-          )}
+          {stepListSlots.map((slot) => (
+            <li key={slot.key}>
+              <button
+                aria-current={slot.isActive ? "step" : undefined}
+                data-active={slot.isActive}
+                data-done={slot.isDone}
+                type="button"
+                onClick={slot.onClick}
+              >
+                <span className={styles.stepIndex} aria-hidden="true">
+                  {slot.indexLabel}
+                </span>
+                <span className={styles.stepLabel}>{slot.label}</span>
+              </button>
+            </li>
+          ))}
         </ol>
         {/* 3(과목 담기) → 5(AI 추천) 지름길: 4(유효 시간표 확인)를 건너뛸 수 있음을 곡선으로 표시.
-            step 3에 있을 때만 강조해, "여기서 바로 건너뛸 수 있다"는 안내로 읽히게 한다. */}
+            step 3에 있을 때만 강조해, "여기서 바로 건너뛸 수 있다"는 안내로 읽히게 한다. 6개 슬롯
+            기준(1,2-1,2-2,3,4,5) x=58.33은 3의 중심, x=91.67은 5의 중심. */}
         <svg
           className={styles.skipArc}
           data-active={step === 3}
@@ -364,7 +350,7 @@ export function PlanningWorkspace() {
         >
           <path
             className={styles.skipArcPath}
-            d="M50 4 Q70 30 90 4"
+            d="M58.33 4 Q75 30 91.67 4"
             fill="none"
             vectorEffect="non-scaling-stroke"
           />

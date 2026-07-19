@@ -214,7 +214,10 @@ export function TimetableCard({
             </div>
             {unscheduledCourses.length > 0 ? (
               <div className={styles.unscheduledRow}>
-                <span className={styles.unscheduledLabel}>온라인 · 시간 미정</span>
+                {/* 일자 그리드에 배치할 요일·시간이 없는 과목은 전부 I-Campus(자기주도학습형
+                    온라인 트랙)라 애초에 시간표가 없다 — "온라인 · 시간 미정"이라고 하면 마치
+                    시간이 정해질 수도 있는 것처럼 읽혀 실제와 다르다. */}
+                <span className={styles.unscheduledLabel}>I-Campus</span>
                 <div className={styles.unscheduledChips}>
                   {unscheduledCourses.map((course, courseIndex) => (
                     <span
