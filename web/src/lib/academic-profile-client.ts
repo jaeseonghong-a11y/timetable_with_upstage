@@ -83,11 +83,11 @@ export function getReviewChecklist(profile: AcademicProfile): ReviewChecklistIte
       : [{ id: `issue-${index}`, message: issue.message }],
   );
 
+  // Every completedCourse.reviewReasons entry is code-generated (Solar's own free-text reasons
+  // are always dropped or overridden — see academic-document.ts), so there is no non-blocking
+  // pattern to filter here: every reason present already needed a person's judgement call.
   profile.completedCourses.forEach((course, courseIndex) => {
     course.reviewReasons.forEach((reason, reasonIndex) => {
-      if (isNonBlockingCourseReview(reason)) {
-        return;
-      }
       items.push({
         id: `course-${courseIndex}-${reasonIndex}`,
         message: `${course.courseCode} ${course.courseName}: ${reason}`,
@@ -121,56 +121,24 @@ export function getReviewChecklist(profile: AcademicProfile): ReviewChecklistIte
   return items;
 }
 
-function isNonBlockingRequirementReview(
+/**
+ * Every Requirement.reviewReasons entry is code-generated (normalizeRequirement/
+ * requirementFromTableCells in academic-document.ts never let Solar's own free-text reasons
+ * through — see the comment on `reviewReasons` there), so the only pattern actually worth
+ * filtering here is this one: a distribution_minimum area row's own 취득학점 cell being an
+ * unparseable composite value is expected and handled separately by
+ * canonicalizeBalancedGeneralRequirements/readBalancedAreaCredits, not something the user needs
+ * to act on. Exported so per-course-card review badges (e.g. AcademicRequirementEditor) count the
+ * same "actually needs attention" set the confirm-blocking checklist above uses, instead of the
+ * raw reviewReasons.length.
+ */
+export function isNonBlockingRequirementReview(
   requirement: Requirement,
   reason: string,
 ): boolean {
-  if (
-    reason.includes("수강학점 일부가 비어 있거나 복합 형식") ||
-    reason.includes("수강학점 세부값이 없어 0으로 표시") ||
-    reason.includes("기준학점 미달") ||
-    reason.includes("취득학점 미달") ||
-    isDeterministicRequirementNotice(requirement, reason)
-  ) {
-    return true;
-  }
-  if (!reason.includes("졸업요건 규칙을 자동으로 확정하지 못해")) {
-    return false;
-  }
-  const requiredCredits =
-    requirement.rawValues["기준학점"] ??
-    requirement.rawValues.requiredCredits ??
-    requirement.rawValues.minimumCredits;
-  return typeof requiredCredits === "string" && isNonNegativeNumber(Number(requiredCredits));
-}
-
-function isNonBlockingCourseReview(reason: string): boolean {
-  const normalized = reason.trim().toLowerCase();
   return (
-    normalized === "다중 학수번호" ||
-    normalized === "multiple course codes" ||
-    /^\d+(?:\.\d+)?\s*학점\s*표시됨$/.test(normalized)
-  );
-}
-
-function isDeterministicRequirementNotice(
-  requirement: Requirement,
-  reason: string,
-): boolean {
-  const normalized = reason.replace(/\s+/g, " ").trim();
-  return (
-    normalized === "중복 표시 주의" ||
-    (normalized.includes("C/L 과목") && normalized.includes("중복")) ||
-    normalized.includes("중복 표시됨") ||
-    /취득학점.*기준(?:학점)?.*초과/.test(normalized) ||
-    normalized.includes("동일 분포 규칙을 공유") ||
-    normalized.includes("그룹 ID='balanced-area'") ||
-    normalized.includes("일반 교양에 해당") ||
-    normalized.includes("DS 교양에 해당") ||
-    normalized.includes("혼합값은 status review로 처리") ||
-    normalized.includes("혼합값임") ||
-    (requirement.rule.kind === "distribution_minimum" &&
-      normalized.includes("취득학점 값이 복합 형식"))
+    requirement.rule.kind === "distribution_minimum" &&
+    reason.replace(/\s+/g, " ").trim().includes("취득학점 값이 복합 형식")
   );
 }
 

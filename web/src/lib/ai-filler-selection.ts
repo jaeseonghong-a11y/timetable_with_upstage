@@ -16,6 +16,24 @@ function areaLabelFragments(areaLabel: string): string[] {
   return [areaLabel, ...aliases].flatMap((label) => label.split(/[/·]/)).filter(Boolean);
 }
 
+/**
+ * Shared by the AI filler shortlist below and the elective tab's "이 영역부터 보여줄까" default —
+ * both need the same 졸업요건 label ↔ 교양 영역 라벨 matching, so this is the one place that logic
+ * lives (see AREA_LABEL_ALIASES for why a plain substring match isn't enough).
+ */
+export function areaMatchesUnmetLabels(
+  areaLabel: string,
+  unmetGeneralLabels: readonly string[],
+): boolean {
+  if (!areaLabel) {
+    return false;
+  }
+  const fragments = areaLabelFragments(areaLabel);
+  return unmetGeneralLabels.some((label) =>
+    fragments.some((fragment) => label.includes(fragment) || fragment.includes(label)),
+  );
+}
+
 export interface AiFillerSelectionInput {
   catalogSubjects: readonly SkkuElectiveSubject[];
   /** Subject ids (matching SubjectOption.id) already used as required/choice subjects. */
@@ -54,16 +72,8 @@ export function selectAiFillerSubjects(input: AiFillerSelectionInput): SkkuElect
     return [];
   }
 
-  const matchesUnmetArea = (areaCode: SkkuElectiveAreaCode): boolean => {
-    const areaLabel = areaLabelByCode.get(areaCode) ?? "";
-    if (!areaLabel) {
-      return false;
-    }
-    const fragments = areaLabelFragments(areaLabel);
-    return unmetGeneralLabels.some((label) =>
-      fragments.some((fragment) => label.includes(fragment) || fragment.includes(label)),
-    );
-  };
+  const matchesUnmetArea = (areaCode: SkkuElectiveAreaCode): boolean =>
+    areaMatchesUnmetLabels(areaLabelByCode.get(areaCode) ?? "", unmetGeneralLabels);
 
   const excludedUpper = new Set([...excludedCourseNumbers].map((value) => value.toUpperCase()));
   const availableSubjects = catalogSubjects.filter(

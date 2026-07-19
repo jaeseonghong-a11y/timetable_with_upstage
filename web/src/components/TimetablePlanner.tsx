@@ -3,7 +3,7 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import type { Requirement } from "@/lib/academic-profile";
-import { selectAiFillerSubjects } from "@/lib/ai-filler-selection";
+import { areaMatchesUnmetLabels, selectAiFillerSubjects } from "@/lib/ai-filler-selection";
 import { markSessionCompleted, track } from "@/lib/analytics";
 import {
   courseGroupsFromCollection,
@@ -98,6 +98,13 @@ const START_OPTIONS = [
   { value: "", label: "상관없음" },
   { value: "600", label: "10:00 이후" },
   { value: "720", label: "12:00 이후" },
+] as const;
+
+/** Mirrors real transitions inside fetchAiRecommendations (not a timer) — stage 0 covers local
+ * candidate-generation work, stage 1 covers the /api/timetable-recommendations Solar call. */
+const RECOMMENDATION_STAGES = [
+  "조건에 맞는 시간표 후보를 추리는 중…",
+  "Solar가 추천 이유를 작성하는 중…",
 ] as const;
 
 type CourseSource = "major" | "elective";
@@ -518,6 +525,13 @@ export function TimetablePlanner({
     selectCourseGroup(group, activeDestination, [sectionId]);
   }
 
+  const unmetGeneralLabels = useMemo(() => {
+    const unsatisfied = requirements.filter(
+      (requirement) => requirement.scope === "general" && requirement.status !== "satisfied",
+    );
+    return unsatisfied.map((requirement) => requirement.label);
+  }, [requirements]);
+
   async function loadAllElectives(campus: SkkuElectiveCampus): Promise<void> {
     if (!query) {
       return;
@@ -535,10 +549,18 @@ export function TimetablePlanner({
         campus,
         mode: "all_subjects",
       });
-      setElectiveCatalogs((catalogs) => ({
-        ...catalogs,
-        [catalogKey]: readElectiveCatalog(payload),
-      }));
+      const catalog = readElectiveCatalog(payload);
+      setElectiveCatalogs((catalogs) => ({ ...catalogs, [catalogKey]: catalog }));
+      // 졸업요건 미충족 영역이 있으면 "전체" 대신 그 영역을 기본으로 보여준다 — 사용자가 이미
+      // 다른 영역을 직접 골랐다면(더 이상 "all"이 아니면) 덮어쓰지 않는다.
+      if (unmetGeneralLabels.length > 0) {
+        const matchedArea = catalog.areas.find(
+          (area) => area.count > 0 && areaMatchesUnmetLabels(area.label, unmetGeneralLabels),
+        );
+        if (matchedArea) {
+          setSelectedElectiveArea((current) => (current === "all" ? matchedArea.code : current));
+        }
+      }
     } catch (error) {
       setElectiveError(readThrownMessage(error));
     } finally {
@@ -946,6 +968,7 @@ export function TimetablePlanner({
     ReadonlyMap<string, { timetable: Timetable; extras: TimetableExtra[] }>
   >(new Map());
   const [isRecommending, setIsRecommending] = useState(false);
+  const [recommendationStage, setRecommendationStage] = useState(0);
   const [recommendationError, setRecommendationError] = useState("");
   const [aiExplanationFailed, setAiExplanationFailed] = useState(false);
 
@@ -1072,10 +1095,6 @@ export function TimetablePlanner({
         bag.subjects.map((subject) => subject.id),
       ),
     ]);
-    const unmetGeneralLabels = requirements
-      .filter((requirement) => requirement.scope === "general" && requirement.status !== "satisfied")
-      .map((requirement) => requirement.label);
-
     const shortlist = selectAiFillerSubjects({
       catalogSubjects: catalog.subjects,
       usedSelectionIds,
@@ -1158,6 +1177,7 @@ export function TimetablePlanner({
     track("ai_recommend_click");
     const startedAt = performance.now();
     setIsRecommending(true);
+    setRecommendationStage(0);
     setRecommendationError("");
     try {
       const filler = await buildAiFillerSubjects();
@@ -1210,6 +1230,7 @@ export function TimetablePlanner({
       }
       setAiCandidateTimetables(candidateMap);
 
+      setRecommendationStage(1);
       const payload = await postJson("/api/timetable-recommendations", {
         timetables: dayFiltered,
         weights: recommendationWeights,
@@ -1228,6 +1249,7 @@ export function TimetablePlanner({
     } finally {
       track("ai_recommend_done", { duration_ms: Math.round(performance.now() - startedAt) });
       setIsRecommending(false);
+      setRecommendationStage(0);
     }
   }
 
@@ -1278,7 +1300,7 @@ export function TimetablePlanner({
             <strong>{isRecommending ? "AI 분석 중" : "AI 추천 조건"}</strong>
             <span>
               {isRecommending
-                ? "AI가 분석 중입니다... 완료되면 결과 화면으로 이동합니다."
+                ? `${RECOMMENDATION_STAGES[recommendationStage]} 완료되면 결과 화면으로 이동합니다.`
                 : "선호 조건을 고른 뒤 추천을 받으면, 다음 화면에서 결과 카드를 확인합니다."}
             </span>
           </div>
@@ -1444,6 +1466,16 @@ export function TimetablePlanner({
                         </button>
                       ))}
                     </div>
+                    {selectedElectiveArea !== "all" &&
+                    areaMatchesUnmetLabels(
+                      electiveAreaLabels.get(selectedElectiveArea) ?? "",
+                      unmetGeneralLabels,
+                    ) ? (
+                      <small className={styles.electiveCatalogNote}>
+                        졸업요건 미충족 영역이라 기본으로 보여드립니다. 다른 영역을 보려면
+                        위에서 골라주세요.
+                      </small>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -2032,7 +2064,7 @@ export function TimetablePlanner({
               <div className={styles.aiLoadingPanel} role="status" aria-live="polite">
                 <span className={styles.aiSpinner} aria-hidden="true" />
                 <strong>AI가 분석 중입니다...</strong>
-                <p>시간표 후보를 만들고 선호 조건을 반영하는 중이에요. 잠시만 기다려 주세요.</p>
+                <p>{RECOMMENDATION_STAGES[recommendationStage]} 잠시만 기다려 주세요.</p>
                 <div className={styles.aiSkeletonList} aria-hidden="true">
                   <div className={styles.aiSkeletonCard} />
                   <div className={styles.aiSkeletonCard} />

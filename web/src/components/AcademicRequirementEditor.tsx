@@ -7,6 +7,7 @@ import type {
   Requirement,
   RequirementRule,
 } from "@/lib/academic-profile";
+import { isNonBlockingRequirementReview } from "@/lib/academic-profile-client";
 
 import styles from "./AcademicDocumentManager.module.css";
 
@@ -124,7 +125,11 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
         </button>
       ) : (
         <ol className={styles.courseCardGrid}>
-          {profile.requirements.map((requirement, index) => (
+          {profile.requirements.map((requirement, index) => {
+            const blockingReviewReasonCount = requirement.reviewReasons.filter(
+              (reason) => !isNonBlockingRequirementReview(requirement, reason),
+            ).length;
+            return (
             <li
               className={`${styles.dataCard} ${styles.requirementCard}`}
               key={requirement.requirementId}
@@ -135,8 +140,8 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
                   <span>{requirement.label || "요건명 미입력"}</span>
                 </div>
                 <div className={styles.cardActions}>
-                  {requirement.reviewReasons.length > 0 ? (
-                    <span>확인 필요 {requirement.reviewReasons.length}</span>
+                  {blockingReviewReasonCount > 0 ? (
+                    <span>확인 필요 {blockingReviewReasonCount}</span>
                   ) : null}
                   <button
                     className={styles.deleteButton}
@@ -252,7 +257,8 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
                 ) : null}
               </div>
             </li>
-          ))}
+            );
+          })}
         </ol>
       )}
     </div>

@@ -98,9 +98,13 @@ describe("academic profile client state", () => {
 
   it("does not require confirmation after multiple course codes were successfully split", () => {
     const profile = makeProfile();
+    // Server-side normalizeCompletedCourse already strips "다중 학수번호"/credit-count annotations
+    // before a course ever reaches the client (see isNonBlockingCourseReason in
+    // academic-document.ts), so a successfully-split row has no reviewReasons left by this point —
+    // only the reviewIssues-level MULTIPLESUBJECT/unexpected_document_rows codes remain to filter.
     profile.completedCourses[0] = {
       ...profile.completedCourses[0]!,
-      reviewReasons: ["다중 학수번호", "3.0 학점 표시됨"],
+      reviewReasons: [],
     };
     profile.reviewIssues = [
       {
@@ -171,7 +175,10 @@ describe("academic profile client state", () => {
     expect(getReviewChecklist(profile)).toEqual([]);
   });
 
-  it("hides legacy non-blocking extraction notices from the confirmation checklist", () => {
+  it("hides duplicate-credit and Solar-supplemented reviewIssues from the confirmation checklist", () => {
+    // reviewIssues freeform text only ever reaches the client when table parsing failed entirely
+    // (Solar's own commentary passes through unfiltered by our code in that fallback path — see
+    // isNonBlockingReviewMessage in academic-profile-client.ts), so this filter is still live.
     const profile = makeProfile();
     profile.completedCourses = [];
     profile.reviewIssues = [
@@ -180,36 +187,6 @@ describe("academic profile client state", () => {
         message: "중복 학점 표시 확인 필요: DS기반 행에 동일 과목이 중복 표시됨",
         sourceDocumentId: "source-1",
       },
-    ];
-    profile.requirements = [
-      {
-        requirementId: "requirement-1",
-        scope: "ds",
-        label: "DS기반(공통)",
-        rule: { kind: "manual", rawText: "졸업요건 원문 확인" },
-        earnedCredits: 0,
-        inProgressCredits: { spring: 0, summer: 0, fall: 0, winter: 0, total: 0 },
-        remainingCredits: 2,
-        status: "review",
-        rawValues: { 기준학점: "2" },
-        sourceDocumentId: "source-1",
-        reviewReasons: [
-          "중복 표시 주의",
-          "졸업요건 규칙을 자동으로 확정하지 못해 원문 기준으로 표시했습니다.",
-          "수강학점 일부가 비어 있거나 복합 형식이어서 0으로 표시했습니다.",
-          "기준학점 미달",
-          "취득학점 미달",
-        ],
-      },
-    ];
-
-    expect(getReviewChecklist(profile)).toEqual([]);
-  });
-
-  it("hides deterministic classification, duplicate-credit, and distribution notices", () => {
-    const profile = makeProfile();
-    profile.completedCourses = [];
-    profile.reviewIssues = [
       {
         code: "solar_requirement_rows_supplemented",
         message: "Solar가 누락한 졸업요건을 표에서 보완했습니다.",
@@ -226,26 +203,57 @@ describe("academic profile client state", () => {
         sourceDocumentId: "source-1",
       },
     ];
+    profile.requirements = [];
+
+    expect(getReviewChecklist(profile)).toEqual([]);
+  });
+
+  it("hides a distribution_minimum area row's own composite 취득학점 cell, but blocks other reasons", () => {
+    // The one requirement-reviewReasons pattern still worth filtering: canonicalizeBalancedGeneralRequirements
+    // /readBalancedAreaCredits in academic-document.ts already handle a distribution area row's
+    // composite "6 / 0"-style 취득학점 cell, so it doesn't need a person's attention. Every other
+    // reviewReasons entry is code-generated for a real reason and must stay blocking.
+    const profile = makeProfile();
+    profile.completedCourses = [];
+    profile.reviewIssues = [];
     profile.requirements = [
       {
         requirementId: "requirement-1",
         scope: "general",
-        label: "글로벌",
-        rule: { kind: "credit_minimum", credits: 4 },
-        earnedCredits: 4,
+        label: "균형교양 - 인간/문화",
+        rule: {
+          kind: "distribution_minimum",
+          groupId: "balanced-general",
+          totalAreas: 3,
+          minimumAreas: 2,
+          totalCredits: 6,
+          rawText: "3개 영역 중 최소 2개 영역에서 합계 6학점 이상 이수",
+        },
+        earnedCredits: null,
         inProgressCredits: { spring: 0, summer: 0, fall: 0, winter: 0, total: 0 },
         remainingCredits: 0,
-        status: "satisfied",
+        status: "review",
+        rawValues: { 취득학점: "6 / 0" },
+        sourceDocumentId: "source-1",
+        reviewReasons: ["취득학점 값이 복합 형식이어서 원문 확인이 필요합니다."],
+      },
+      {
+        requirementId: "requirement-2",
+        scope: "general",
+        label: "글로벌",
+        rule: { kind: "credit_minimum", credits: 4 },
+        earnedCredits: 2,
+        inProgressCredits: { spring: 0, summer: 0, fall: 0, winter: 0, total: 0 },
+        remainingCredits: 2,
+        status: "review",
         rawValues: {},
         sourceDocumentId: "source-1",
-        reviewReasons: [
-          "'글로벌'은 일반 교양에 해당함",
-          "기준으로 '글로벌학점'이 중복 표시됨",
-          "C/L 과목은 각각의 전공에 중복 되어 취득학점으로 표시",
-        ],
+        reviewReasons: ["충족 상태를 자동으로 확정할 수 없어 확인이 필요합니다."],
       },
     ];
 
-    expect(getReviewChecklist(profile)).toEqual([]);
+    const checklist = getReviewChecklist(profile);
+    expect(checklist).toHaveLength(1);
+    expect(checklist[0]?.message).toContain("충족 상태를 자동으로 확정할 수 없어");
   });
 });
