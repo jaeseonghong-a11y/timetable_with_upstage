@@ -564,10 +564,30 @@
   cursor: pointer;
 }
 
-.choiceGroupRules,
+.choiceGroupRules {
+  display: grid;
+  gap: 14px;
+}
+
+.destinationBlock {
+  display: grid;
+  gap: 8px;
+}
+
 .selectedSubjectList {
   display: grid;
   gap: 7px;
+  padding-left: 2px;
+}
+
+.groupEmpty {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px dashed var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .requiredRule,
