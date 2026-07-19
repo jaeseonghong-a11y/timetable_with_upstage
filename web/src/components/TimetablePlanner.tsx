@@ -185,6 +185,9 @@ export function TimetablePlanner({
   const [choiceGroups, setChoiceGroups] = useState<ChoiceGroupConfig[]>(INITIAL_CHOICE_GROUPS);
   const [activeDestination, setActiveDestination] = useState<CourseDestination>("required");
   const [courseOwners, setCourseOwners] = useState<Record<string, CourseDestination>>({});
+  // 담은 과목이 많아지면 한눈에 보기 어려워지므로 그룹(필수/선택그룹)별로 묶고, 각 그룹은 기본
+  // 접힌 상태로 시작한다. 펼친 그룹만 여기 저장한다(비어있으면 전부 접힘).
+  const [expandedOwnerIds, setExpandedOwnerIds] = useState<Set<CourseDestination>>(() => new Set());
   const [enabledSectionIds, setEnabledSectionIds] = useState<Record<string, string[]>>({});
   const [unavailableDays, setUnavailableDays] = useState<Weekday[]>([]);
   const [earliestStart, setEarliestStart] = useState("");
@@ -420,6 +423,18 @@ export function TimetablePlanner({
     if (activeDestination === groupId) {
       setActiveDestination("required");
     }
+  }
+
+  function toggleOwnerExpanded(ownerId: CourseDestination): void {
+    setExpandedOwnerIds((current) => {
+      const next = new Set(current);
+      if (next.has(ownerId)) {
+        next.delete(ownerId);
+      } else {
+        next.add(ownerId);
+      }
+      return next;
+    });
   }
 
   function updateChoiceGroup(
@@ -776,6 +791,23 @@ export function TimetablePlanner({
       ),
     [choiceGroups, courseOwners, selectedCourseGroups],
   );
+  const selectedCourseGroupsByOwner = useMemo(() => {
+    const owners: Array<{ id: CourseDestination; title: string; groups: PlannerCourseGroup[] }> = [
+      { id: "required", title: "필수 과목", groups: [] },
+      ...choiceGroups.map((choiceGroup) => ({
+        id: choiceGroup.id,
+        title: choiceGroup.title,
+        groups: [] as PlannerCourseGroup[],
+      })),
+    ];
+    const ownerById = new Map(owners.map((owner) => [owner.id, owner]));
+    selectedCourseGroups.forEach((group) => {
+      const ownerId = courseOwners[group.selectionId] ?? "required";
+      const owner = ownerById.get(ownerId) ?? ownerById.get("required");
+      owner?.groups.push(group);
+    });
+    return owners.filter((owner) => owner.groups.length > 0);
+  }, [choiceGroups, courseOwners, selectedCourseGroups]);
 
   const sectionIdToGroup = useMemo(() => {
     const map = new Map<string, PlannerCourseGroup>();
@@ -1300,6 +1332,24 @@ export function TimetablePlanner({
                 교양 과목
               </button>
             </div>
+            <label className={styles.assignmentTarget}>
+              <span>새로 선택한 과목을 담을 곳</span>
+              <select
+                value={activeDestination}
+                onChange={(event) => setActiveDestination(event.target.value)}
+              >
+                <option value="required">필수 과목 · 모든 조합에 포함</option>
+                {choiceGroups.map((choiceGroup) => (
+                  <option key={choiceGroup.id} value={choiceGroup.id}>
+                    {choiceGroup.title} · {choiceGroup.minSubjects}~{choiceGroup.maxSubjects}과목 선택
+                  </option>
+                ))}
+              </select>
+              <small>
+                체크박스는 지금 선택한 위치에 들어있는 과목만 표시합니다. 다른 위치에 이미 담긴
+                과목은 체크 해제 상태로 보이며, 눌러서 이 위치로 옮길 수 있습니다.
+              </small>
+            </label>
             {courseSource === "major" && majorProgramTabs.length > 1 ? (
               <div className={styles.electiveAreaFilter}>
                 <span>전공</span>
@@ -1398,24 +1448,6 @@ export function TimetablePlanner({
                 ) : null}
               </div>
             ) : null}
-            <label className={styles.assignmentTarget}>
-              <span>새로 선택한 과목을 담을 곳</span>
-              <select
-                value={activeDestination}
-                onChange={(event) => setActiveDestination(event.target.value)}
-              >
-                <option value="required">필수 과목 · 모든 조합에 포함</option>
-                {choiceGroups.map((choiceGroup) => (
-                  <option key={choiceGroup.id} value={choiceGroup.id}>
-                    {choiceGroup.title} · {choiceGroup.minSubjects}~{choiceGroup.maxSubjects}과목 선택
-                  </option>
-                ))}
-              </select>
-              <small>
-                체크박스는 지금 선택한 위치에 들어있는 과목만 표시합니다. 다른 위치에 이미 담긴
-                과목은 체크 해제 상태로 보이며, 눌러서 이 위치로 옮길 수 있습니다.
-              </small>
-            </label>
             <label className={styles.courseSearch}>
               <span className={styles.srOnly}>과목 검색</span>
               <input
@@ -1686,92 +1718,117 @@ export function TimetablePlanner({
                 ))}
               </div>
 
-              {selectedCourseGroups.length > 0 ? (
-                <div className={styles.selectedSubjectList}>
-                  {selectedCourseGroups.map((group) => {
-                    const selectedSections = enabledSectionIds[group.selectionId]
-                      ?? getInitialSectionIds(group.candidates);
-                    const owner = courseOwners[group.selectionId] ?? "required";
+              {selectedCourseGroupsByOwner.length > 0 ? (
+                <div className={styles.selectedOwnerSections}>
+                  {selectedCourseGroupsByOwner.map((ownerGroup) => {
+                    const isExpanded = expandedOwnerIds.has(ownerGroup.id);
                     return (
-                      <details className={styles.selectedSubject} key={group.selectionId}>
-                        <summary>
+                      <section className={styles.selectedOwnerSection} key={ownerGroup.id}>
+                        <button
+                          aria-expanded={isExpanded}
+                          className={styles.selectedOwnerHeading}
+                          type="button"
+                          onClick={() => toggleOwnerExpanded(ownerGroup.id)}
+                        >
                           <span>
-                            <strong>{group.title}</strong>
-                            <small>
-                              {group.id}
-                              {group.credits > 0 ? ` · ${formatCredits(group.credits)}학점` : ""}
-                            </small>
+                            {isExpanded ? "▼" : "▶"} {ownerGroup.title}
                           </span>
-                          <small>
-                            {getDestinationLabel(owner, choiceGroups)} · 분반 {selectedSections.length}/
-                            {group.candidates.length}
-                          </small>
-                        </summary>
-                        <div className={styles.subjectConfiguration}>
-                          <label className={styles.subjectDestination}>
-                            <span>과목 위치</span>
-                            <select
-                              value={owner}
-                              onChange={(event) =>
-                                setCourseOwners((owners) => ({
-                                  ...owners,
-                                  [group.selectionId]: event.target.value,
-                                }))
-                              }
-                            >
-                              <option value="required">필수 과목</option>
-                              {choiceGroups.map((choiceGroup) => (
-                                <option key={choiceGroup.id} value={choiceGroup.id}>
-                                  {choiceGroup.title}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <button
-                            className={styles.removeSelectedCourse}
-                            type="button"
-                            onClick={() => removeSelectedCourse(group)}
-                          >
-                            이 과목 선택 해제
-                          </button>
-                          {group.candidates.length > 1 ? (
-                            <button
-                              className={styles.selectAllSections}
-                              type="button"
-                              onClick={() =>
-                                selectedSections.length === group.candidates.length
-                                  ? deselectAllSections(group)
-                                  : selectAllSections(group)
-                              }
-                            >
-                              {selectedSections.length === group.candidates.length
-                                ? "분반 전체 선택 해제"
-                                : "분반 전체 선택"}
-                            </button>
-                          ) : null}
-                          <div className={styles.sectionChoices}>
-                            {group.candidates.map((candidate) => (
-                              <label key={candidate.id}>
-                                <input
-                                  checked={selectedSections.includes(candidate.id)}
-                                  type="checkbox"
-                                  onChange={() => toggleSection(group, candidate.id)}
-                                />
-                                <span>
-                                  <strong>{candidate.title}</strong>
-                                  <small>
-                                    {candidate.professor || "교수 미정"} · {getCourseTypeLabel(candidate)}
-                                  </small>
-                                  <small>
-                                    {candidate.schedule || "시간 미정/온라인"}
-                                    {candidate.campus ? ` · ${candidate.campus}` : ""}
-                                  </small>
-                                </span>
-                              </label>
-                            ))}
+                          <span>{ownerGroup.groups.length}개</span>
+                        </button>
+                        {isExpanded ? (
+                          <div className={styles.selectedSubjectList}>
+                            {ownerGroup.groups.map((group) => {
+                              const selectedSections = enabledSectionIds[group.selectionId]
+                                ?? getInitialSectionIds(group.candidates);
+                              const owner = courseOwners[group.selectionId] ?? "required";
+                              return (
+                                <details className={styles.selectedSubject} key={group.selectionId}>
+                                  <summary>
+                                    <span>
+                                      <strong>{group.title}</strong>
+                                      <small>
+                                        {group.id}
+                                        {group.credits > 0
+                                          ? ` · ${formatCredits(group.credits)}학점`
+                                          : ""}
+                                      </small>
+                                    </span>
+                                    <small>
+                                      {getDestinationLabel(owner, choiceGroups)} · 분반{" "}
+                                      {selectedSections.length}/{group.candidates.length}
+                                    </small>
+                                  </summary>
+                                  <div className={styles.subjectConfiguration}>
+                                    <label className={styles.subjectDestination}>
+                                      <span>과목 위치</span>
+                                      <select
+                                        value={owner}
+                                        onChange={(event) =>
+                                          setCourseOwners((owners) => ({
+                                            ...owners,
+                                            [group.selectionId]: event.target.value,
+                                          }))
+                                        }
+                                      >
+                                        <option value="required">필수 과목</option>
+                                        {choiceGroups.map((choiceGroup) => (
+                                          <option key={choiceGroup.id} value={choiceGroup.id}>
+                                            {choiceGroup.title}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </label>
+                                    <button
+                                      className={styles.removeSelectedCourse}
+                                      type="button"
+                                      onClick={() => removeSelectedCourse(group)}
+                                    >
+                                      이 과목 선택 해제
+                                    </button>
+                                    {group.candidates.length > 1 ? (
+                                      <button
+                                        className={styles.selectAllSections}
+                                        type="button"
+                                        onClick={() =>
+                                          selectedSections.length === group.candidates.length
+                                            ? deselectAllSections(group)
+                                            : selectAllSections(group)
+                                        }
+                                      >
+                                        {selectedSections.length === group.candidates.length
+                                          ? "분반 전체 선택 해제"
+                                          : "분반 전체 선택"}
+                                      </button>
+                                    ) : null}
+                                    <div className={styles.sectionChoices}>
+                                      {group.candidates.map((candidate) => (
+                                        <label key={candidate.id}>
+                                          <input
+                                            checked={selectedSections.includes(candidate.id)}
+                                            type="checkbox"
+                                            onChange={() => toggleSection(group, candidate.id)}
+                                          />
+                                          <span>
+                                            <strong>{candidate.title}</strong>
+                                            <small>
+                                              {candidate.professor || "교수 미정"} ·{" "}
+                                              {getCourseTypeLabel(candidate)}
+                                            </small>
+                                            <small>
+                                              {candidate.schedule || "시간 미정/온라인"}
+                                              {candidate.campus ? ` · ${candidate.campus}` : ""}
+                                            </small>
+                                          </span>
+                                        </label>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </details>
+                              );
+                            })}
                           </div>
-                        </div>
-                      </details>
+                        ) : null}
+                      </section>
                     );
                   })}
                 </div>
@@ -2094,14 +2151,21 @@ export function TimetablePlanner({
                       footer={
                         hasFooterContent ? (
                           <div className={styles.recommendationFooter}>
-                            {recommendation.reason ? <p>{recommendation.reason}</p> : null}
+                            {recommendation.reason ? (
+                              <p>
+                                <span className={styles.recommendationLabel}>AI 추천 근거</span>
+                                {recommendation.reason}
+                              </p>
+                            ) : null}
                             {recommendation.requirementContribution ? (
                               <p className={styles.recommendationRequirement}>
+                                <span className={styles.recommendationLabel}>졸업요건 기여</span>
                                 {recommendation.requirementContribution}
                               </p>
                             ) : null}
                             {recommendation.customPreferenceNote ? (
                               <p className={styles.recommendationCustomNote}>
+                                <span className={styles.recommendationLabel}>입력하신 조건 반영</span>
                                 {recommendation.customPreferenceNote}
                               </p>
                             ) : null}

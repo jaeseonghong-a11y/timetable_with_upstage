@@ -514,6 +514,33 @@
   gap: 7px;
 }
 
+.selectedOwnerSections {
+  display: grid;
+  gap: 10px;
+}
+
+.selectedOwnerSection {
+  display: grid;
+  gap: 7px;
+}
+
+.selectedOwnerHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 0 6px;
+  border: 0;
+  border-bottom: 2px solid var(--border-subtle);
+  background: none;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
 .requiredRule,
 .choiceGroupRule {
   position: relative;
@@ -1543,6 +1570,16 @@
 
 .recommendationCustomNote {
   font-style: italic;
+}
+
+.recommendationLabel {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--accent-strong);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.02em;
 }
 
 @media (max-width: 760px) {

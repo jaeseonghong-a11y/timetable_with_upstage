@@ -224,7 +224,7 @@ export function AcademicCourseEditor({ profile, onChange }: Props) {
                 })
               }
             />
-            <span>이 과목을 재수강할 예정이므로 추천 후보에 포함</span>
+            <span>재수강 예정(추천 후보에 포함)</span>
           </label>
         </div>
       </li>

@@ -382,6 +382,40 @@ ${JSON.stringify({
     );
   });
 
+  it("does not flag a remaining-credits mismatch that in-progress credits fully explain", () => {
+    // The school's own document is generated as of last confirmed semester and does not subtract
+    // credits from courses the student is currently taking, so its printed 잔여학점 (기준-취득)
+    // routinely differs from the code-computed value (기준-취득-수강중) for any enrolled student.
+    // That is expected, not an extraction error, and must not be flagged for review.
+    const profile = parseAcademicExtraction(
+      JSON.stringify({
+        completedCourses: [],
+        requirements: [
+          {
+            scope: "general",
+            label: "글로벌",
+            rule: { kind: "credit_minimum", credits: 10 },
+            earnedCredits: 6,
+            inProgressCredits: { spring: 2, summer: 0, fall: 0, winter: 0, total: 2 },
+            // Document prints 10 - 6 = 4 (ignores the 2 in-progress credits); code computes
+            // 10 - 6 - 2 = 2. The gap is fully explained by inProgressCredits.total.
+            remainingCredits: 4,
+            status: "in_progress",
+            rawValues: { 기준학점: "10", 취득학점: "6", 잔여학점: "4" },
+          },
+        ],
+        reviewIssues: [],
+      }),
+      "graduation_requirements",
+      "source-remaining-explained-by-in-progress",
+    );
+
+    expect(profile.requirements[0]).toMatchObject({
+      remainingCredits: 2,
+      reviewReasons: [],
+    });
+  });
+
   it("computes remaining credits even when Solar omits the field entirely", () => {
     const profile = parseAcademicExtraction(
       JSON.stringify({

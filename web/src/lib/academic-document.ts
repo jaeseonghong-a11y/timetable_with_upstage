@@ -1092,10 +1092,14 @@ function normalizeNullableCredit(
  * 쓴다 — 멘토 피드백(P0-2, "계산은 코드로") 및 mentor_midcheckpoint_feedback 메모 반영. 문서
  * 유형·구성은 학교/학생마다 달라질 수 있어 규칙 종류(credit_minimum vs distribution_minimum
  * 등) 판별은 계속 Solar/표 파싱에 맡기지만, 세 값이 갖춰진 뒤의 뺄셈 자체는 절대 변하지 않는
- * 산수이므로 추출 대상이 아니라 계산 대상으로 취급한다. 추출된 값과 계산값이 다르면(즉 세 값
- * 중 하나가 잘못 읽혔다는 신호) reviewReasons에 남겨 review 상태로 보내고, 그렇지 않으면
- * 계산값을 그대로 canonical 값으로 반환한다. rule.kind가 credit_minimum이 아니거나
+ * 산수이므로 추출 대상이 아니라 계산 대상으로 취급한다. rule.kind가 credit_minimum이 아니거나
  * earnedCredits를 확정하지 못한 경우는 계산 불가능한 경우이므로 추출값을 그대로 둔다.
+ *
+ * 문서의 잔여학점이 수강중 학점을 빼기 전 값(기준-취득)과 일치하는 경우는 검토 대상에서
+ * 제외한다 — 학교 문서는 대개 직전 학기까지만 반영해 생성되므로, 현재 학기에 수강중인 과목이
+ * 있는 학생은 이 차이가 사실상 항상 발생하는 정상 상황이다(실측: 재학생 다수 케이스). 계산값과
+ * 화면 값이 이 패턴으로도 설명되지 않을 때만 — 즉 세 값 중 하나가 잘못 읽혔다는 신호일 때만 —
+ * reviewReasons에 남겨 review 상태로 보낸다.
  */
 function reconcileCreditMinimumRemaining(
   rule: RequirementRule,
@@ -1108,9 +1112,11 @@ function reconcileCreditMinimumRemaining(
     return extractedRemainingCredits;
   }
   const computedRemainingCredits = Math.max(0, rule.credits - earnedCredits - inProgressTotal);
+  const remainingBeforeInProgress = Math.max(0, rule.credits - earnedCredits);
   if (
     extractedRemainingCredits !== null &&
-    extractedRemainingCredits !== computedRemainingCredits
+    extractedRemainingCredits !== computedRemainingCredits &&
+    !(inProgressTotal > 0 && extractedRemainingCredits === remainingBeforeInProgress)
   ) {
     reviewReasons.push("기준·취득·수강학점으로 계산한 잔여학점과 화면 값이 달라 확인이 필요합니다.");
   }
