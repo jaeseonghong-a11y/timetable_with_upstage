@@ -22,7 +22,7 @@ const STEPS = [
   { id: 1, title: "기본 정보 입력", short: "기본 정보 입력" },
   { id: 2, title: "내 기록 적용하기", short: "내 기록 적용하기" },
   { id: 3, title: "과목 담기", short: "과목 담기" },
-  { id: 4, title: "AI 시간표 추천", short: "AI 추천" },
+  { id: 4, title: "AI 시간표 추천", short: "AI 시간표 추천" },
 ] as const;
 
 type StepId = (typeof STEPS)[number]["id"];
@@ -203,8 +203,8 @@ export function PlanningWorkspace() {
           : "과목 담기 (2/2)"
         : step === 4
           ? aiSubstep === "setup"
-            ? "AI 추천 조건 (1/2)"
-            : "AI 추천 결과 (2/2)"
+            ? "AI 시간표 추천 (1/2)"
+            : "AI 시간표 추천 (2/2)"
           : current.title;
   const plannerView =
     step === 4
@@ -221,7 +221,7 @@ export function PlanningWorkspace() {
     (step === 4 && aiSubstep === "setup");
   const nextLabel =
     step === 3 && planSubstep === "select"
-      ? "유효 시간표 보기"
+      ? "유효 시간표 확인"
       : step === 4 && aiSubstep === "setup"
         ? aiRecommendAction.isRunning
           ? "추천 생성 중…"

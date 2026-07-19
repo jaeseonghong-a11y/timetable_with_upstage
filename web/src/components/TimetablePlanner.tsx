@@ -1342,24 +1342,26 @@ export function TimetablePlanner({
         </div>
       ) : null}
       {showAiSetup ? (
-        <div className={styles.notice}>
-          <div>
-            <strong>{isRecommending ? "AI 분석 중" : "AI 추천 조건"}</strong>
-            <span>
-              {isRecommending
-                ? `${RECOMMENDATION_STAGES[recommendationStage]} 완료되면 결과 화면으로 이동합니다.`
-                : "선호 조건을 고른 뒤 추천을 받으면, 다음 화면에서 결과 카드를 확인합니다."}
-            </span>
+        <div className={styles.stepIntro}>
+          <div className={styles.stepHeading}>
+            <h2>STEP 4 · AI 시간표 추천</h2>
+            {isRecommending ? <span className={styles.loadingBadge}>분석 중…</span> : null}
           </div>
-          {isRecommending ? <span className={styles.loadingBadge}>분석 중…</span> : null}
+          <p className={styles.stepLead}>
+            {isRecommending
+              ? `${RECOMMENDATION_STAGES[recommendationStage]} 완료되면 결과 화면으로 이동합니다.`
+              : "선호 조건을 고른 뒤 추천을 받으면, 다음 화면에서 결과 카드를 확인합니다."}
+          </p>
         </div>
       ) : null}
       {showAiResults ? (
-        <div className={styles.notice}>
-          <div>
-            <strong>AI 추천 결과</strong>
-            <span>앞에서 담은 과목을 유지한 채, 조건에 맞는 상위 후보를 보여줍니다.</span>
+        <div className={styles.stepIntro}>
+          <div className={styles.stepHeading}>
+            <h2>STEP 4 · AI 시간표 추천</h2>
           </div>
+          <p className={styles.stepLead}>
+            앞에서 담은 과목을 유지한 채, 조건에 맞는 상위 후보를 보여줍니다.
+          </p>
         </div>
       ) : null}
       {showSelect && collectionError ? (
