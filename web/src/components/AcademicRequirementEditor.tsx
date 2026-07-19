@@ -41,6 +41,9 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
       ({ requirement }) => !showUnmetGeneralOnly || isUnmetGeneralRequirement(requirement),
     );
   const unmetGeneralCount = profile.requirements.filter(isUnmetGeneralRequirement).length;
+  const needsReviewCount = profile.requirements.filter((requirement) =>
+    requirement.reviewReasons.some((reason) => !isNonBlockingRequirementReview(requirement, reason)),
+  ).length;
 
   function updateRequirement(index: number, requirement: Requirement): void {
     onChange({
@@ -132,6 +135,9 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
               {unmetGeneralCount > 0 ? ` (${unmetGeneralCount})` : ""}
             </span>
           </label>
+          {needsReviewCount > 0 ? (
+            <span className={styles.needsReviewBadge}>확인 필요 {needsReviewCount}</span>
+          ) : null}
           <button type="button" onClick={() => setIsListCollapsed(true)}>
             전체 접기
           </button>

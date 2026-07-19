@@ -217,8 +217,6 @@ export function TimetablePlanner({
   const [fixedEventError, setFixedEventError] = useState("");
   const [minimumCredits, setMinimumCredits] = useState("12");
   const [maximumCredits, setMaximumCredits] = useState("21");
-  /** Reserved credits for AI elective filler — always added to the desired credit range. */
-  const [electiveRecommendationCredits, setElectiveRecommendationCredits] = useState("0");
   const [disabledCourseTypes, setDisabledCourseTypes] = useState<Set<string>>(new Set());
   const [dayOffFilters, setDayOffFilters] = useState<Weekday[]>([]);
   const [courseSearch, setCourseSearch] = useState("");
@@ -284,12 +282,23 @@ export function TimetablePlanner({
             ),
           })),
         );
-        const majorResults = await Promise.all(majorRequests);
+        // allSettled, not all: doubling requests to two campuses per department doubles exposure
+        // to a single transient SKKU failure, and one rejected request must not wipe out every
+        // OTHER department/campus that succeeded — only surface an error if literally none did.
+        const majorSettlements = await Promise.allSettled(majorRequests);
+        const majorResults = majorSettlements.flatMap((settlement) =>
+          settlement.status === "fulfilled" ? [settlement.value] : [],
+        );
+        if (majorResults.length === 0 && majorSettlements.length > 0) {
+          const firstFailure = majorSettlements.find(
+            (settlement): settlement is PromiseRejectedResult => settlement.status === "rejected",
+          );
+          throw firstFailure?.reason ?? new Error("개설강좌를 불러오지 못했습니다.");
+        }
         // A department with zero open sections this term/campus is a normal outcome (e.g. a
         // department that only opens sections on the other campus, or a niche 연계전공/융합트랙),
         // not a failure — courseGroupsFromCollection throws on an empty collection, which would
-        // otherwise abort every OTHER selected major's courses too since they're all merged from
-        // one Promise.all batch.
+        // otherwise abort every OTHER selected major's courses too since they're all merged here.
         const groups = majorResults.flatMap(({ departmentCode, result }) =>
           hasAnyCourses(result)
             ? courseGroupsFromCollection(result).map((group) => ({
@@ -859,11 +868,6 @@ export function TimetablePlanner({
     return { requiredSubjects, choiceBags };
   }, [choiceGroups, courseOwners, enabledSectionIds, selectedCourseGroups]);
 
-  const reservedElectiveCredits = useMemo(() => {
-    const parsed = Number(electiveRecommendationCredits);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-  }, [electiveRecommendationCredits]);
-  // 비포함 = 담은 과목만(유효 시간표). 포함 = 비포함 + 교양 추천(AI 추천).
   const derivedCreditRange = useMemo(
     () => estimateCreditRangeFromPlan(manualSelectionPlanSubjects),
     [manualSelectionPlanSubjects],
@@ -871,26 +875,11 @@ export function TimetablePlanner({
   const [previousDerivedCreditRange, setPreviousDerivedCreditRange] = useState(derivedCreditRange);
   if (previousDerivedCreditRange !== derivedCreditRange) {
     setPreviousDerivedCreditRange(derivedCreditRange);
-    if (!derivedCreditRange) {
-      setMinimumCredits("12");
-      setMaximumCredits("21");
-    } else {
+    if (derivedCreditRange) {
       setMinimumCredits(formatCredits(derivedCreditRange.minCredits));
       setMaximumCredits(formatCredits(derivedCreditRange.maxCredits));
     }
   }
-  const excludedCreditRangeLabel = `${minimumCredits || "?"}~${maximumCredits || "?"}학점`;
-  const includedMinCredits =
-    minimumCredits === "" || !Number.isFinite(Number(minimumCredits))
-      ? null
-      : Number(minimumCredits) + reservedElectiveCredits;
-  const includedMaxCredits =
-    maximumCredits === "" || !Number.isFinite(Number(maximumCredits))
-      ? null
-      : Number(maximumCredits) + reservedElectiveCredits;
-  const includedCreditRangeLabel = `${
-    includedMinCredits === null ? "?" : formatCredits(includedMinCredits)
-  }~${includedMaxCredits === null ? "?" : formatCredits(includedMaxCredits)}학점`;
 
   const result = useMemo(() => {
     if (selectedCourseGroups.length === 0) {
@@ -1188,17 +1177,6 @@ export function TimetablePlanner({
     setRecommendationError("");
     try {
       const filler = await buildAiFillerSubjects();
-      const parsedMin = minimumCredits === "" ? Number.NaN : Number(minimumCredits);
-      const parsedMax = maximumCredits === "" ? Number.NaN : Number(maximumCredits);
-      // Elevate the Step 3 bag range by the reserved 교양 추천 credits for AI fill only.
-      const aiCreditRange = {
-        minCredits: Number.isFinite(parsedMin)
-          ? parsedMin + reservedElectiveCredits
-          : parsedMin,
-        maxCredits: Number.isFinite(parsedMax)
-          ? parsedMax + reservedElectiveCredits
-          : parsedMax,
-      };
       const timetables = generateTimetablesForSelectionPlan(
         {
           requiredSubjects: manualSelectionPlanSubjects.requiredSubjects,
@@ -1206,7 +1184,10 @@ export function TimetablePlanner({
             ...manualSelectionPlanSubjects.choiceBags,
             ...(filler.bag ? [filler.bag] : []),
           ],
-          creditRange: aiCreditRange,
+          creditRange: {
+            minCredits: minimumCredits === "" ? Number.NaN : Number(minimumCredits),
+            maxCredits: maximumCredits === "" ? Number.NaN : Number(maximumCredits),
+          },
         },
         {
           unavailableDays,
@@ -1378,10 +1359,10 @@ export function TimetablePlanner({
       {showResults ? (
         <div className={styles.stepIntro}>
           <div className={styles.stepHeading}>
-            <h2>유효 시간표 확인 (교양 추천 비포함)</h2>
+            <h2>유효 시간표 확인</h2>
           </div>
           <p className={styles.stepLead}>
-            요일, 시간 조건을 조정하여 담아 둔 과목으로 만들 수 있는 시간표를 확인합니다.
+            요일, 시간, 학점 조건을 조정하여 담아 둔 과목으로 만들 수 있는 시간표를 확인합니다.
           </p>
         </div>
       ) : null}
@@ -1794,39 +1775,7 @@ export function TimetablePlanner({
                   </div>
                 </div>
 
-                {(() => {
-                  const choiceGroupIds = new Set(choiceGroups.map((group) => group.id));
-                  const hasChoiceSubjects = selectedCourseGroups.some(({ selectionId }) => {
-                    const owner = courseOwners[selectionId];
-                    return Boolean(owner && owner !== "required" && choiceGroupIds.has(owner));
-                  });
-                  const electiveRecommendationBlock = (
-                    <div className={styles.destinationBlock} key="elective-recommendation">
-                      <div className={styles.requiredRule}>
-                        <span>교양 과목 추천 받기</span>
-                        <label className={styles.electiveCreditInput}>
-                          <span className={styles.srOnly}>추천받을 교양 학점</span>
-                          <input
-                            inputMode="numeric"
-                            min="0"
-                            max="21"
-                            step="1"
-                            type="number"
-                            value={electiveRecommendationCredits}
-                            onChange={(event) =>
-                              setElectiveRecommendationCredits(event.target.value)
-                            }
-                          />
-                          <span aria-hidden="true">학점</span>
-                        </label>
-                        <small>
-                          아래 학점 범위의 ‘교양 추천 포함’에 더해지며, AI 시간표 추천에만
-                          사용됩니다.
-                        </small>
-                      </div>
-                    </div>
-                  );
-                  const choiceGroupBlocks = choiceGroups.map((choiceGroup) => {
+                {choiceGroups.map((choiceGroup) => {
                     const groupSubjects = selectedCourseGroups.filter(
                       ({ selectionId }) => courseOwners[selectionId] === choiceGroup.id,
                     );
@@ -1908,34 +1857,39 @@ export function TimetablePlanner({
                         </div>
                       </div>
                     );
-                  });
-                  return hasChoiceSubjects
-                    ? [...choiceGroupBlocks, electiveRecommendationBlock]
-                    : [electiveRecommendationBlock, ...choiceGroupBlocks];
-                })()}
+                  })}
               </div>
 
-              <fieldset className={styles.creditRangeFieldset}>
-                <legend>학점 범위</legend>
-                <div className={styles.creditRangeRows}>
-                  <div className={styles.creditRangeRow}>
-                    <div className={styles.creditRangeRowLabel}>
-                      <strong>교양 추천 비포함</strong>
-                      <small>유효 시간표 확인</small>
-                    </div>
-                    <span className={styles.creditRangeRowValue}>{excludedCreditRangeLabel}</span>
-                  </div>
-                  <div className={styles.creditRangeRow}>
-                    <div className={styles.creditRangeRowLabel}>
-                      <strong>교양 추천 포함</strong>
-                      <small>AI 시간표 추천</small>
-                    </div>
-                    <span className={styles.creditRangeRowValue}>{includedCreditRangeLabel}</span>
-                  </div>
+              <fieldset>
+                <legend>원하는 학점 범위</legend>
+                <div className={styles.creditRangeInputs}>
+                  <label>
+                    <span>최소</span>
+                    <input
+                      inputMode="numeric"
+                      min="0"
+                      step="1"
+                      type="number"
+                      value={minimumCredits}
+                      onChange={(event) => setMinimumCredits(event.target.value)}
+                    />
+                  </label>
+                  <span aria-hidden="true">~</span>
+                  <label>
+                    <span>최대</span>
+                    <input
+                      inputMode="numeric"
+                      min="0"
+                      step="1"
+                      type="number"
+                      value={maximumCredits}
+                      onChange={(event) => setMaximumCredits(event.target.value)}
+                    />
+                  </label>
                 </div>
                 <small>
-                  담은 필수·선택 과목 학점으로 자동 계산됩니다. 교양 추천 학점을 바꾸면 포함
-                  범위만 달라집니다.
+                  필수 과목 학점과 선택 그룹의 학점 범위(예: 1개~2개)를 반영해 자동으로 채웁니다.
+                  필요하면 직접 수정할 수 있습니다.
                 </small>
               </fieldset>
             </section>

@@ -641,32 +641,6 @@
   font-size: 10px;
 }
 
-.electiveCreditInput {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.electiveCreditInput input {
-  width: 56px;
-  padding: 6px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 7px;
-  background: var(--surface-card);
-  color: var(--text-primary);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 800;
-  text-align: center;
-}
-
-.electiveCreditInput > span:last-child {
-  color: var(--text-primary);
-  font-size: 12px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
 .choiceGroupRuleHeader {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -1073,78 +1047,39 @@
   font: inherit;
 }
 
-.creditRangeFieldset {
+.creditRangeInputs {
   display: grid;
-  gap: 8px;
-  margin: 20px 0 0;
-  padding: 16px 0 0;
-  border: 0;
-  border-top: 1px solid var(--border-subtle);
-  min-width: 0;
-}
-
-.creditRangeFieldset legend {
-  float: left;
-  width: 100%;
-  margin: 0 0 8px;
-  padding: 0;
-  color: var(--text-primary);
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.creditRangeFieldset > small {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 11px;
-  line-height: 1.45;
-}
-
-.creditRangeRows {
-  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
   gap: 8px;
 }
 
-.creditRangeRow {
+.creditRangeInputs label {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  background: var(--surface-page);
+  gap: 5px;
 }
 
-.creditRangeRowLabel {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.creditRangeRowLabel strong {
-  color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.creditRangeRowLabel small {
-  color: var(--text-secondary);
-  font-size: 11px;
-  line-height: 1.4;
-}
-
-.creditRangeRowValue {
-  color: var(--text-primary);
-  font-size: 14px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
+.creditRangeInputs label span,
 .controls fieldset > small {
   color: var(--text-secondary);
   font-size: 11px;
   line-height: 1.45;
+}
+
+.creditRangeInputs input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 9px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.creditRangeInputs + small {
+  display: block;
+  margin-top: 7px;
 }
 
 .results {

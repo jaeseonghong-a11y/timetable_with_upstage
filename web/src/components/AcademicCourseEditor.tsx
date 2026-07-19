@@ -17,6 +17,9 @@ export function AcademicCourseEditor({ profile, onChange }: Props) {
     [profile.completedCourses],
   );
   const classifications = groupedCourses.map((group) => group.classification);
+  const needsReviewCount = profile.completedCourses.filter(
+    (course) => course.reviewReasons.length > 0,
+  ).length;
   const sourceDocumentId = profile.sourceDocuments[0]?.id;
   const searchQuery = courseSearch.trim().toLowerCase();
 
@@ -297,6 +300,9 @@ export function AcademicCourseEditor({ profile, onChange }: Props) {
           <h3>{profile.completedCourses.length}개</h3>
         </div>
         <div className={styles.sectionControls}>
+          {needsReviewCount > 0 ? (
+            <span className={styles.needsReviewBadge}>확인 필요 {needsReviewCount}</span>
+          ) : null}
           <button type="button" onClick={() => setAllGroupsCollapsed(true, classifications)}>
             전체 접기
           </button>

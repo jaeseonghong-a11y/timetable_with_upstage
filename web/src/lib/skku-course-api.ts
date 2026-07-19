@@ -1,6 +1,7 @@
 import {
   ELECTIVE_CATALOG_CACHE_TTL_MS,
   ELECTIVE_SECTIONS_CACHE_TTL_MS,
+  MAJOR_COURSES_CACHE_TTL_MS,
   SESSION_COOKIE_CACHE_TTL_MS,
 } from "./cache-constants";
 import { InMemoryTtlCache, type CacheStore } from "./cache-store";
@@ -128,12 +129,14 @@ const SESSION_CACHE_KEY = "session";
 const defaultSessionCache: CacheStore<string> = new InMemoryTtlCache();
 const defaultElectiveCatalogCache: CacheStore<SkkuElectiveCatalog> = new InMemoryTtlCache();
 const defaultElectiveSectionsCache: CacheStore<SkkuCourse[]> = new InMemoryTtlCache();
+const defaultMajorCoursesCache: CacheStore<SkkuCourse[]> = new InMemoryTtlCache();
 
 /** Test-only: clears every default cache so tests don't leak state across cases. */
 export function resetSkkuApiCaches(): void {
   (defaultSessionCache as InMemoryTtlCache<string>).clear();
   (defaultElectiveCatalogCache as InMemoryTtlCache<SkkuElectiveCatalog>).clear();
   (defaultElectiveSectionsCache as InMemoryTtlCache<SkkuCourse[]>).clear();
+  (defaultMajorCoursesCache as InMemoryTtlCache<SkkuCourse[]>).clear();
 }
 
 function electiveCatalogCacheKey(query: SkkuElectiveQuery): string {
@@ -144,17 +147,30 @@ function electiveSectionsCacheKey(query: SkkuElectiveQuery, courseNumber: string
   return `${query.year}:${query.term}:${query.campus}:${courseNumber}`;
 }
 
+function majorCoursesCacheKey(query: SkkuCourseQuery): string {
+  return `${query.year}:${query.term}:${query.campus}:${query.departmentCode}`;
+}
+
 export async function fetchSkkuMajorCourses(
   query: SkkuCourseQuery,
   options: {
     fetcher?: typeof fetch;
     requestIntervalMs?: number;
     sessionCache?: CacheStore<string>;
+    majorCoursesCache?: CacheStore<SkkuCourse[]>;
   } = {},
 ): Promise<SkkuCourse[]> {
+  const majorCoursesCache = options.majorCoursesCache ?? defaultMajorCoursesCache;
+  const cacheKey = majorCoursesCacheKey(query);
+  const cached = majorCoursesCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   const fetcher = options.fetcher ?? fetch;
-  const requestIntervalMs = options.requestIntervalMs ?? 500;
   const sessionCookie = await establishSkkuSession(fetcher, options.sessionCache);
+  // A single standalone request per invocation with nothing else to pace against — see the same
+  // note on fetchSkkuElectiveCourses — so it skips the shared 500ms burst-protection default.
   const rows = await fetchSkkuDataset(
     MAJOR_COURSES_URL,
     sessionCookie,
@@ -170,9 +186,11 @@ export async function fetchSkkuMajorCourses(
         _TRANSACTION_ID: "selectMain",
     },
     fetcher,
-    requestIntervalMs,
+    options.requestIntervalMs ?? 0,
   );
-  return normalizeCourseRows(rows, "major");
+  const result = normalizeCourseRows(rows, "major");
+  majorCoursesCache.set(cacheKey, result, MAJOR_COURSES_CACHE_TTL_MS);
+  return result;
 }
 
 export async function fetchSkkuElectiveAreas(

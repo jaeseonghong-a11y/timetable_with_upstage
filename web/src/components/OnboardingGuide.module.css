@@ -1,0 +1,232 @@
+.dialog {
+  width: min(420px, calc(100vw - 32px));
+  padding: 0;
+  border: 0;
+  border-radius: 20px;
+  background: var(--surface-card);
+  box-shadow: 0 28px 70px rgb(10 30 22 / 28%);
+}
+
+.dialog::backdrop {
+  background: rgb(10 20 16 / 55%);
+  backdrop-filter: blur(1px);
+}
+
+.panel {
+  position: relative;
+  display: grid;
+  gap: 14px;
+  padding: 28px 26px 24px;
+}
+
+.closeButton {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface-page);
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.closeButton:hover {
+  background: var(--surface-note);
+  color: var(--accent-strong);
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.diagram {
+  display: grid;
+  place-items: center;
+  padding: 18px 12px;
+  border-radius: 14px;
+  background: var(--surface-note);
+}
+
+.diagram svg {
+  width: 100%;
+  max-width: 260px;
+  height: auto;
+}
+
+.diagramCard {
+  fill: var(--surface-card);
+  stroke: var(--border-subtle);
+  stroke-width: 2;
+}
+
+.diagramBar {
+  fill: var(--border-subtle);
+}
+
+.diagramBarStrong {
+  fill: var(--accent-strong);
+  opacity: 0.85;
+}
+
+.diagramArrow {
+  stroke: var(--accent-strong);
+  stroke-width: 3;
+  fill: none;
+}
+
+.diagramArrowHead {
+  fill: var(--accent-strong);
+}
+
+.diagramAccentSoft {
+  fill: var(--surface-card);
+  stroke: var(--accent-strong);
+  stroke-width: 3;
+}
+
+.diagramCheck {
+  stroke: var(--accent-strong);
+}
+
+.diagramGridLine {
+  stroke: var(--border-subtle);
+  stroke-width: 1;
+}
+
+.diagramBlock1 {
+  fill: #dcefe8;
+  stroke: rgb(24 105 76 / 75%);
+  stroke-width: 1.5;
+}
+
+.diagramBlock2 {
+  fill: #e4eafa;
+  stroke: #5170a8;
+  stroke-width: 1.5;
+}
+
+.diagramBlock3 {
+  fill: #f8e9dc;
+  stroke: #b16b40;
+  stroke-width: 1.5;
+}
+
+.diagramSparkle {
+  fill: var(--accent-strong);
+}
+
+.diagramRankCardActive {
+  fill: var(--surface-card);
+  stroke: var(--accent-strong);
+  stroke-width: 2.5;
+}
+
+.diagramRankCard {
+  fill: var(--surface-card);
+  stroke: var(--border-subtle);
+  stroke-width: 1.5;
+}
+
+.diagramRankBadgeActive {
+  fill: var(--accent-strong);
+}
+
+.diagramRankBadge {
+  fill: var(--border-subtle);
+}
+
+.title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.body {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border-subtle);
+  transition: background 160ms ease, width 160ms ease;
+}
+
+.dot[data-active="true"] {
+  width: 18px;
+  background: var(--accent-strong);
+}
+
+.nav {
+  display: flex;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.nav button {
+  flex: 1;
+  min-height: 44px;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.secondaryButton {
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-card);
+  color: var(--text-secondary);
+}
+
+.secondaryButton:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.primaryButton {
+  border: 1px solid var(--accent-strong);
+  background: var(--accent-strong);
+  color: #fff;
+}
+
+.dontShowToday {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding-top: 2px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+
+.dontShowToday input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent-strong);
+}

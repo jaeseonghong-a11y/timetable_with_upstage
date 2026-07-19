@@ -19,10 +19,10 @@ import { TimetablePlanner } from "./TimetablePlanner";
 import styles from "./PlanningWorkspace.module.css";
 
 const STEPS = [
-  { id: 1, title: "기본 정보 입력", short: "기본 정보 입력" },
-  { id: 2, title: "내 기록 적용하기", short: "내 기록 적용하기" },
-  { id: 3, title: "과목 담기", short: "과목 담기" },
-  { id: 4, title: "AI 시간표 추천", short: "AI 시간표 추천" },
+  { id: 1, title: "기본 정보 입력" },
+  { id: 2, title: "내 기록 적용하기" },
+  { id: 3, title: "과목 담기" },
+  { id: 4, title: "AI 시간표 추천" },
 ] as const;
 
 type StepId = (typeof STEPS)[number]["id"];
@@ -119,13 +119,18 @@ export function PlanningWorkspace() {
   }
 
   function goToStep(nextStep: StepId): void {
-    if (nextStep !== 1 && !appliedProfile && nextStep > 1) {
+    if (nextStep !== 1 && !appliedProfile) {
       return;
     }
-    if (nextStep === 2) {
-      setDocSubstep("course_history");
-    }
     enterStep(nextStep);
+  }
+
+  function goToDocSubstep(target: DocSubstep): void {
+    if (!appliedProfile) {
+      return;
+    }
+    setDocSubstep(target);
+    enterStep(2);
   }
 
   function skipCurrentDocument(): void {
@@ -193,9 +198,21 @@ export function PlanningWorkspace() {
   }
 
   const current = STEPS[step - 1]!;
+  // The top progress bar shows 2단계 as two separately-clickable sub-steps (2-1/2-2), so the
+  // connector spans 5 visual slots even though STEPS itself still only has 4 real steps.
+  const TOTAL_VISUAL_STEPS = 5;
+  const visualStepPosition =
+    step === 1
+      ? 0
+      : step === 2
+        ? docSubstep === "course_history"
+          ? 1
+          : 2
+        : step === 3
+          ? 3
+          : 4;
   /** 0–100 along the connector between first and last step centers. */
-  const connectorProgress =
-    STEPS.length <= 1 ? 0 : ((step - 1) / (STEPS.length - 1)) * 100;
+  const connectorProgress = (visualStepPosition / (TOTAL_VISUAL_STEPS - 1)) * 100;
   const currentDocumentConfirmed = Boolean(confirmedProfiles[docSubstep]);
   const nextBlocked =
     (step === 1 && !appliedProfile) ||
@@ -233,12 +250,65 @@ export function PlanningWorkspace() {
     (step === 4 && aiSubstep === "setup");
   const nextLabel =
     step === 3 && planSubstep === "select"
-      ? "유효 시간표 확인 (교양 추천 비포함)"
+      ? "유효 시간표 확인"
       : step === 4 && aiSubstep === "setup"
         ? aiRecommendAction.isRunning
           ? "추천 생성 중…"
-          : "AI 추천 받기 (교양 추천 포함)"
+          : "AI 추천 받기"
         : "다음";
+
+  const stepListEntries: Array<{
+    key: string;
+    indexLabel: string;
+    label: string;
+    subLabel?: string;
+    isActive: boolean;
+    isDone: boolean;
+    onClick: () => void;
+  }> = [
+    {
+      key: "1",
+      indexLabel: "1",
+      label: "기본 정보 입력",
+      isActive: step === 1,
+      isDone: step > 1,
+      onClick: () => goToStep(1),
+    },
+    {
+      key: "2-1",
+      indexLabel: "2-1",
+      label: "내 기록 적용하기",
+      subLabel: "수강/취득 과목",
+      isActive: step === 2 && docSubstep === "course_history",
+      isDone: step > 2 || (step === 2 && docSubstep === "graduation_requirements"),
+      onClick: () => goToDocSubstep("course_history"),
+    },
+    {
+      key: "2-2",
+      indexLabel: "2-2",
+      label: "내 기록 적용하기",
+      subLabel: "졸업요건충족현황",
+      isActive: step === 2 && docSubstep === "graduation_requirements",
+      isDone: step > 2,
+      onClick: () => goToDocSubstep("graduation_requirements"),
+    },
+    {
+      key: "3",
+      indexLabel: "3",
+      label: "과목 담기",
+      isActive: step === 3,
+      isDone: step > 3,
+      onClick: () => goToStep(3),
+    },
+    {
+      key: "4",
+      indexLabel: "4",
+      label: "AI 시간표 추천",
+      isActive: step === 4,
+      isDone: false,
+      onClick: () => goToStep(4),
+    },
+  ];
 
   return (
     <div className={styles.workspace}>
@@ -258,19 +328,21 @@ export function PlanningWorkspace() {
           className={styles.stepList}
           style={{ ["--connector-progress" as string]: String(connectorProgress) }}
         >
-          {STEPS.map((item) => (
-            <li key={item.id}>
+          {stepListEntries.map((entry) => (
+            <li key={entry.key}>
               <button
-                aria-current={item.id === step ? "step" : undefined}
-                data-active={item.id === step}
-                data-done={item.id < step}
+                aria-current={entry.isActive ? "step" : undefined}
+                data-active={entry.isActive}
+                data-done={entry.isDone}
                 type="button"
-                onClick={() => goToStep(item.id)}
+                onClick={entry.onClick}
               >
                 <span className={styles.stepIndex} aria-hidden="true">
-                  {item.id}
+                  {entry.indexLabel}
                 </span>
-                <span className={styles.stepLabel}>{item.short}</span>
+                <span className={entry.subLabel ? styles.stepSubLabel : styles.stepLabel}>
+                  {entry.subLabel ?? entry.label}
+                </span>
               </button>
             </li>
           ))}
@@ -288,6 +360,11 @@ export function PlanningWorkspace() {
                 profile.departmentCode,
                 ...(profile.additionalDepartmentCodes ?? []),
               ]);
+              // Mount TimetablePlanner (hidden) right away so its major-course fetch starts in
+              // the background while the student is still on step 2, instead of only starting
+              // once they open step 3 — the two-campus fetch takes long enough that waiting for
+              // step 3 to even begin loading made 과목 담기 feel stuck on open.
+              setHasEnteredPlanner(true);
               track("profile_applied");
             }}
             onChange={setStudentProfile}

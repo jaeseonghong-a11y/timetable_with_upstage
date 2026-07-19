@@ -493,8 +493,20 @@
 .sectionControls {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
   gap: 7px;
+}
+
+.needsReviewBadge {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--surface-warning);
+  color: var(--text-warning);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .sectionControls > button:not(.secondaryButton) {
