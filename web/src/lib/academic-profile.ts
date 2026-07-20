@@ -11,6 +11,32 @@ export type RequirementScope =
   | "other";
 export type RequirementStatus = "satisfied" | "in_progress" | "unmet" | "review";
 
+// Exchange-credit recognition codes (e.g. EXGLV45) use only 2 digits, unlike SKKU's own 3-4 digit
+// numbering. Kept here as the single source of truth (not copy-pasted per module) after a real
+// incident where the client-side confirm-time copy of this pattern silently drifted out of sync
+// with the server-side parsing copy and rejected valid courses on every confirm attempt.
+export const COURSE_CODE_PATTERN = /^[A-Z]{2,6}[0-9]{2,4}$/;
+
+// U+200B/200C/200D (zero-width space/non-joiner/joiner) and U+FEFF (BOM) — built from numeric
+// code points, not literal characters, so this source file never itself embeds an invisible one.
+const INVISIBLE_CODE_POINTS = [0x200b, 0x200c, 0x200d, 0xfeff];
+const INVISIBLE_CHARACTERS_PATTERN = new RegExp(
+  `[${INVISIBLE_CODE_POINTS.map((codePoint) => String.fromCharCode(codePoint)).join("")}]`,
+  "g",
+);
+
+/**
+ * Normalizes a course code for matching against COURSE_CODE_PATTERN. Strips zero-width/BOM
+ * characters in addition to ordinary whitespace trimming — these can survive a Document
+ * Parse/Solar round trip, are invisible in the UI, and a plain .trim() leaves them behind (JS's
+ * `trim()` only strips characters in the Unicode "White_Space" category, which excludes
+ * zero-width space/joiners and the BOM), so a code that looks completely normal on screen can
+ * still fail a naive pattern test.
+ */
+export function normalizeCourseCodeForMatch(code: string): string {
+  return code.replace(INVISIBLE_CHARACTERS_PATTERN, "").trim().toUpperCase();
+}
+
 export interface CompletedCourse {
   courseCode: string;
   courseName: string;

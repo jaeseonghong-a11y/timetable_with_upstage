@@ -77,7 +77,7 @@ describe("academic profile client state", () => {
     profile.completedCourses[0] = { ...profile.completedCourses[0]!, courseCode: "invalid" };
 
     expect(getAcademicProfileValidationErrors(profile)).toContain(
-      "1번째 과목의 학수번호를 확인해 주세요.",
+      '1번째 과목 "경영학원론"의 학수번호를 확인해 주세요.',
     );
     expect(() =>
       confirmAcademicProfile(profile, new Set(getReviewChecklist(profile).map(({ id }) => id))),
@@ -119,7 +119,35 @@ describe("academic profile client state", () => {
     ];
 
     expect(getAcademicProfileValidationErrors(profile)).toContain(
-      "1번째 과목의 학수번호를 확인해 주세요.",
+      '1번째 과목 "경영학원론"의 학수번호를 확인해 주세요.',
+    );
+  });
+
+  it("names the course in the message so it can be found by search even if the display number is ever wrong again", () => {
+    const profile = makeProfile();
+    profile.completedCourses[0] = {
+      ...profile.completedCourses[0]!,
+      courseCode: "invalid",
+      courseName: "경영전략특강",
+    };
+
+    expect(getAcademicProfileValidationErrors(profile)).toContain(
+      '1번째 과목 "경영전략특강"의 학수번호를 확인해 주세요.',
+    );
+  });
+
+  it("accepts a course code with a zero-width space Document Parse/Solar left behind (invisible in the UI)", () => {
+    const profile = makeProfile();
+    // Built from a numeric code point, not a literal character, so this test file never itself
+    // embeds an invisible character: "GED" + U+200B (zero-width space) + "G001".
+    const codeWithZeroWidthSpace = `GED${String.fromCharCode(0x200b)}G001`;
+    profile.completedCourses[0] = {
+      ...profile.completedCourses[0]!,
+      courseCode: codeWithZeroWidthSpace,
+    };
+
+    expect(getAcademicProfileValidationErrors(profile)).not.toEqual(
+      expect.arrayContaining([expect.stringContaining("학수번호")]),
     );
   });
 

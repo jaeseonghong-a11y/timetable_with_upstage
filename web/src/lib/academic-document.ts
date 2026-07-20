@@ -1,15 +1,17 @@
 import { requestSolarCompletion, UpstageApiError, type SolarJsonSchema } from "./upstage";
-import type {
-  AcademicDocumentKind,
-  AcademicProfile,
-  AcademicTerm,
-  CompletedCourse,
-  CompletionStatus,
-  Requirement,
-  RequirementRule,
-  RequirementScope,
-  RequirementStatus,
-  ReviewIssue,
+import {
+  COURSE_CODE_PATTERN,
+  normalizeCourseCodeForMatch,
+  type AcademicDocumentKind,
+  type AcademicProfile,
+  type AcademicTerm,
+  type CompletedCourse,
+  type CompletionStatus,
+  type Requirement,
+  type RequirementRule,
+  type RequirementScope,
+  type RequirementStatus,
+  type ReviewIssue,
 } from "./academic-profile";
 
 export type { AcademicDocumentKind, AcademicProfile } from "./academic-profile";
@@ -22,12 +24,10 @@ export class AcademicExtractionError extends Error {
 }
 
 const MAX_SOLAR_MARKDOWN_CHARACTERS = 80_000;
-// 2-digit suffix live-confirmed 2026-07-20: exchange-credit recognition codes (e.g. EXGLV45) use
-// only 2 digits, unlike SKKU's own 3-4 digit numbering — without {2,4} these rows never match at
-// all, so the code is invisible everywhere (never expected, never extracted as its own course),
-// and its trailing text instead gets absorbed into whichever real course happens to sit right
-// before it in the same garbled cell (see extractCourseCodeNamePairs).
-const COURSE_CODE_PATTERN = /^[A-Z]{2,6}[0-9]{2,4}$/;
+// COURSE_CODE_PATTERN (2-digit suffix live-confirmed 2026-07-20: exchange-credit recognition
+// codes like EXGLV45 use only 2 digits, unlike SKKU's own 3-4 digit numbering) lives in
+// academic-profile.ts as the single shared source of truth — a client-side copy of this same
+// pattern once drifted out of sync and silently rejected valid courses on every confirm attempt.
 const COURSE_CODE_SCAN_PATTERN = /\b[A-Z]{2,6}[0-9]{2,4}\b/g;
 const TERMS: readonly AcademicTerm[] = ["spring", "summer", "fall", "winter"];
 const COMPLETION_STATUSES: readonly CompletionStatus[] = [
@@ -1007,7 +1007,8 @@ function normalizeCompletedCourse(value: unknown, sourceDocumentId: string): Com
   if (!isRecord(value)) {
     return null;
   }
-  const courseCode = readString(value.courseCode)?.toUpperCase() ?? null;
+  const rawCourseCode = readString(value.courseCode);
+  const courseCode = rawCourseCode ? normalizeCourseCodeForMatch(rawCourseCode) : null;
   const courseName = readString(value.courseName);
   const majorScope = readString(value.majorScope, true);
   const classification = readString(value.classification, true);

@@ -70,6 +70,35 @@ describe("parseAcademicExtraction", () => {
     });
   });
 
+  it("accepts a Solar-returned course code with a zero-width space (invisible in the UI, not stripped by a plain trim())", () => {
+    // Built from a numeric code point, not a literal character, so this test file never itself
+    // embeds an invisible character: "BUS" + U+200B (zero-width space) + "2001".
+    const codeWithZeroWidthSpace = `BUS${String.fromCharCode(0x200b)}2001`;
+    const content = JSON.stringify({
+      completedCourses: [
+        {
+          courseCode: codeWithZeroWidthSpace,
+          courseName: "경영학원론",
+          majorScope: "제1전공",
+          classification: "전공",
+          year: 2025,
+          term: "fall",
+          credits: 3,
+          area: "전공코어",
+          completionStatus: "earned",
+          flags: [],
+          reviewReasons: [],
+        },
+      ],
+      ...EMPTY_REQUIREMENT_ARRAYS,
+    });
+
+    const profile = parseAcademicExtraction(content, "course_history", "source-1");
+
+    expect(profile.completedCourses).toHaveLength(1);
+    expect(profile.completedCourses[0]?.courseCode).toBe("BUS2001");
+  });
+
   it("accepts fenced JSON and builds requirement identifiers on the server", () => {
     const content = `\`\`\`json
 ${JSON.stringify({

@@ -1,14 +1,16 @@
-import type {
-  AcademicDocumentKind,
-  AcademicProfile,
-  AcademicTerm,
-  CompletedCourse,
-  CompletionStatus,
-  Requirement,
-  RequirementRule,
-  RequirementScope,
-  RequirementStatus,
-  ReviewIssue,
+import {
+  COURSE_CODE_PATTERN,
+  normalizeCourseCodeForMatch,
+  type AcademicDocumentKind,
+  type AcademicProfile,
+  type AcademicTerm,
+  type CompletedCourse,
+  type CompletionStatus,
+  type Requirement,
+  type RequirementRule,
+  type RequirementScope,
+  type RequirementStatus,
+  type ReviewIssue,
 } from "./academic-profile";
 import { getCourseDisplayNumbers } from "./course-history-grouping";
 
@@ -43,10 +45,6 @@ const REQUIREMENT_STATUSES: readonly RequirementStatus[] = [
   "unmet",
   "review",
 ];
-// Kept in sync with academic-document.ts's COURSE_CODE_PATTERN: exchange-credit codes (e.g.
-// EXGLV45) use only 2 digits, unlike SKKU's own 3-4 digit numbering — {3,4} here rejected those
-// as "invalid" on every confirm attempt even though they'd already parsed correctly upstream.
-const COURSE_CODE_PATTERN = /^[A-Z]{2,6}[0-9]{2,4}$/;
 
 export function parseAcademicProfileResponse(payload: unknown): AcademicProfile {
   if (!isRecord(payload) || !isAcademicProfile(payload.academicProfile)) {
@@ -217,22 +215,30 @@ export function isAcademicProfileConfirmed(profile: AcademicProfile): boolean {
 export function getAcademicProfileValidationErrors(profile: AcademicProfile): string[] {
   const errors: string[] = [];
   // The review UI numbers cards by grouping/sorting order ("과목 N" on the card), not by this
-  // array's storage order — using the raw index here would point the user at a number that was
-  // never rendered anywhere, so the two must stay in lockstep.
+  // array's storage order, so the display number alone is kept in lockstep via
+  // getCourseDisplayNumbers. But relying on a number alone is exactly what broke once already
+  // (a numbering-scheme mismatch pointed users at the wrong card) — every message also names the
+  // course itself (과목명 우선, 없으면 학수번호) so it can be found by typing that name/code into
+  // the search box above the course list, with no dependency on any numbering scheme staying in
+  // sync in the future.
   const displayNumbers = getCourseDisplayNumbers(profile.completedCourses);
   profile.completedCourses.forEach((course, index) => {
     const displayNumber = displayNumbers[index] ?? index + 1;
-    if (!COURSE_CODE_PATTERN.test(course.courseCode.trim().toUpperCase())) {
-      errors.push(`${displayNumber}번째 과목의 학수번호를 확인해 주세요.`);
+    const identity = course.courseName.trim() || course.courseCode.trim();
+    const courseLabel = identity
+      ? `${displayNumber}번째 과목 "${identity}"`
+      : `${displayNumber}번째 과목`;
+    if (!COURSE_CODE_PATTERN.test(normalizeCourseCodeForMatch(course.courseCode))) {
+      errors.push(`${courseLabel}의 학수번호를 확인해 주세요.`);
     }
     if (!course.courseName.trim()) {
-      errors.push(`${displayNumber}번째 과목명을 입력해 주세요.`);
+      errors.push(`${courseLabel}의 과목명을 입력해 주세요.`);
     }
     if (!Number.isFinite(course.credits) || course.credits < 0) {
-      errors.push(`${displayNumber}번째 과목의 학점을 확인해 주세요.`);
+      errors.push(`${courseLabel}의 학점을 확인해 주세요.`);
     }
     if (course.year !== null && !isIntegerInRange(course.year, 2000, 2100)) {
-      errors.push(`${displayNumber}번째 과목의 이수년도를 확인해 주세요.`);
+      errors.push(`${courseLabel}의 이수년도를 확인해 주세요.`);
     }
   });
   profile.requirements.forEach((requirement, index) => {
