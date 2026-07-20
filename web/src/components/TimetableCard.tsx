@@ -135,7 +135,7 @@ export function TimetableCard({
 
   /**
    * Saves this timetable to the server under a short code a friend can look up later — unlike
-   * "친구에게 공유"(URL 링크), this is a live pointer: whoever holds the code always sees the
+   * "1회용 링크로 공유"(URL 링크), this is a live pointer: whoever holds the code always sees the
    * latest save, not a frozen snapshot. If this browser already has a code from a previous save
    * (localStorage), it updates that same entry using its editToken instead of creating a new one.
    */
@@ -328,18 +328,20 @@ export function TimetableCard({
           <button disabled={isSavingImage} onClick={() => void handleSaveImage()} type="button">
             {isSavingImage ? "저장 중…" : "이미지로 저장"}
           </button>
-          <button onClick={handleToggleShare} type="button">
-            {isShareOpen ? "공유 링크 닫기" : "친구에게 공유"}
-          </button>
           <button onClick={handleToggleServerPanel} type="button">
-            {isServerPanelOpen ? "서버 저장 닫기" : "친구에게 서버로 공유"}
+            {isServerPanelOpen ? "코드 공유 닫기" : "코드로 공유(계속 최신 유지)"}
+          </button>
+          <button onClick={handleToggleShare} type="button">
+            {isShareOpen ? "공유 링크 닫기" : "1회용 링크로 공유"}
           </button>
           {saveImageError ? <span className={styles.saveImageError}>{saveImageError}</span> : null}
         </div>
         {isServerPanelOpen ? (
           <div className={styles.sharePanel}>
             <p className={styles.sharePanelHint}>
-              코드 하나로 언제든 최신 시간표를 확인할 수 있게 서버에 저장해요. 로그인은 필요 없어요.
+              코드 하나로 언제든 최신 시간표를 확인할 수 있게 서버에 저장해요. 나중에 시간표를 바꾸고
+              다시 저장해도 코드는 그대로라, 친구에게 코드를 다시 보낼 필요가 없어요. 로그인은 필요
+              없어요.
             </p>
             <div className={styles.shareLinkRow}>
               <input
@@ -379,7 +381,9 @@ export function TimetableCard({
         {isShareOpen && shareUrl ? (
           <div className={styles.sharePanel}>
             <p className={styles.sharePanelHint}>
-              로그인 없이 이 링크(또는 QR)를 열면 이 시간표를 그대로 볼 수 있어요.
+              로그인 없이 이 링크(또는 QR)를 열면 지금 이 시간표를 그대로 볼 수 있어요. 이후에
+              시간표를 바꿔도 이 링크는 갱신되지 않으니, 계속 최신 상태로 공유하려면 위의
+              &ldquo;코드로 공유&rdquo;를 쓰세요.
             </p>
             <div className={styles.shareLinkRow}>
               <input

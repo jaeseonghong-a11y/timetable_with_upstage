@@ -689,8 +689,19 @@
   gap: 9px;
 }
 
+/* "과목 N" must never lose space to the title next to it, however long that title is (long
+   English exchange-course titles like "Introductory Practical Management II" are common). */
+.cardIdentity > strong {
+  flex-shrink: 0;
+}
+
 .cardIdentity > span {
+  /* min-width: 0 is set explicitly (not left to the overflow:hidden auto-min-size rule) so the
+     ellipsis truncation below is guaranteed regardless of browser or any future change to this
+     rule's overflow value — a flex item with no min-width otherwise refuses to shrink past its
+     untruncated content width and pushes the delete button out of the card. */
   overflow: hidden;
+  min-width: 0;
   color: var(--text-secondary);
   font-size: 14px;
   text-overflow: ellipsis;

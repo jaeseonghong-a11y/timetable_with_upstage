@@ -61,6 +61,26 @@ export function formatTermLabel(term: AcademicTerm | null): string {
 }
 
 /**
+ * Maps each course's position in the raw `courses` array to the "과목 N" number the review UI
+ * shows on its card (grouping/sorting order, not array order) — so a validation message built
+ * from the raw array index can point at the same number the user sees on screen instead of a
+ * position that was never rendered anywhere.
+ */
+export function getCourseDisplayNumbers(courses: readonly CompletedCourse[]): readonly number[] {
+  const displayNumberByIndex = new Map<number, number>();
+  for (const group of groupCompletedCoursesForReview(courses)) {
+    for (const yearGroup of group.yearGroups) {
+      for (const termGroup of yearGroup.termGroups) {
+        for (const entry of termGroup.entries) {
+          displayNumberByIndex.set(entry.index, displayNumberByIndex.size + 1);
+        }
+      }
+    }
+  }
+  return courses.map((_, index) => displayNumberByIndex.get(index) ?? index + 1);
+}
+
+/**
  * Groups completed courses for review by 이수구분 (classification), then by year, then by 학기 —
  * a flat list of dozens of courses is hard to scan, and this mirrors how a transcript itself is
  * organized. Classification groups are ordered 전공, 교양, 일반선택, DS, anything else, then

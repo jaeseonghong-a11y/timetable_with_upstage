@@ -1,7 +1,11 @@
 import { useMemo, useState } from "react";
 
 import type { AcademicProfile, CompletedCourse } from "@/lib/academic-profile";
-import { formatTermLabel, groupCompletedCoursesForReview } from "@/lib/course-history-grouping";
+import {
+  formatTermLabel,
+  getCourseDisplayNumbers,
+  groupCompletedCoursesForReview,
+} from "@/lib/course-history-grouping";
 
 import styles from "./AcademicDocumentManager.module.css";
 
@@ -281,16 +285,7 @@ export function AcademicCourseEditor({ profile, onChange }: Props) {
     );
   }
 
-  const displayNumberByIndex = new Map<number, number>();
-  for (const group of groupedCourses) {
-    for (const yearGroup of group.yearGroups) {
-      for (const termGroup of yearGroup.termGroups) {
-        for (const entry of termGroup.entries) {
-          displayNumberByIndex.set(entry.index, displayNumberByIndex.size + 1);
-        }
-      }
-    }
-  }
+  const displayNumbers = getCourseDisplayNumbers(profile.completedCourses);
 
   return (
     <div className={styles.dataSection}>
@@ -381,11 +376,7 @@ export function AcademicCourseEditor({ profile, onChange }: Props) {
                                 </p>
                                 <ol className={styles.courseCardGrid}>
                                   {termGroup.entries.map(({ course, index }) =>
-                                    renderCourseCard(
-                                      course,
-                                      index,
-                                      displayNumberByIndex.get(index) ?? index + 1,
-                                    ),
+                                    renderCourseCard(course, index, displayNumbers[index] ?? index + 1),
                                   )}
                                 </ol>
                               </div>

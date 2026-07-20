@@ -290,8 +290,8 @@ export default function FriendsPage() {
           </>
         ) : (
           <p className={styles.emptyHint}>
-            아직 저장한 시간표가 없어요. 시간표 카드의 &ldquo;친구에게 서버로 공유&rdquo; 버튼을 먼저
-            눌러 주세요. <Link href="/">메인으로 가기</Link>
+            아직 저장한 시간표가 없어요. 시간표 카드의 &ldquo;코드로 공유&rdquo; 버튼을 먼저 눌러
+            주세요. <Link href="/">메인으로 가기</Link>
           </p>
         )}
         {deleteMineError ? <p className={styles.error}>{deleteMineError}</p> : null}

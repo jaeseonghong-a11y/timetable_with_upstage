@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import type { CompletedCourse } from "./academic-profile";
-import { formatTermLabel, groupCompletedCoursesForReview } from "./course-history-grouping";
+import {
+  formatTermLabel,
+  getCourseDisplayNumbers,
+  groupCompletedCoursesForReview,
+} from "./course-history-grouping";
 
 function makeCourse(overrides: Partial<CompletedCourse>): CompletedCourse {
   return {
@@ -111,6 +115,20 @@ describe("groupCompletedCoursesForReview", () => {
     const groups = groupCompletedCoursesForReview(courses);
 
     expect(groups.map((group) => group.classification)).toEqual(["전공", "교양"]);
+  });
+});
+
+describe("getCourseDisplayNumbers", () => {
+  it("numbers courses by grouped/sorted card order, not raw array position", () => {
+    // "전공" (index 1) sorts before "교양" (index 0) in the review UI, so their display numbers
+    // are swapped relative to the array — a validation message using the raw index would point
+    // at a "과목 N" that was never rendered.
+    const courses = [
+      makeCourse({ courseCode: "A", classification: "교양" }),
+      makeCourse({ courseCode: "B", classification: "전공" }),
+    ];
+
+    expect(getCourseDisplayNumbers(courses)).toEqual([2, 1]);
   });
 });
 

@@ -96,6 +96,33 @@ describe("academic profile client state", () => {
     );
   });
 
+  it("accepts a 2-digit exchange-credit course code (e.g. EXGLV45)", () => {
+    const profile = makeProfile();
+    profile.completedCourses[0] = {
+      ...profile.completedCourses[0]!,
+      courseCode: "EXGLV45",
+    };
+
+    expect(getAcademicProfileValidationErrors(profile)).not.toEqual(
+      expect.arrayContaining([expect.stringContaining("학수번호")]),
+    );
+  });
+
+  it("numbers a validation error by the course's displayed card number, not its raw array position", () => {
+    const profile = makeProfile();
+    // "전공" sorts before "교양" in the review UI (see course-history-grouping's classification
+    // tier order), so the second array entry is displayed first — a message built from the raw
+    // array index (2번째) would point at a card the user never sees labelled that way.
+    profile.completedCourses = [
+      { ...profile.completedCourses[0]!, courseCode: "GED1001", classification: "교양" },
+      { ...profile.completedCourses[0]!, courseCode: "invalid", classification: "전공" },
+    ];
+
+    expect(getAcademicProfileValidationErrors(profile)).toContain(
+      "1번째 과목의 학수번호를 확인해 주세요.",
+    );
+  });
+
   it("does not require confirmation after multiple course codes were successfully split", () => {
     const profile = makeProfile();
     // Server-side normalizeCompletedCourse already strips "다중 학수번호"/credit-count annotations
@@ -143,6 +170,29 @@ describe("academic profile client state", () => {
     ];
 
     expect(() => confirmAcademicProfile(profile, new Set())).toThrow("기준 규칙");
+  });
+
+  it("accepts a secondary_major requirement scope (복수전공 제2/3전공 rows)", () => {
+    const profile = makeProfile();
+    profile.completedCourses = [];
+    profile.reviewIssues = [];
+    profile.requirements = [
+      {
+        requirementId: "requirement-1",
+        scope: "secondary_major",
+        label: "제3전공 총학점",
+        rule: { kind: "credit_minimum", credits: 36 },
+        earnedCredits: 15,
+        inProgressCredits: { spring: 0, summer: 0, fall: 0, winter: 0, total: 0 },
+        remainingCredits: 21,
+        status: "unmet",
+        rawValues: {},
+        sourceDocumentId: "source-1",
+        reviewReasons: [],
+      },
+    ];
+
+    expect(() => parseAcademicProfileResponse({ academicProfile: profile })).not.toThrow();
   });
 
   it("groups repeated review reasons from one shared distribution requirement", () => {
