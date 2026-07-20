@@ -606,7 +606,10 @@
 
 .courseList {
   max-height: 460px;
+  padding: 4px 6px;
   overflow-y: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
 }
 
 .excludedNotice,
@@ -630,8 +633,10 @@
   display: grid;
   gap: 12px;
   margin-top: 24px;
-  padding-top: 24px;
-  border-top: 3px solid var(--border-subtle);
+  padding: 18px 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  background: var(--surface-page);
 }
 
 .selectionPlanHeading {

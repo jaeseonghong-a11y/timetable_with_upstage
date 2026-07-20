@@ -34,6 +34,11 @@ body {
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* 줄바꿈은 단어(한글 어절/영단어/숫자) 단위로만 일어나게 하고, 정말 길어서 넘치는 경우에만
+     예외적으로 단어 중간을 끊는다 — 기본값은 어디서나 끊길 수 있어 영단어·학수번호가 중간에
+     잘리는 문제가 있었다. */
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 * {

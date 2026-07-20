@@ -1708,10 +1708,6 @@ export function TimetablePlanner({
                     </button>
                   ))}
                 </div>
-                <small className={styles.electiveCatalogNote}>
-                  캠퍼스별 과목을 따로 찾아 함께 선택할 수 있습니다. 캠퍼스 간 이동 제한은 추후
-                  추천 단계에서 적용합니다.
-                </small>
                 {electiveCatalog ? (
                   <div className={styles.electiveAreaFilter}>
                     <span>교양 영역</span>

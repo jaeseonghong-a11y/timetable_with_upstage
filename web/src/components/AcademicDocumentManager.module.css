@@ -184,9 +184,8 @@
 }
 
 .allReviewConsent span {
-  color: var(--text-warning);
+  color: var(--text-secondary);
   font-size: 12px;
-  font-weight: 700;
 }
 
 .allReviewConsent button {
