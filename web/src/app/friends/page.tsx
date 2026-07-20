@@ -18,7 +18,6 @@ import {
   type FriendEntry,
 } from "@/lib/friend-list-storage";
 import type { MergedTimetableSource } from "@/lib/merged-timetable";
-import { SITE_NAME } from "@/lib/site-config";
 import type { Timetable } from "@/lib/timetable";
 import { useLocalStorageItem } from "@/lib/use-local-storage-item";
 
@@ -383,7 +382,9 @@ export default function FriendsPage() {
       ) : null}
 
       <footer className={pageStyles.footer}>
-        <Link href="/">{SITE_NAME}으로 돌아가기</Link>
+        <Link className={styles.backButton} href="/">
+          SKKU TIMETABLE로 돌아가기
+        </Link>
       </footer>
     </main>
   );

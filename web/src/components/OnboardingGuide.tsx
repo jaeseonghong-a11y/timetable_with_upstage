@@ -27,8 +27,8 @@ const STEPS: readonly OnboardingStep[] = [
     ),
   },
   {
-    title: "2. 내 기록 적용하기 (선택)",
-    body: "수강내역·졸업요건 문서를 올리면 Upstage AI가 자동으로 읽어서, 이미 들은 과목은 빼고 남은 졸업요건만 정리해줘요.",
+    title: "2-1. 수강/취득과목 확인 (선택)",
+    body: "수강내역 문서를 올리면 Upstage AI가 자동으로 읽어서 과목·학점을 정리해요. 검토가 필요한 항목만 확인하면 끝이에요.",
     diagram: (
       <svg viewBox="0 0 160 100" aria-hidden="true">
         <rect x="14" y="18" width="46" height="60" rx="6" className={styles.diagramCard} />
@@ -65,8 +65,40 @@ const STEPS: readonly OnboardingStep[] = [
     ),
   },
   {
+    title: "2-2. 졸업요건충족현황 확인 (선택)",
+    body: "졸업요건 캡처를 붙여넣으면 남은 요건만 자동으로 정리해요. 미충족 교양 영역은 이후 과목 추천에도 반영돼요.",
+    diagram: (
+      <svg viewBox="0 0 160 100" aria-hidden="true">
+        <rect x="14" y="18" width="46" height="60" rx="6" className={styles.diagramCard} />
+        <rect x="22" y="30" width="30" height="6" rx="3" className={styles.diagramBar} />
+        <rect x="22" y="42" width="30" height="6" rx="3" className={styles.diagramBar} />
+        <rect x="22" y="54" width="20" height="6" rx="3" className={styles.diagramBar} />
+        <path
+          d="M66 48h26"
+          className={styles.diagramArrow}
+          markerEnd="url(#onboarding-arrowhead-2)"
+        />
+        <rect x="98" y="24" width="48" height="14" rx="7" className={styles.diagramBlock1} />
+        <rect x="98" y="42" width="48" height="14" rx="7" className={styles.diagramBlock2} />
+        <rect x="98" y="60" width="30" height="14" rx="7" className={styles.diagramBlock3} />
+        <defs>
+          <marker
+            id="onboarding-arrowhead-2"
+            markerWidth="8"
+            markerHeight="8"
+            refX="4"
+            refY="4"
+            orient="auto"
+          >
+            <path d="M0 0l8 4-8 4z" className={styles.diagramArrowHead} />
+          </marker>
+        </defs>
+      </svg>
+    ),
+  },
+  {
     title: "3. 과목 담기",
-    body: "필수·선택 과목을 담으면 시간이 겹치지 않는 유효한 시간표 조합을 바로 확인할 수 있어요.",
+    body: "필수·선택 과목을 담아요. 이미 이수한 과목은 후보 목록에서 자동으로 빠져 있어요.",
     diagram: (
       <svg viewBox="0 0 160 100" aria-hidden="true">
         <rect x="10" y="12" width="140" height="76" rx="8" className={styles.diagramCard} />
@@ -89,7 +121,39 @@ const STEPS: readonly OnboardingStep[] = [
     ),
   },
   {
-    title: "4. AI 시간표 추천",
+    title: "4. 유효 시간표 확인",
+    body: "담은 과목으로 시간이 겹치지 않는 조합만 실시간으로 확인해요. 학점 범위·요일·고정 일정을 조정할 수 있어요.",
+    diagram: (
+      <svg viewBox="0 0 160 100" aria-hidden="true">
+        <rect x="10" y="12" width="140" height="76" rx="8" className={styles.diagramCard} />
+        {[0, 1, 2, 3, 4].map((col) => (
+          <line
+            key={col}
+            x1={10 + ((col + 1) * 140) / 5}
+            y1={12}
+            x2={10 + ((col + 1) * 140) / 5}
+            y2={88}
+            className={styles.diagramGridLine}
+          />
+        ))}
+        <rect x="16" y="22" width="22" height="20" rx="3" className={styles.diagramBlock1} />
+        <rect x="72" y="34" width="22" height="28" rx="3" className={styles.diagramBlock2} />
+        <rect x="100" y="20" width="22" height="16" rx="3" className={styles.diagramBlock3} />
+        <rect x="44" y="56" width="22" height="22" rx="3" className={styles.diagramBlock1} />
+        <circle cx="132" cy="70" r="16" className={styles.diagramAccentSoft} />
+        <path
+          d="M124 70l6 6 10-12"
+          className={styles.diagramCheck}
+          fill="none"
+          strokeWidth="4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
+  {
+    title: "5. AI 시간표 추천",
     body: "공강·연강·오전 수업 같은 원하는 조건을 고르면, AI가 상위 시간표와 추천 이유를 알려줘요.",
     diagram: (
       <svg viewBox="0 0 160 100" aria-hidden="true">
@@ -101,6 +165,22 @@ const STEPS: readonly OnboardingStep[] = [
         <rect x="14" y="72" width="132" height="16" rx="8" className={styles.diagramRankCard} />
         <circle cx="26" cy="60" r="6" className={styles.diagramRankBadgeActive} />
         <circle cx="26" cy="80" r="6" className={styles.diagramRankBadge} />
+      </svg>
+    ),
+  },
+  {
+    title: "+ 친구와 시간표 겹쳐보기",
+    body: "완성한 시간표를 코드로 저장해 친구와 공유하고, 여러 명 시간표를 겹쳐서 다같이 비는 시간을 찾아보세요. 로그인은 필요 없어요.",
+    diagram: (
+      <svg viewBox="0 0 160 100" aria-hidden="true">
+        <rect x="14" y="16" width="60" height="60" rx="8" transform="rotate(-6 44 46)" className={styles.diagramBlock2} />
+        <rect x="86" y="16" width="60" height="60" rx="8" transform="rotate(6 116 46)" className={styles.diagramBlock3} />
+        <circle cx="80" cy="50" r="17" className={styles.diagramAccentSoft} />
+        <path
+          d="M40 14l4.5 10.5L55 29l-10.5 4.5L40 44l-4.5-10.5L25 29l10.5-4.5z"
+          className={styles.diagramSparkle}
+          transform="translate(40 6) scale(0.5)"
+        />
       </svg>
     ),
   },

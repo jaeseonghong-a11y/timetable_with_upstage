@@ -164,9 +164,9 @@
 }
 
 .body {
-  /* Reserves room for the longest step's body text (step 2) so the card doesn't visibly resize
-     as "다음"/"이전" swaps in a shorter one. */
-  min-height: 66px;
+  /* Reserves room for the longest step's body text (the "친구와 시간표 겹쳐보기" bonus step,
+     3 short sentences) so the card doesn't visibly resize as "다음"/"이전" swaps in a shorter one. */
+  min-height: 84px;
   margin: 0;
   color: var(--text-secondary);
   font-size: 14px;
