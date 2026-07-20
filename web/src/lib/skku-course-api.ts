@@ -1,10 +1,12 @@
+import { BlobTtlCache } from "./blob-cache-store";
 import {
+  CATALOG_L1_REPOPULATE_TTL_MS,
   ELECTIVE_CATALOG_CACHE_TTL_MS,
   ELECTIVE_SECTIONS_CACHE_TTL_MS,
   MAJOR_COURSES_CACHE_TTL_MS,
   SESSION_COOKIE_CACHE_TTL_MS,
 } from "./cache-constants";
-import { InMemoryTtlCache, type CacheStore } from "./cache-store";
+import { InMemoryTtlCache, TieredCacheStore, type CacheStore } from "./cache-store";
 
 const RS = "\x1e";
 const US = "\x1f";
@@ -120,23 +122,37 @@ export class SkkuCourseApiError extends Error {
 
 const SESSION_CACHE_KEY = "session";
 
+interface ClearableCacheStore<T> extends CacheStore<T> {
+  clear(): void;
+}
+
 /**
- * Module-level singletons. Swap the `InMemoryTtlCache` instances below for a
- * `CacheStore` backed by Vercel KV/Upstash Redis to share state across
- * serverless instances — every call site here only depends on the
- * `CacheStore` interface.
+ * Module-level singletons. The session cookie and per-subject section caches stay in-memory only
+ * (short-lived / cheap to re-fetch — not worth persisting). The elective catalog and major-course
+ * caches are the slow ones (a cold elective fetch is ~14 sequential SKKU requests, ~10s), so they
+ * use TieredCacheStore: an in-memory L1 plus a Vercel Blob L2 that survives cold serverless
+ * starts, so the *first* person to query a given (year, term, campus[, department]) after a
+ * deploy/cold-start pays the SKKU round trip and everyone after them reads the Blob copy instead.
  */
-const defaultSessionCache: CacheStore<string> = new InMemoryTtlCache();
-const defaultElectiveCatalogCache: CacheStore<SkkuElectiveCatalog> = new InMemoryTtlCache();
-const defaultElectiveSectionsCache: CacheStore<SkkuCourse[]> = new InMemoryTtlCache();
-const defaultMajorCoursesCache: CacheStore<SkkuCourse[]> = new InMemoryTtlCache();
+const defaultSessionCache: ClearableCacheStore<string> = new InMemoryTtlCache();
+const defaultElectiveCatalogCache: ClearableCacheStore<SkkuElectiveCatalog> = new TieredCacheStore(
+  new InMemoryTtlCache(),
+  new BlobTtlCache("elective-catalog"),
+  CATALOG_L1_REPOPULATE_TTL_MS,
+);
+const defaultElectiveSectionsCache: ClearableCacheStore<SkkuCourse[]> = new InMemoryTtlCache();
+const defaultMajorCoursesCache: ClearableCacheStore<SkkuCourse[]> = new TieredCacheStore(
+  new InMemoryTtlCache(),
+  new BlobTtlCache("major-courses"),
+  CATALOG_L1_REPOPULATE_TTL_MS,
+);
 
 /** Test-only: clears every default cache so tests don't leak state across cases. */
 export function resetSkkuApiCaches(): void {
-  (defaultSessionCache as InMemoryTtlCache<string>).clear();
-  (defaultElectiveCatalogCache as InMemoryTtlCache<SkkuElectiveCatalog>).clear();
-  (defaultElectiveSectionsCache as InMemoryTtlCache<SkkuCourse[]>).clear();
-  (defaultMajorCoursesCache as InMemoryTtlCache<SkkuCourse[]>).clear();
+  defaultSessionCache.clear();
+  defaultElectiveCatalogCache.clear();
+  defaultElectiveSectionsCache.clear();
+  defaultMajorCoursesCache.clear();
 }
 
 function electiveCatalogCacheKey(query: SkkuElectiveQuery): string {
@@ -162,7 +178,7 @@ export async function fetchSkkuMajorCourses(
 ): Promise<SkkuCourse[]> {
   const majorCoursesCache = options.majorCoursesCache ?? defaultMajorCoursesCache;
   const cacheKey = majorCoursesCacheKey(query);
-  const cached = majorCoursesCache.get(cacheKey);
+  const cached = await majorCoursesCache.get(cacheKey);
   if (cached) {
     return cached;
   }
@@ -189,7 +205,7 @@ export async function fetchSkkuMajorCourses(
     options.requestIntervalMs ?? 0,
   );
   const result = normalizeCourseRows(rows, "major");
-  majorCoursesCache.set(cacheKey, result, MAJOR_COURSES_CACHE_TTL_MS);
+  await majorCoursesCache.set(cacheKey, result, MAJOR_COURSES_CACHE_TTL_MS);
   return result;
 }
 
@@ -261,7 +277,7 @@ export async function fetchSkkuAllElectiveSubjects(
 ): Promise<SkkuElectiveCatalog> {
   const catalogCache = options.catalogCache ?? defaultElectiveCatalogCache;
   const cacheKey = electiveCatalogCacheKey(query);
-  const cached = catalogCache.get(cacheKey);
+  const cached = await catalogCache.get(cacheKey);
   if (cached) {
     return cached;
   }
@@ -313,7 +329,7 @@ export async function fetchSkkuAllElectiveSubjects(
   }
 
   const result = { areas, subjects: [...subjects.values()] };
-  catalogCache.set(cacheKey, result, ELECTIVE_CATALOG_CACHE_TTL_MS);
+  await catalogCache.set(cacheKey, result, ELECTIVE_CATALOG_CACHE_TTL_MS);
   return result;
 }
 
@@ -329,7 +345,7 @@ export async function fetchSkkuElectiveCourses(
 ): Promise<SkkuCourse[]> {
   const sectionsCache = options.sectionsCache ?? defaultElectiveSectionsCache;
   const cacheKey = electiveSectionsCacheKey(query, courseNumber);
-  const cached = sectionsCache.get(cacheKey);
+  const cached = await sectionsCache.get(cacheKey);
   if (cached) {
     return cached;
   }
@@ -352,7 +368,7 @@ export async function fetchSkkuElectiveCourses(
     options.requestIntervalMs ?? 0,
   );
   const result = normalizeCourseRows(rows, "elective");
-  sectionsCache.set(cacheKey, result, ELECTIVE_SECTIONS_CACHE_TTL_MS);
+  await sectionsCache.set(cacheKey, result, ELECTIVE_SECTIONS_CACHE_TTL_MS);
   return result;
 }
 
@@ -409,7 +425,7 @@ async function establishSkkuSession(
   fetcher: typeof fetch,
   sessionCache: CacheStore<string> = defaultSessionCache,
 ): Promise<string> {
-  const cached = sessionCache.get(SESSION_CACHE_KEY);
+  const cached = await sessionCache.get(SESSION_CACHE_KEY);
   if (cached) {
     return cached;
   }
@@ -433,7 +449,7 @@ async function establishSkkuSession(
   if (!sessionCookie) {
     throw new SkkuCourseApiError("invalid_response");
   }
-  sessionCache.set(SESSION_CACHE_KEY, sessionCookie, SESSION_COOKIE_CACHE_TTL_MS);
+  await sessionCache.set(SESSION_CACHE_KEY, sessionCookie, SESSION_COOKIE_CACHE_TTL_MS);
   return sessionCookie;
 }
 
