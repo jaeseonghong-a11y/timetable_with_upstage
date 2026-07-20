@@ -136,6 +136,10 @@ export function AcademicDocumentManager({
     Partial<Record<AcademicDocumentKind, FileInputMethod>>
   >({});
   const [hasConsented, setHasConsented] = useState(false);
+  // Starts expanded so the full notice (수집 목적/항목/보유기간/거부권리) is read at least once
+  // before agreeing; collapses to a one-line summary once checked so it doesn't keep taking up
+  // space on every later visit, but stays independently toggleable so it's never unreadable again.
+  const [isPrivacyNoticeExpanded, setIsPrivacyNoticeExpanded] = useState(true);
   const [profiles, setProfiles] = useState<ProfilesByKind>({});
   const [acknowledgements, setAcknowledgements] = useState<AcknowledgementsByKind>({});
   const [collapsedResults, setCollapsedResults] = useState<Partial<Record<AcademicDocumentKind, boolean>>>({});
@@ -406,19 +410,72 @@ export function AcademicDocumentManager({
       </div>
 
       <div className={styles.privacyNotice}>
-        <p>
-          업로드한 파일은 분석을 위해 <strong>외부 API(Upstage)</strong>로 전송됩니다.
-          분석이 끝나면 원본 파일과 전체 분석 결과는 <strong>우리 서버에 저장하지
-          않으며</strong>, 구조화된 데이터만 이 브라우저 화면에 남습니다(새로고침하면
-          사라집니다).
-        </p>
+        <div className={styles.privacyNoticeHeading}>
+          <strong>[개인정보 수집 및 이용 동의]</strong>
+          {hasConsented ? (
+            <button
+              className={styles.privacyNoticeToggle}
+              type="button"
+              onClick={() => setIsPrivacyNoticeExpanded((expanded) => !expanded)}
+            >
+              {isPrivacyNoticeExpanded ? "간략히 보기" : "자세히 보기"}
+            </button>
+          ) : null}
+        </div>
+        {isPrivacyNoticeExpanded ? (
+          <dl className={styles.privacyNoticeDetails}>
+            <div>
+              <dt>수집 및 이용 목적</dt>
+              <dd>
+                업로드한 학사문서를 분석해 이수/미이수 과목과 졸업요건을 확인하고, 이를 바탕으로
+                시간표를 추천하기 위해 이용합니다.
+              </dd>
+            </div>
+            <div>
+              <dt>수집 항목</dt>
+              <dd>
+                업로드한 파일 원본(이름·학번·정확한 성적 등 개인정보가 포함될 수 있음)을 분석을
+                위해 <strong>외부 API(Upstage)</strong>로 전송합니다. 분석이 끝나면 원본 파일과
+                전체 분석 결과는 <strong>우리 서버에 저장하지 않으며</strong>, 이름·학번·정확한
+                성적 같은 개인 식별 정보는 남기지 않고 과목명·학점·이수구분 등 구조화된 데이터만
+                이 브라우저 화면에 남습니다.
+              </dd>
+            </div>
+            <div>
+              <dt>보유 및 이용 기간</dt>
+              <dd>
+                분석 결과는 서버에 저장되지 않고 이 브라우저 화면에만 남으며, 새로고침하면
+                사라집니다. 업로드한 파일이 외부 API(Upstage)에서 처리되는 동안의 보관은 Upstage의
+                개인정보처리방침을 따르며, 저희는 분석 완료 후 원본 파일을 별도로 보관하지
+                않습니다.
+              </dd>
+            </div>
+            <div>
+              <dt>동의 거부 권리 및 불이익</dt>
+              <dd>
+                동의를 거부할 권리가 있습니다. 다만 동의하지 않으면 학사문서를 분석해 과목·졸업요건을
+                자동으로 반영하는 이 기능은 이용할 수 없으며, 시간표 짜기 등 다른 기능은 계속
+                이용하실 수 있습니다.
+              </dd>
+            </div>
+          </dl>
+        ) : (
+          <p className={styles.privacyNoticeSummary}>
+            동의 완료 — 업로드한 파일을 분석을 위해 외부 API(Upstage)로 전송하며, 원본과 개인
+            식별 정보는 저장하지 않습니다.
+          </p>
+        )}
         <label>
           <input
             checked={hasConsented}
             type="checkbox"
-            onChange={(event) => setHasConsented(event.target.checked)}
+            onChange={(event) => {
+              const checked = event.target.checked;
+              setHasConsented(checked);
+              setIsPrivacyNoticeExpanded(!checked);
+            }}
           />
-          <span>위 내용을 확인했으며, 파일을 외부 API로 전송하는 데 동의합니다.</span>
+          <span>위 내용을 확인했으며, 개인정보 수집 및 이용에 동의합니다.</span>
         </label>
       </div>
 
