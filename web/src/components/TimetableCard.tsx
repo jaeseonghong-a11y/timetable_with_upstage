@@ -339,9 +339,9 @@ export function TimetableCard({
         {isServerPanelOpen ? (
           <div className={styles.sharePanel}>
             <p className={styles.sharePanelHint}>
-              코드 하나로 언제든 최신 시간표를 확인할 수 있게 서버에 저장해요. 나중에 시간표를 바꾸고
-              다시 저장해도 코드는 그대로라, 친구에게 코드를 다시 보낼 필요가 없어요. 로그인은 필요
-              없어요.
+              코드는 친구에게 한 번만 알려주면 돼요. 이후 시간표를 바꾸고 다시 저장해도 같은 코드로
+              자동 최신화되어서, 친구는 코드를 새로 받지 않아도 항상 최신 시간표를 보게 돼요. 로그인은
+              필요 없어요.
             </p>
             <div className={styles.shareLinkRow}>
               <input
@@ -381,9 +381,10 @@ export function TimetableCard({
         {isShareOpen && shareUrl ? (
           <div className={styles.sharePanel}>
             <p className={styles.sharePanelHint}>
-              로그인 없이 이 링크(또는 QR)를 열면 지금 이 시간표를 그대로 볼 수 있어요. 이후에
-              시간표를 바꿔도 이 링크는 갱신되지 않으니, 계속 최신 상태로 공유하려면 위의
-              &ldquo;코드로 공유&rdquo;를 쓰세요.
+              로그인 없이 이 링크(또는 QR)를 열면 지금 이 시간표를 볼 수 있어요. 이 링크는 지금
+              시간표로 고정돼서, 나중에 시간표를 바꿔도 이미 보낸 링크는 그대로예요 — 바뀐 내용을
+              보여주려면 링크를 새로 만들어 다시 보내야 해요. 매번 다시 보내지 않고 자동으로
+              최신화되게 하려면 위의 &ldquo;코드로 공유&rdquo;를 쓰세요.
             </p>
             <div className={styles.shareLinkRow}>
               <input
