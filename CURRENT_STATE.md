@@ -2747,26 +2747,152 @@ curl -o /dev/null -w "%{http_code}" https://timetable-with-upstage.vercel.app/fr
   또 만들었는지 미확인, GitHub PR #1 닫혔는지 미확인, 정현 조원 `YJH-1023/h` 연결 안 됨,
   AI 필러 후보 수 축소 보류, Blob 2단 캐시(과목 카탈로그) 확장은 사용자가 원하면 다음 과제로.
 
+## ⏸️ 2026-07-20(8) Claude Code — 과목 담기 화면 UI 정리, 교양/전공 캐시 Blob 이중화, 복수전공 학사문서 분석 근본 수정
+
+### 이번에 한 일
+
+**1. 과목 담기(STEP 3) UI 정리 + 전역 줄바꿈 개선**
+- STEP 3 과목 카탈로그와 "담은 과목 확인"이 테두리 하나로만 구분되던 걸 각각 독립 카드(둥근
+  테두리 + 배경색)로 분리.
+- `globals.css`의 `body`에 `word-break: keep-all; overflow-wrap: break-word;` 추가 — 한글
+  어절/영단어/학수번호가 줄바꿈 시 단어 중간에서 잘리지 않게 함.
+- 과잉 강조 텍스트 정리(예: `StudentProfileForm`의 학과 선택 확인 문구 볼드 제거,
+  `AcademicDocumentManager`의 "전체 X개·미동의 Y개" 카운트 문구 경고색·볼드 제거) 및
+  STEP 3 교양 캠퍼스 선택의 군더더기 부연 설명 삭제.
+- 커밋 `099a7fd`, 배포 완료.
+
+**2. 교양/전공 개설강좌 캐시를 Vercel Blob으로 이중화(L1 메모리 + L2 Blob)**
+- 기존 `InMemoryTtlCache`는 서버리스 인스턴스 하나 안에서만 유지돼 콜드스타트마다 초기화됨
+  (교양 카탈로그 콜드 조회는 14회 순차 SKKU 요청, 최대 10초). `CacheStore` 인터페이스를
+  비동기로 전환하고 `TieredCacheStore`(L1 메모리 + L2 Blob)를 추가해 교양 카탈로그/전공
+  개설강좌 캐시에 적용 — 같은 학기 조합을 먼저 조회한 사람이 있으면 다른 서버리스 인스턴스도
+  즉시 응답.
+- `BlobTtlCache` 첫 구현에 버그 있었음: 캐시 키에 `encodeURIComponent`를 걸었더니 쓰기/읽기
+  경로의 URL 인코딩 해석이 어긋나 계속 캐시 미스(Blob 경로엔 `:` 제한이 없다는 걸 SDK
+  소스로 확인 후 인코딩 제거해 해결).
+- 로컬 실측: 콜드 10.8초 → 같은 프로세스 재조회(L1) 12ms → 프로세스 재시작 후(L2 Blob 히트)
+  557ms(교양)/531ms(전공). 세션·교양 분반별 캐시는 그대로 인메모리만 사용(짧은 TTL이라
+  영속화 불필요).
+- 커밋 `641c590`, 배포 완료.
+
+**3. 복수전공 학사문서(수강/취득과목·졸업요건충족현황) 분석 오류 근본 수정**
+- 팀원(박윤서, 2·3전공)이 수강/취득과목을 분석하면 오류가 급증한다고 제보. 실제 PDF를
+  로컬 서버(브라우저 업로드)로 두 번 재현하며 debug 훅(`writeFileSync`, 세션 종료 시 완전
+  제거·PII 포함 debug 파일도 삭제 완료)으로 Document Parse의 **실제 markdown 원본**을
+  직접 캡처·분석해 원인을 코드 레벨로 확인했다(추측 아님, 실측).
+- 발견한 근본 원인들(`web/src/lib/academic-document.ts`):
+  1. GLS 문서는 복수전공이면 전체 과목 리스트가 전공별로 두 번(제1전공 관점/제N전공 관점)
+     반복되는데, 기존 파서는 같은 과목코드가 두 번 나오면 "문서에서 나중에 나온 값"을
+     채택 + Solar 추출값이 표(table) 값보다 우선이라 실행마다 결과가 흔들렸음 →
+     `resolveMultiMajorCourseDuplicates` 추가(이수구분이 "선택"이 아닌 진짜 값 우선 채택) +
+     병합 우선순위를 표 값 우선으로 변경.
+  2. Document Parse가 페이지 헤더/메타정보를 통째로 `<table>` 태그 안에 욱여넣어 pipe-table
+     셀 하나에 크로스 들어가는 경우가 있는데, `cleanTableCell`이 HTML 태그를 지운 *뒤에*
+     `<table>` 존재 여부를 검사하고 있어 가드가 무력화됐던 버그 발견 → 태그가 지워지기 전
+     원본 줄 단계(`parseMarkdownTableRows`)에서 걸러내도록 수정(첫 수정 실패 → 재현 →
+     재수정까지 실측으로 확인).
+  3. 이수구분 셀 오염("교양 일반선택" 등 인접 값이 섞임)을 전공>교양>DS>선택 우선순위로
+     정규화(`sanitizeClassification`/`sanitizeMajorScope`).
+  4. 교환학생 학점인정 코드(예: `EXGLV45`)가 2자리 숫자라 기존 3~4자리 전용 정규식에
+     전혀 안 걸려 인접 과목명 뒤에 텍스트가 그대로 붙던 문제 → 코드 패턴을 2~4자리로 확장.
+  5. 과목명 끝에 옆 행 연도/학기 잔재가 붙는 문제(`stripTrailingDateNoise`) 및 dedup 승자의
+     과목명이 비어있을 때 형제(중복) 항목에서 보완하는 로직 추가.
+  6. 졸업요건충족현황: "제2전공"/"제3전공" 라벨이 `normalizeRequirementScope`에서 전혀
+     인식 안 돼 전부 `scope: "other"` + "기타로 표시했습니다" 리뷰 사유가 붙어 검토 오류가
+     거의 두 배로 뛰던 문제 → `RequirementScope`에 `secondary_major` 추가, `/^제[2-9]전공/`
+     라벨 분기 추가.
+- **복수전공 문서에 한해** 수강내역 검토 화면 그룹을 이수구분뿐 아니라 전공(제1전공/제3전공)
+  별로도 나누도록 `course-history-grouping.ts` 수정(예: "제1전공 전공"/"제3전공 전공") —
+  단일전공 문서는 majorScope가 하나뿐이라 기존과 완전히 동일(회귀 없음, 기존 테스트 219개
+  그대로 통과로 확인).
+- `AcademicDocumentManager.tsx`의 졸업요건충족현황 첨부 안내에 "이수구분별 학점취득/수강현황"
+  스크린샷도 함께 안내하도록 문구 추가(복수전공 학생의 전공별 총학점 breakdown은 이 표에만
+  있음).
+- 새 회귀 테스트 7개 추가(복수전공 dedup, `<table>`-wrap 노이즈, 이수구분 오염 정규화,
+  2자리 코드, 과목명 잔재 제거, 이름 보완, majorScope 그룹 분리) — 실제 캡처한 markdown으로
+  직접 재검증(fixture 결과: classification이 정확히 `["교양","전공","선택","DS"]` 4개,
+  majorScope가 정확히 `["제1전공","제3전공"]` 2개로 정리됨, 총 44과목).
+- 커밋 `a4a07f3`, 배포 완료.
+
+### 문제 상황 → 해결 과정 (요약)
+1차 수정(다른 채팅 세션에서 이미 시도) 후에도 사용자가 브라우저에서 재현하면 계속 깨져
+보였음 → "네가 직접 PDF 분석해보고 Solar 결과랑 비교해서 고쳐"라는 사용자 지시에 따라,
+추측을 멈추고 **API 라우트에 임시 `writeFileSync` 디버그 훅을 넣어 실제 Document Parse
+markdown을 로컬 파일로 캡처 → 사용자가 브라우저로 재업로드 → 그 파일을 직접 읽고 분석**하는
+방식으로 전환. 처음엔 사용자가 "채팅에 PDF를 다시 첨부"하는 바람에(로컬 서버가 아니라 이
+대화창으로 감) 파일이 안 만들어져 몇 차례 왕복이 필요했다 — "브라우저에서 localhost:3000에
+직접 업로드해야 한다"를 아주 구체적으로(단계별) 안내하고 나서야 실제 캡처에 성공했다. 캡처한
+markdown을 보고 첫 fix(`<table>` 가드)가 왜 안 먹혔는지도 코드로 재확인해(`cleanTableCell`이
+태그를 먼저 지움) 두 번째 시도에서 근본적으로 고쳤다.
+
+### 변경한 파일 목록
+- `web/src/lib/academic-document.ts` — 위 6가지 근본 원인 전부 수정
+- `web/src/lib/academic-profile.ts` — `RequirementScope`에 `secondary_major` 추가
+- `web/src/lib/course-history-grouping.ts` — 복수전공 시 majorScope별 그룹 분리
+- `web/src/lib/academic-document.test.ts`, `web/src/lib/course-history-grouping.test.ts` — 회귀 테스트 추가
+- `web/src/components/AcademicRequirementEditor.tsx` — scope select에 "제2·3전공" 옵션 추가
+- `web/src/components/AcademicDocumentManager.tsx` — 첨부 안내 문구 수정(과잉강조 정리 포함)
+- `web/src/app/api/parse-academic-document/route.ts` — (디버그 훅은 진단 후 완전히 제거됨, 최종 diff는 공백 1줄뿐)
+- `web/src/lib/cache-store.ts`(신규 `TieredCacheStore`), `web/src/lib/blob-cache-store.ts`(신규), `web/src/lib/cache-constants.ts`, `web/src/lib/skku-course-api.ts` — Blob 이중 캐시
+- `web/src/app/globals.css`, `web/src/components/TimetablePlanner.module.css`, `web/src/components/StudentProfileForm.module.css` — UI 정리
+
+### 실행한 명령어
+```
+cd web && npm run lint && npm run typecheck && npm run test && npm run build   # 매 수정마다
+npm run dev  (포트 충돌 시 PowerShell로 프로세스 강제 종료 후 재시작)
+# 실제 PDF는 사용자가 localhost:3000 브라우저 업로드로만 재현 가능(대화창 첨부는 무효)
+node -e '...'  # Blob put/get 왕복, list()로 캐시 항목 확인
+git add <파일들> && git commit -m "..." && git push origin main   # 3회(099a7fd/641c590/a4a07f3)
+npx vercel --prod --yes   # 3회 배포
+curl -o /dev/null -w "%{http_code}" https://timetable-with-upstage.vercel.app/   # 매번 200
+```
+- 품질 게이트 3회 모두 통과(마지막 기준 테스트 219개). 디버그 훅과 debug-*.txt/json
+  (PII 포함) 파일은 진단 완료 후 매번 완전히 삭제·확인.
+
+### ⚠️ 남은 문제 / 막힌 곳
+- **여전히 브라우저 직접 클릭 검증 미완료** — 이번 세션은 실제 PDF 업로드 재현은 했지만
+  (사용자가 직접), UI 정리분(STEP 3 박스 분리)·Blob 캐시·복수전공 그룹 분리 화면을 내가
+  직접 브라우저로 클릭해본 적은 없다. 여러 세션째 최우선 미해결.
+- **복수전공 수정 후 사용자의 최종 실측 확인이 아직 안 됨** — "브라우저에서 한 번 더 확인해
+  달라"고 요청했고 사용자는 "커밋 푸쉬 배포 진행해"로 응답했다. 배포는 했지만 실서비스에서
+  실제로 깨끗하게 나오는지 사용자 본인 확인은 이 세션에서 아직 못 받았다. **다음 세션
+  최우선**: 사용자에게 실서비스(`https://timetable-with-upstage.vercel.app`)에서 같은
+  PDF로 재확인했는지 물어볼 것.
+- 과목명 잔재 제거(`stripTrailingDateNoise`)와 dedup 이름 보완은 known-case 몇 개만
+  실측 검증했다 — 다른 학생/다른 학과 조합에서 또 다른 garbling 패턴이 나올 수 있음(Document
+  Parse의 OCR/표 재구성이 완전히 결정론적이지 않아 보임 — 같은 파일도 재업로드마다 살짝
+  다른 markdown이 나온 사례 있었음). 또 신고되면 같은 방식(debug 훅 + 실제 markdown 캡처)으로
+  재현할 것 — 절대 추측으로 고치지 말 것(이번 세션에서 추측성 첫 수정이 실패했던 교훈).
+- 나머지 미해결 항목은 이전 섹션과 동일(진전 없음): GA4 속성/스트림 ID·맞춤 정의 등록 상태
+  미확인, 사용자가 윤서 조원에게 GA4 측정 ID 변경을 전달했는지 미확인, `GEMINI_API_KEY`
+  Vercel 삭제는 하네스가 차단해 사용자가 직접 해야 함, 규나 조원이 `uiux-redesign-6` 이상을
+  또 만들었는지 미확인, GitHub PR #1 닫혔는지 미확인, 정현 조원 `YJH-1023/h` 연결 안 됨,
+  AI 필러 후보 수 축소 보류, `docs/09` 데모 대본을 사람이 마무리해야 함(데모데이 2026-07-25
+  임박), 시작 가이드 7단계·`/friends` 버튼 등 이전 세션 UI 변경분도 브라우저 미검증.
+
 ## ▶️ Recommended Next Step (다음 도구가 이어서 할 일)
 
-1. 시작 즉시 `git status --short`와 `git log --oneline -5`를 읽는다. **최우선 확인 사항**:
-   a. **브라우저로 직접 열어서 클릭해본다** — `cd web && npm run dev` 후
-      `http://localhost:3000`. 우선순위: (i) 시작 가이드가 7단계(2-1/2-2 분리 + 유효
-      시간표 확인 + 친구 겹쳐보기 보너스)로 자연스럽게 넘어가는지, 카드 크기가 안 흔들리는지,
-      (ii) `/friends` 페이지 하단 "SKKU TIMETABLE로 돌아가기" 버튼이 잘 보이는지,
-      (iii) 메인 페이지 상단 진입 버튼 → `/friends`에서 내 시간표 열람 → 겹쳐보기 체크박스
-      선택까지 이어지는 전체 흐름. 여러 세션째 브라우저 직접 검증이 안 됐다.
-   b. `docs/09_데모데이_발표_준비.md`를 사용자와 함께 검토해 실제 발표 대본/슬라이드로
+1. 시작 즉시 `git status --short`와 `git log --oneline -6`을 읽는다. **최우선 확인 사항**:
+   a. **사용자에게 실서비스에서 복수전공 PDF 재확인 결과를 물어본다** — 이 세션에서 배포까지는
+      했지만 사용자 본인의 최종 확인은 못 받았다. 문제가 남아있다면 반드시 debug 훅
+      (`writeFileSync`로 markdown/profile 캡처, `app/api/parse-academic-document/route.ts`에
+      임시로 넣었다 진단 후 제거하는 패턴)으로 실제 데이터를 다시 확보해서 고칠 것 — 추측 금지.
+   b. **브라우저로 직접 열어서 클릭해본다** — `cd web && npm run dev` 후
+      `http://localhost:3000`. 이번 세션 변경분(STEP 3 박스 분리·줄바꿈, 복수전공 그룹 분리
+      화면)과 이전 세션 변경분(온보딩 가이드 7단계, `/friends` 버튼, 겹쳐보기)을 함께 확인.
+      여러 세션째 브라우저 직접 검증이 안 됐다.
+   c. `docs/09_데모데이_발표_준비.md`를 사용자와 함께 검토해 실제 발표 대본/슬라이드로
       다듬는다 — 특히 §6 시연 스크립트 중 라이브 시연 vs 사전 녹화 구간을 정해야 한다.
       데모데이(2026-07-25)가 임박했다.
-   c. 사용자에게 GA4 측정 ID 변경 사실을 윤서 조원에게 전달했는지 확인한다.
-   d. 규나 조원이 `uiux-redesign-6` 이상 새 브랜치를 또 만들었는지 확인한다. 병합 시 반드시
+   d. 사용자에게 GA4 측정 ID 변경 사실을 윤서 조원에게 전달했는지 확인한다.
+   e. 규나 조원이 `uiux-redesign-6` 이상 새 브랜치를 또 만들었는지 확인한다. 병합 시 반드시
       별도 워크트리에서 품질 게이트 + diff를 직접 읽고 검증한 뒤 진행할 것.
-   e. 사용자에게 `GEMINI_API_KEY` Vercel 환경변수를 직접 지웠는지 확인(하네스가 차단해서
+   f. 사용자에게 `GEMINI_API_KEY` Vercel 환경변수를 직접 지웠는지 확인(하네스가 차단해서
       내가 못 지움).
-2. [중간점검 후 검토] 교양/전공과목 캐싱은 인메모리 TTL이다(`web/src/lib/cache-store.ts`).
-   콜드스타트 직후 재요청이 느려지는 트레이드오프가 있으니, 데모에 문제가 되면 `CacheStore`
-   인터페이스를 그대로 구현하는 Vercel Blob(친구 시간표에 이미 씀) 2단 캐시로 전환한다.
+2. 학사문서 분석에서 또 다른 garbling 패턴이 신고되면, `web/src/lib/academic-document.ts`의
+   `resolveMultiMajorCourseDuplicates`/`sanitizeClassification`/`sanitizeMajorScope`/
+   `stripTrailingDateNoise`/`extractCourseCodeNamePairs` 부근을 먼저 본다 — 이미 여러 실제
+   케이스를 실측으로 잡은 곳이라 비슷한 패턴일 가능성이 높다.
 3. AI 필러 후보 수 축소(현재 8개 중 5개)는 계속 보류 중 — 10000개 한도 문제가 다시 보고되면
    고려한다.
 4. GitHub PR #1(`YOUNSUHPARK-patch-1`) 닫혔는지, 윤서 조원이 GA4 맞춤 정의를 등록했는지
