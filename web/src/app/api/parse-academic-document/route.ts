@@ -88,7 +88,6 @@ export async function POST(request: Request): Promise<Response> {
         "Document Parse 응답에서 분석할 텍스트를 찾지 못했습니다.",
       );
     }
-
     const sourceDocumentId = crypto.randomUUID();
     const academicProfile = await extractAcademicProfile(
       markdown,

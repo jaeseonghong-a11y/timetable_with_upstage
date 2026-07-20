@@ -85,6 +85,33 @@ describe("groupCompletedCoursesForReview", () => {
   it("returns an empty array for no courses", () => {
     expect(groupCompletedCoursesForReview([])).toEqual([]);
   });
+
+  it("splits classification groups by 전공 범위 once 2+ distinct majorScopes are present", () => {
+    const courses = [
+      makeCourse({ courseCode: "A", majorScope: "제1전공", classification: "전공" }),
+      makeCourse({ courseCode: "B", majorScope: "제3전공", classification: "전공" }),
+      makeCourse({ courseCode: "C", majorScope: "제1전공", classification: "교양" }),
+    ];
+
+    const groups = groupCompletedCoursesForReview(courses);
+
+    expect(groups.map((group) => group.classification)).toEqual([
+      "제1전공 전공",
+      "제3전공 전공",
+      "제1전공 교양",
+    ]);
+  });
+
+  it("does not split by majorScope when every course shares the same one (single-major documents)", () => {
+    const courses = [
+      makeCourse({ courseCode: "A", majorScope: "제1전공", classification: "전공" }),
+      makeCourse({ courseCode: "B", majorScope: "제1전공", classification: "교양" }),
+    ];
+
+    const groups = groupCompletedCoursesForReview(courses);
+
+    expect(groups.map((group) => group.classification)).toEqual(["전공", "교양"]);
+  });
 });
 
 describe("formatTermLabel", () => {

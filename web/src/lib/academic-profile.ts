@@ -2,7 +2,13 @@ export type AcademicDocumentKind = "course_history" | "graduation_requirements";
 export type AcademicDocumentStatus = "draft" | "confirmed";
 export type AcademicTerm = "spring" | "summer" | "fall" | "winter";
 export type CompletionStatus = "earned" | "failed" | "withdrawn" | "review";
-export type RequirementScope = "primary_major" | "general" | "ds" | "university" | "other";
+export type RequirementScope =
+  | "primary_major"
+  | "secondary_major"
+  | "general"
+  | "ds"
+  | "university"
+  | "other";
 export type RequirementStatus = "satisfied" | "in_progress" | "unmet" | "review";
 
 export interface CompletedCourse {

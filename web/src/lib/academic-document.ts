@@ -22,8 +22,13 @@ export class AcademicExtractionError extends Error {
 }
 
 const MAX_SOLAR_MARKDOWN_CHARACTERS = 80_000;
-const COURSE_CODE_PATTERN = /^[A-Z]{2,6}[0-9]{3,4}$/;
-const COURSE_CODE_SCAN_PATTERN = /\b[A-Z]{2,6}[0-9]{3,4}\b/g;
+// 2-digit suffix live-confirmed 2026-07-20: exchange-credit recognition codes (e.g. EXGLV45) use
+// only 2 digits, unlike SKKU's own 3-4 digit numbering — without {2,4} these rows never match at
+// all, so the code is invisible everywhere (never expected, never extracted as its own course),
+// and its trailing text instead gets absorbed into whichever real course happens to sit right
+// before it in the same garbled cell (see extractCourseCodeNamePairs).
+const COURSE_CODE_PATTERN = /^[A-Z]{2,6}[0-9]{2,4}$/;
+const COURSE_CODE_SCAN_PATTERN = /\b[A-Z]{2,6}[0-9]{2,4}\b/g;
 const TERMS: readonly AcademicTerm[] = ["spring", "summer", "fall", "winter"];
 const COMPLETION_STATUSES: readonly CompletionStatus[] = [
   "earned",
@@ -33,6 +38,7 @@ const COMPLETION_STATUSES: readonly CompletionStatus[] = [
 ];
 const REQUIREMENT_SCOPES: readonly RequirementScope[] = [
   "primary_major",
+  "secondary_major",
   "general",
   "ds",
   "university",
@@ -380,8 +386,10 @@ ${markdown}
  * instruction back as a reason and stuffing the grade into flags. completionStatus also
  * flipped between "earned" and "review" for the same 0-credit pass/fail row across runs.
  * The table parser's own values for these three judgement fields are used instead, for the
- * same reason as mergeSolarAndTableRequirement: Solar still contributes the fields it is
- * genuinely better positioned to read (majorScope/classification/year/term/credits/area).
+ * same reason as mergeSolarAndTableRequirement. majorScope/classification are table-preferred
+ * too (see resolveMultiMajorCourseDuplicates) since a 복수전공 document repeats every course once
+ * per major and Solar has no more reliable way than the raw table to pick the genuine occurrence;
+ * Solar still contributes year/term/credits/area, which aren't duplicated/ambiguous the same way.
  */
 function supplementCompletedCoursesFromTable(
   profile: AcademicProfile,
@@ -401,8 +409,13 @@ function supplementCompletedCoursesFromTable(
           // Usually the table's own name is authoritative, but it can be blank when Document
           // Parse split the name into a garbled adjacent row (see extractCourseCodeNamePairs).
           courseName: tableCourse.courseName || solarCourse.courseName,
-          majorScope: solarCourse.majorScope || tableCourse.majorScope,
-          classification: solarCourse.classification || tableCourse.classification,
+          // majorScope/classification prefer the (deduped, multi-major-aware) table value for the
+          // same reason completionStatus/flags/reviewReasons already do below: a course code that
+          // appears twice in a 복수전공 document (once per major's section) resolves to the wrong
+          // occurrence just as easily via Solar as via the raw table, and resolveMultiMajorCourseDuplicates
+          // has already picked the genuine one out of the table's rows — see its doc comment.
+          majorScope: tableCourse.majorScope || solarCourse.majorScope,
+          classification: tableCourse.classification || solarCourse.classification,
           year: solarCourse.year ?? tableCourse.year,
           term: solarCourse.term ?? tableCourse.term,
           credits: solarCourse.credits || tableCourse.credits,
@@ -434,6 +447,27 @@ function supplementCompletedCoursesFromTable(
       ...profile.completedCourses.filter((course) => !expectedCodeSet.has(course.courseCode)),
     ],
   };
+}
+
+/**
+ * Test-only entry point mirroring supplementGraduationRequirementsFromMarkdown: exercises
+ * parseCompletedCourseTable + resolveMultiMajorCourseDuplicates + supplementCompletedCoursesFromTable
+ * directly against a markdown fixture, without the Solar retry pass in
+ * supplementCompletedCoursesWithRetry (which needs a real/mocked network call).
+ */
+export function supplementCompletedCoursesFromMarkdown(
+  profile: AcademicProfile,
+  markdown: string,
+  sourceDocumentId: string,
+): AcademicProfile {
+  const tableCourses = parseCompletedCourseTable(markdown, sourceDocumentId);
+  const expectedCodes = [
+    ...new Set([
+      ...tableCourses.map((course) => course.courseCode),
+      ...(markdown.match(COURSE_CODE_SCAN_PATTERN) ?? []),
+    ]),
+  ];
+  return supplementCompletedCoursesFromTable(profile, tableCourses, expectedCodes);
 }
 
 /**
@@ -470,6 +504,46 @@ function dedupeRepeatedText(raw: string | undefined): string {
   }
   const half = trimmed.length / 2;
   return trimmed.slice(0, half) === trimmed.slice(half) ? trimmed.slice(0, half) : trimmed;
+}
+
+/**
+ * Live-verified (2026-07-20, real 복수전공 GLS export): Document Parse's table reconstruction
+ * sometimes bleeds an *adjacent* row's 이수구분 value into this row's cell — a genuinely 교양
+ * course's cell read "교양 일반선택", a genuinely 전공 course's cell read "전공 선택 국제어" or
+ * "전공 선택 2024 2 학기". Trusting the raw (possibly two-category) string as its own
+ * classification fragments the course list into dozens of bogus one-off groups instead of the
+ * real 전공/교양/선택/DS buckets. Extract the single most specific real category present, using
+ * the same reliability ordering as classificationTier in course-history-grouping.ts: 전공 is the
+ * most specific signal a contaminated cell can carry, then 교양, then DS, then 선택 (the "nothing
+ * more specific present" fallback bucket) — checked against every case observed in that export
+ * and correct every time.
+ */
+function sanitizeClassification(raw: string | undefined): string {
+  const deduped = dedupeRepeatedText(raw);
+  if (/전공/.test(deduped)) {
+    return "전공";
+  }
+  if (/교양/.test(deduped)) {
+    return "교양";
+  }
+  if (/DS/i.test(deduped)) {
+    return "DS";
+  }
+  if (/선택/.test(deduped)) {
+    return "선택";
+  }
+  return deduped;
+}
+
+/**
+ * Same contamination as sanitizeClassification, but for the 전공(majorScope) cell — a real
+ * observed case had it read "제1전공 일반선택" instead of just "제1전공". Extracts the clean
+ * "제N전공" token if present; falls back to the raw trimmed text otherwise (e.g. non-복수전공
+ * documents where this cell is never contaminated in the first place).
+ */
+function sanitizeMajorScope(raw: string): string {
+  const match = raw.match(/제[1-9]전공/);
+  return match ? match[0] : raw.trim();
 }
 
 function parseCompletedCourseTable(
@@ -509,8 +583,14 @@ function parseCompletedCourseTable(
       return;
     }
 
-    currentMajorScope = cells[0]?.trim() || currentMajorScope;
-    currentClassification = dedupeRepeatedText(cells[1]) || currentClassification;
+    const majorScopeCell = cells[0]?.trim();
+    if (majorScopeCell) {
+      currentMajorScope = sanitizeMajorScope(majorScopeCell);
+    }
+    const classificationCell = cells[1]?.trim();
+    if (classificationCell) {
+      currentClassification = sanitizeClassification(classificationCell);
+    }
     const rowText = cells.join(" ");
     const years = [...rowText.matchAll(/\b(?:19|20)\d{2}\b/g)].map((match) =>
       Number(match[0]),
@@ -549,7 +629,46 @@ function parseCompletedCourseTable(
       });
     });
   });
-  return courses;
+  return resolveMultiMajorCourseDuplicates(courses);
+}
+
+/**
+ * A 복수전공(double/triple major) course-history document repeats its ENTIRE course list once
+ * per declared major: the 원전공(primary) section lists every completed course with real
+ * classification for the student's own major but tags every *other* major's course "선택", and
+ * each additional major's section does the mirror image (that major's own courses show their real
+ * classification, everything else shows "선택") — live-confirmed against a real GLS export
+ * (2026-07-20). So a course code can appear 2+ times in `courses`, and only the occurrence whose
+ * classification isn't the "not mine" placeholder "선택" is the genuine one. This groups by
+ * courseCode and keeps that occurrence (using *its* majorScope, e.g. "제3전공" for a course that
+ * only that major recognizes as 전공) — driven entirely by the table's own classification value,
+ * not by course-code prefixes, so it generalizes to any department/major combination. When every
+ * occurrence is "선택" (genuinely elective, duplicated identically across every major's section)
+ * or otherwise tied, the first occurrence — the 원전공 section, which the document always lists
+ * first — is kept.
+ */
+function resolveMultiMajorCourseDuplicates(courses: CompletedCourse[]): CompletedCourse[] {
+  const occurrencesByCode = new Map<string, CompletedCourse[]>();
+  for (const course of courses) {
+    const existing = occurrencesByCode.get(course.courseCode);
+    if (existing) {
+      existing.push(course);
+    } else {
+      occurrencesByCode.set(course.courseCode, [course]);
+    }
+  }
+  return [...occurrencesByCode.values()].map((occurrences) => {
+    const winner = occurrences.find((course) => course.classification !== "선택") ?? occurrences[0];
+    // The occurrence picked for its correct classification can still have a blank name (a
+    // *different* row-boundary garbling issue than which section owns the course) while a
+    // sibling occurrence's own row happened to capture the name cleanly — borrow it rather than
+    // falling all the way through to ensureCourseNameFallback's code-as-name placeholder.
+    if (winner.courseName.trim()) {
+      return winner;
+    }
+    const nameDonor = occurrences.find((course) => course.courseName.trim());
+    return nameDonor ? { ...winner, courseName: nameDonor.courseName } : winner;
+  });
 }
 
 /**
@@ -563,12 +682,35 @@ function parseCompletedCourseTable(
 function extractCourseCodeNamePairs(
   cell: string,
 ): Array<{ courseCode: string; courseName: string }> {
-  const pattern = /\b([A-Z]{2,6}[0-9]{3,4})(?:\s+(.+?))?(?=\s+[A-Z]{2,6}[0-9]{3,4}\b|$)/g;
+  const pattern = /\b([A-Z]{2,6}[0-9]{2,4})(?:\s+(.+?))?(?=\s+[A-Z]{2,6}[0-9]{2,4}\b|$)/g;
   return [...cell.matchAll(pattern)].flatMap((match) => {
     const courseCode = match[1];
-    const courseName = (match[2] ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    const courseName = stripTrailingDateNoise(
+      (match[2] ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(),
+    );
     return courseCode ? [{ courseCode, courseName }] : [];
   });
+}
+
+/**
+ * Live-verified (2026-07-20): a garbled row can leave the *next* row's year/term/credit tokens
+ * dangling on this course's captured name (e.g. "스피치와토론 2025 1 학기 2025 1 2025 1 학기
+ * 2025", or "융복합미디어와대중문화 1 학기") — strip a trailing run of standalone
+ * year/학기/bare-number/decimal tokens, since a real course name never legitimately ends in one
+ * *with a preceding space* (a name that's genuinely suffixed with a digit, e.g. "미분적분학1",
+ * has no space before it and is left untouched).
+ */
+function stripTrailingDateNoise(name: string): string {
+  const trailingPattern =
+    /(?:\s+(?:\d+\.\d+|\d{1,2}|(?:19|20)\d{2}|1\s*학기|2\s*학기|여름\s*학기|여름학|겨울\s*학기|겨울학|학기))+$/;
+  let result = name;
+  for (;;) {
+    const next = result.replace(trailingPattern, "").trim();
+    if (next === result) {
+      return result;
+    }
+    result = next;
+  }
 }
 
 function indexedMergedValue<T>(
@@ -1009,6 +1151,12 @@ function normalizeRequirementScope(
     "primary major": "primary_major",
     "primary-major": "primary_major",
     "제1전공": "primary_major",
+    // 복수전공(2전공/3전공)은 원전공이 아닌 "나머지 전공"으로 하나의 scope에 묶는다 — GLS 문서는
+    // 학생이 실제로 몇 번째 전공을 취소/유지했는지와 무관하게 "제2전공"/"제3전공" 라벨을 그대로
+    // 쓰므로(예: 2전공을 취소하고 바로 3전공만 남은 학생도 "제3전공"으로 표기), 번호 자체보다는
+    // "제1전공이 아닌 전공"이라는 사실만 구분하면 충분하다.
+    "제2전공": "secondary_major",
+    "제3전공": "secondary_major",
     교양: "general",
     ds: "ds",
     대학: "university",
@@ -1019,6 +1167,9 @@ function normalizeRequirementScope(
   }
   if (label.startsWith("제1전공")) {
     return "primary_major";
+  }
+  if (/^제[2-9]전공/.test(label)) {
+    return "secondary_major";
   }
   if (/^DS\s*기반/i.test(label)) {
     return "ds";
@@ -1363,6 +1514,19 @@ function deriveRequirementStatus(
 function parseMarkdownTableRows(markdown: string): string[][] {
   return markdown.split(/\r?\n/).flatMap((line) => {
     if (!line.includes("|")) {
+      return [];
+    }
+    // Live-verified (2026-07-20): Document Parse can render a whole page's course table as an
+    // embedded <table>...</table> sitting inside ONE cell of an *outer* pipe-table row (e.g.
+    // "| 휴학구분 인성품: <table>...50 courses worth...</table> | 국제품: 미취득 ... | ... |").
+    // cleanTableCell strips every HTML tag below, so by the time cells exist there is no trace
+    // of "<table" left to detect — the check has to happen here, against the raw line, before
+    // cleaning destroys the evidence. Otherwise every course code inside that embedded table gets
+    // misread as belonging to this one outer row, stamped with the *outer* row's own cells
+    // (page-header junk text, never a real 이수구분 value) as majorScope/classification for all of
+    // them at once. The embedded table's actual rows are already captured correctly by
+    // parseHtmlTableRows, so this line is pure duplication/noise and is dropped entirely.
+    if (/<table[\s>]/i.test(line)) {
       return [];
     }
     const cells = line

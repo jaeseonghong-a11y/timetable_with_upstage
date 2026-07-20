@@ -71,28 +71,48 @@ export function formatTermLabel(term: AcademicTerm | null): string {
  * grid, since a divider element spanning the full grid row naturally forces a line break there.
  * `index` on each entry is the position in the original array, so grouping never breaks
  * index-keyed handlers upstream.
+ *
+ * 복수전공(2+ distinct majorScope values present) documents additionally split each
+ * classification bucket by 전공 범위 (e.g. "제1전공 전공" / "제3전공 전공") — otherwise a single
+ * "전공" group silently mixes courses from every declared major together with no way to tell
+ * them apart at a glance. Single-major documents (the common case) see no change: with only one
+ * majorScope value there is nothing to split, so the group label stays exactly the classification.
  */
 export function groupCompletedCoursesForReview(
   courses: readonly CompletedCourse[],
 ): readonly CourseHistoryClassificationGroup[] {
-  const classificationOrder: string[] = [];
-  const byClassification = new Map<string, CourseHistoryEntry[]>();
+  const distinctMajorScopes = new Set(
+    courses.map((course) => course.majorScope.trim()).filter((value) => value.length > 0),
+  );
+  const splitByMajorScope = distinctMajorScopes.size > 1;
+
+  const groupOrder: string[] = [];
+  const groupClassifications = new Map<string, string>();
+  const byGroup = new Map<string, CourseHistoryEntry[]>();
 
   courses.forEach((course, index) => {
     const classification = course.classification.trim() || UNKNOWN_CLASSIFICATION;
-    if (!byClassification.has(classification)) {
-      byClassification.set(classification, []);
-      classificationOrder.push(classification);
+    const majorScope = course.majorScope.trim();
+    const label =
+      splitByMajorScope && majorScope && classification !== UNKNOWN_CLASSIFICATION
+        ? `${majorScope} ${classification}`
+        : classification;
+    if (!byGroup.has(label)) {
+      byGroup.set(label, []);
+      groupOrder.push(label);
+      groupClassifications.set(label, classification);
     }
-    byClassification.get(classification)!.push({ course, index });
+    byGroup.get(label)!.push({ course, index });
   });
 
-  const orderedClassifications = [...classificationOrder].sort(
-    (a, b) => classificationTier(a) - classificationTier(b),
-  );
+  const orderedLabels = [...groupOrder].sort((a, b) => {
+    const classA = groupClassifications.get(a) ?? a;
+    const classB = groupClassifications.get(b) ?? b;
+    return classificationTier(classA) - classificationTier(classB);
+  });
 
-  return orderedClassifications.map((classification) => {
-    const entries = byClassification.get(classification)!;
+  return orderedLabels.map((classification) => {
+    const entries = byGroup.get(classification)!;
     const byYear = new Map<number | null, CourseHistoryEntry[]>();
     for (const entry of entries) {
       const year = entry.course.year;

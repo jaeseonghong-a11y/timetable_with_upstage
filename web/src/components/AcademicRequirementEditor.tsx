@@ -223,6 +223,7 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
                       }
                     >
                       <option value="primary_major">제1전공</option>
+                      <option value="secondary_major">제2·3전공</option>
                       <option value="general">교양</option>
                       <option value="ds">DS</option>
                       <option value="university">대학 공통</option>

@@ -4,6 +4,7 @@ import {
   AcademicExtractionError,
   cleanCompletedCourseExtraction,
   parseAcademicExtraction,
+  supplementCompletedCoursesFromMarkdown,
   supplementGraduationRequirementsFromMarkdown,
 } from "./academic-document";
 
@@ -647,6 +648,242 @@ ${JSON.stringify({
     expect(() =>
       parseAcademicExtraction('{"completedCourses":[]}', "course_history", "source-4"),
     ).toThrow(AcademicExtractionError);
+  });
+
+  it("ignores an outer pipe-table row whose cell wraps a whole embedded <table>, without losing the embedded table's own rows", () => {
+    // Live-verified against a real GLS export (2026-07-20): Document Parse can render a page's
+    // course table as an embedded <table>...</table> sitting inside ONE cell of an *outer*
+    // pipe-table row (e.g. "휴학구분 인성품: 미취득 <table>...</table>" | "국제품: 미취득 ..." |
+    // "AI품: 미취득 ..."). parseMarkdownTableRows reads that whole line as one 3-cell row, finds a
+    // course code inside the huge embedded blob, and would otherwise stamp every course found
+    // there with the *outer* row's own cells as majorScope/classification — here, page-header
+    // junk text ("국제품: 미취득 창의품: 미취득") never meant to be a 이수구분 value at all.
+    const markdown = [
+      "| 전공 | 이수구분 | 년도 | 학기 | 학수번호 | 영역 | 학점 | 성적 |",
+      "| --- | --- | --- | --- | --- | --- | --- | --- |",
+      "| 제1전공 | 전공 | 2023 | 1학기 | ABC1001 정상과목 | 전공코어 | 3 | A+ |",
+      '| 휴학구분 인성품: 미취득 <table><tr><td>제1전공</td><td>전공</td><td>2023</td><td>1학기</td><td>XYZ2002 임베디드과목</td><td>전공코어</td><td>3</td><td>A+</td></tr></table> | 국제품: 미취득 창의품: 미취득 | AI품: 미취득 인턴십품: 미취득 |',
+    ].join("\n");
+    const emptyProfile = parseAcademicExtraction(
+      JSON.stringify({ completedCourses: [], ...EMPTY_REQUIREMENT_ARRAYS }),
+      "course_history",
+      "source-embedded-table",
+    );
+
+    const supplemented = supplementCompletedCoursesFromMarkdown(
+      emptyProfile,
+      markdown,
+      "source-embedded-table",
+    );
+
+    expect(supplemented.completedCourses).toHaveLength(2);
+    expect(
+      supplemented.completedCourses.every(
+        (course) => !course.classification.includes("국제품") && !course.majorScope.includes("휴학구분"),
+      ),
+    ).toBe(true);
+    expect(supplemented.completedCourses).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ courseCode: "ABC1001", majorScope: "제1전공", classification: "전공" }),
+        expect.objectContaining({ courseCode: "XYZ2002", majorScope: "제1전공", classification: "전공" }),
+      ]),
+    );
+  });
+
+  it("resolves a cross-contaminated 이수구분 cell (e.g. \"교양 일반선택\") to the single most specific real category", () => {
+    // Live-verified: Document Parse's table reconstruction can bleed an adjacent row's 이수구분
+    // value into this row's cell. 전공 beats 교양 beats DS beats 선택 (see sanitizeClassification).
+    const markdown = [
+      "| 전공 | 이수구분 | 년도 | 학기 | 학수번호 | 영역 | 학점 | 성적 |",
+      "| --- | --- | --- | --- | --- | --- | --- | --- |",
+      "| 제1전공 | 교양 일반선택 | 2022 | 1학기 | GED9010 교양오염과목 | 의사소통 | 2 | A |",
+      "| 제1전공 | 전공 선택 국제어 | 2023 | 1학기 | COS9010 전공오염과목 | 전공코어 | 3 | A+ |",
+    ].join("\n");
+    const emptyProfile = parseAcademicExtraction(
+      JSON.stringify({ completedCourses: [], ...EMPTY_REQUIREMENT_ARRAYS }),
+      "course_history",
+      "source-contaminated-classification",
+    );
+
+    const supplemented = supplementCompletedCoursesFromMarkdown(
+      emptyProfile,
+      markdown,
+      "source-contaminated-classification",
+    );
+
+    expect(supplemented.completedCourses).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ courseCode: "GED9010", classification: "교양" }),
+        expect.objectContaining({ courseCode: "COS9010", classification: "전공" }),
+      ]),
+    );
+  });
+
+  it("recognizes a 2-digit exchange-credit course code (e.g. EXGL99) instead of swallowing it into the preceding course's name", () => {
+    // Live-verified: SKKU's own course codes are always 3-4 digits, but exchange-credit
+    // recognition codes (real example: EXGLV45) are only 2 digits — the old {3,4}-digit pattern
+    // never matched them at all, so their trailing text got absorbed into whichever real course
+    // happened to sit right before them in the same garbled Document Parse cell.
+    const markdown = [
+      "| 전공 | 이수구분 | 년도 | 학기 | 학수번호 | 영역 | 학점 | 성적 |",
+      "| --- | --- | --- | --- | --- | --- | --- | --- |",
+      "| 제1전공 | 전공 | 2023 | 1학기 | PHL9016 고중세철학사 EXGL99 University Exchange Course | 전공코어 | 3 | A |",
+    ].join("\n");
+    const emptyProfile = parseAcademicExtraction(
+      JSON.stringify({ completedCourses: [], ...EMPTY_REQUIREMENT_ARRAYS }),
+      "course_history",
+      "source-2digit-code",
+    );
+
+    const supplemented = supplementCompletedCoursesFromMarkdown(
+      emptyProfile,
+      markdown,
+      "source-2digit-code",
+    );
+
+    expect(supplemented.completedCourses).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ courseCode: "PHL9016", courseName: "고중세철학사" }),
+        expect.objectContaining({ courseCode: "EXGL99", courseName: "University Exchange Course" }),
+      ]),
+    );
+  });
+
+  it("strips a dangling year/학기 tail left on a course name by an adjacent garbled row", () => {
+    const markdown = [
+      "| 전공 | 이수구분 | 년도 | 학기 | 학수번호 | 영역 | 학점 | 성적 |",
+      "| --- | --- | --- | --- | --- | --- | --- | --- |",
+      "| 제1전공 | 교양 | 2022 | 1학기 | GED9020 스피치와토론 2025 1 학기 2025 | 의사소통 | 2 | A |",
+    ].join("\n");
+    const emptyProfile = parseAcademicExtraction(
+      JSON.stringify({ completedCourses: [], ...EMPTY_REQUIREMENT_ARRAYS }),
+      "course_history",
+      "source-trailing-noise",
+    );
+
+    const supplemented = supplementCompletedCoursesFromMarkdown(
+      emptyProfile,
+      markdown,
+      "source-trailing-noise",
+    );
+
+    expect(supplemented.completedCourses).toEqual([
+      expect.objectContaining({ courseCode: "GED9020", courseName: "스피치와토론" }),
+    ]);
+  });
+
+  it("borrows a non-blank courseName from a sibling occurrence when the dedup winner's own name is blank", () => {
+    // The occurrence picked for its correct classification (전공, not 선택) can still have a
+    // blank name — a different row-boundary garbling issue than which section owns the course —
+    // while the *rejected* 선택 occurrence's own row happened to capture the name cleanly.
+    const markdown = [
+      "| 전공 | 이수구분 | 년도 | 학기 | 학수번호 | 영역 | 학점 | 성적 |",
+      "| --- | --- | --- | --- | --- | --- | --- | --- |",
+      "| 제1전공 | 선택 | 2023 | 1학기 | XYZ9030 진짜과목이름 | 전공코어 | 3 | A |",
+      "| 제3전공 | 전공 | 2023 | 1학기 | XYZ9030 | 전공코어 | 3 | A |",
+    ].join("\n");
+    const emptyProfile = parseAcademicExtraction(
+      JSON.stringify({ completedCourses: [], ...EMPTY_REQUIREMENT_ARRAYS }),
+      "course_history",
+      "source-name-borrow",
+    );
+
+    const supplemented = supplementCompletedCoursesFromMarkdown(
+      emptyProfile,
+      markdown,
+      "source-name-borrow",
+    );
+
+    expect(supplemented.completedCourses).toEqual([
+      expect.objectContaining({
+        courseCode: "XYZ9030",
+        courseName: "진짜과목이름",
+        majorScope: "제3전공",
+        classification: "전공",
+      }),
+    ]);
+  });
+
+  it("resolves a 복수전공 document's duplicated course rows to the genuine (non-선택) occurrence", () => {
+    // GLS repeats the whole course-history table once per declared major: 제1전공's own section
+    // lists COS9001 as its real 전공 and CNT9001 as a "선택" placeholder for the other major's
+    // course; the 제3전공 section mirrors that (CNT9001 real, COS9001 "선택"). GED9001 (교양) is
+    // duplicated identically in both, as it belongs to neither major specifically.
+    const markdown = [
+      "| 전공 | 이수구분 | 년도 | 학기 | 학수번호 | 영역 | 학점 | 성적 |",
+      "| --- | --- | --- | --- | --- | --- | --- | --- |",
+      "| 제1전공 | 전공 | 2023 | 1학기 | COS9001 동양철학입문 | 전공코어 | 3 | A+ |",
+      "| 제1전공 | 선택 | 2024 | 2학기 | CNT9001 문화콘텐츠입문 | 전공코어 | 3 | A |",
+      "| 제1전공 | 교양 | 2022 | 1학기 | GED9001 영어쓰기 | 글로벌 | 2 | A |",
+      "| 제3전공 | 선택 | 2023 | 1학기 | COS9001 동양철학입문 | 전공코어 | 3 | A+ |",
+      "| 제3전공 | 전공 | 2024 | 2학기 | CNT9001 문화콘텐츠입문 | 전공코어 | 3 | A |",
+      "| 제3전공 | 교양 | 2022 | 1학기 | GED9001 영어쓰기 | 글로벌 | 2 | A |",
+    ].join("\n");
+    const emptyProfile = parseAcademicExtraction(
+      JSON.stringify({ completedCourses: [], ...EMPTY_REQUIREMENT_ARRAYS }),
+      "course_history",
+      "source-double-major",
+    );
+
+    const supplemented = supplementCompletedCoursesFromMarkdown(
+      emptyProfile,
+      markdown,
+      "source-double-major",
+    );
+
+    expect(supplemented.completedCourses).toHaveLength(3);
+    expect(supplemented.completedCourses).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          courseCode: "COS9001",
+          majorScope: "제1전공",
+          classification: "전공",
+        }),
+        expect.objectContaining({
+          courseCode: "CNT9001",
+          majorScope: "제3전공",
+          classification: "전공",
+        }),
+        expect.objectContaining({
+          courseCode: "GED9001",
+          majorScope: "제1전공",
+          classification: "교양",
+        }),
+      ]),
+    );
+  });
+
+  it("classifies 제2전공/제3전공 graduation-requirement rows as secondary_major instead of falling back to other", () => {
+    const markdown = [
+      "| 구분 | 기준학점 | 취득학점 | 1학기 | 여름 | 2학기 | 겨울 | 계 | 잔여학점 |",
+      "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+      "| 제1전공 총학점 | 42 | 42 | 0 | 0 | 0 | 0 | 0 | 0 |",
+      "| 제3전공 총학점 | 42 | 40 | 0 | 0 | 0 | 0 | 0 | 2 |",
+    ].join("\n");
+    const emptyProfile = parseAcademicExtraction(
+      JSON.stringify({ completedCourses: [], requirements: [], reviewIssues: [] }),
+      "graduation_requirements",
+      "source-secondary-major",
+    );
+
+    const supplemented = supplementGraduationRequirementsFromMarkdown(
+      emptyProfile,
+      markdown,
+      "source-secondary-major",
+    );
+
+    expect(supplemented.requirements).toEqual([
+      expect.objectContaining({
+        label: "제1전공 총학점",
+        scope: "primary_major",
+        reviewReasons: [],
+      }),
+      expect.objectContaining({
+        label: "제3전공 총학점",
+        scope: "secondary_major",
+        reviewReasons: [],
+      }),
+    ]);
   });
 });
 
