@@ -46,6 +46,8 @@ import {
   type Weekday,
 } from "@/lib/timetable";
 import {
+  DEFAULT_LUNCH_WINDOW_END_MINUTES,
+  DEFAULT_LUNCH_WINDOW_START_MINUTES,
   DEFAULT_RECOMMENDATION_WEIGHTS,
   getTimetableCandidateId,
   type RecommendationWeight,
@@ -83,7 +85,7 @@ interface Props {
 const WEIGHT_LABELS: Record<WeightId, string> = {
   free_days: "공강 요일 만들기",
   back_to_back: "연강 선호/기피",
-  lunch_break: "점심시간(11~13시) 확보",
+  lunch_break: "점심시간 확보",
   avoid_9am: "오전 9시 수업 회피",
   compact_days: "수업일수 최소화",
   prefer_in_person: "대면 수업 선호",
@@ -1203,6 +1205,18 @@ export function TimetablePlanner({
     );
   }
 
+  function setLunchBreakConfig(
+    partial: Partial<NonNullable<RecommendationWeight["config"]>>,
+  ): void {
+    setRecommendationWeights((weights) =>
+      weights.map((weight) =>
+        weight.id === "lunch_break"
+          ? { ...weight, config: { ...weight.config, ...partial } }
+          : weight,
+      ),
+    );
+  }
+
   /**
    * Looks beyond the user's manually chosen courses: pulls in elective subjects the user never
    * added to a choice group, preferring areas that match unmet 교양(general) graduation
@@ -1969,7 +1983,7 @@ export function TimetablePlanner({
               <div className={styles.selectionPlanHeading}>
                 <div>
                   <strong className={styles.sectionTitle}>담은 과목 확인</strong>
-                  <small>분반 선택, 선택 그룹 이름 변경, 그룹 이동을 할 수 있습니다.</small>
+                  <small>분반 선택, 선택 그룹 추가 및 수정, 그룹 이동을 할 수 있습니다.</small>
                 </div>
                 <button className={styles.addChoiceGroupButton} onClick={addChoiceGroup} type="button">
                   + 선택 그룹 추가
@@ -2326,6 +2340,37 @@ export function TimetablePlanner({
                       <option value="medium">보통</option>
                       <option value="high">높음</option>
                     </select>
+                  ) : null}
+                  {weight.enabled && weight.id === "lunch_break" ? (
+                    <span className={styles.backToBackConfig}>
+                      <input
+                        aria-label="점심 시작 시각"
+                        type="time"
+                        value={formatMinutes(
+                          weight.config?.lunchStartMinutes ?? DEFAULT_LUNCH_WINDOW_START_MINUTES,
+                        )}
+                        onChange={(event) => {
+                          const minutes = parseTimeInputToMinutes(event.target.value);
+                          if (minutes !== null) {
+                            setLunchBreakConfig({ lunchStartMinutes: minutes });
+                          }
+                        }}
+                      />
+                      <span aria-hidden="true">~</span>
+                      <input
+                        aria-label="점심 종료 시각"
+                        type="time"
+                        value={formatMinutes(
+                          weight.config?.lunchEndMinutes ?? DEFAULT_LUNCH_WINDOW_END_MINUTES,
+                        )}
+                        onChange={(event) => {
+                          const minutes = parseTimeInputToMinutes(event.target.value);
+                          if (minutes !== null) {
+                            setLunchBreakConfig({ lunchEndMinutes: minutes });
+                          }
+                        }}
+                      />
+                    </span>
                   ) : null}
                   {weight.enabled && weight.id === "back_to_back" ? (
                     <span className={styles.backToBackConfig}>
