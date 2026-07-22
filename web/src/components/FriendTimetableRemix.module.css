@@ -1,13 +1,13 @@
 .page {
-  --remix-shared-border: #27b783;
-  --remix-shared-surface: #d8f4e8;
-  --remix-shared-text: #07553d;
-  --remix-friend-border: #4f9e87;
-  --remix-friend-surface: #dcefe7;
-  --remix-friend-text: #174f40;
-  --remix-mine-border: #91a94f;
-  --remix-mine-surface: #eef3d7;
-  --remix-mine-text: #4f621e;
+  --remix-shared-border: #11845d;
+  --remix-shared-surface: #9ce4bc;
+  --remix-shared-text: #063b29;
+  --remix-friend-border: #1f7685;
+  --remix-friend-surface: #8bcfd5;
+  --remix-friend-text: #083b44;
+  --remix-mine-border: #937320;
+  --remix-mine-surface: #e2d486;
+  --remix-mine-text: #4a3b07;
   min-height: 100vh;
   padding: 36px 20px 64px;
   background: #06100b;
@@ -211,9 +211,9 @@
 .courseLegend i {
   display: inline-block;
   flex: none;
-  width: 10px;
-  height: 10px;
-  border: 1px solid;
+  width: 12px;
+  height: 12px;
+  border: 2px solid;
   border-radius: 3px;
 }
 
