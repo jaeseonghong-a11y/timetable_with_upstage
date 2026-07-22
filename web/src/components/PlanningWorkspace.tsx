@@ -28,12 +28,12 @@ const STEPS = [
 
 type StepId = (typeof STEPS)[number]["id"];
 type DocSubstep = "course_history" | "graduation_requirements";
-type AiSubstep = "split" | "setup" | "results";
+type AiSubstep = "setup" | "results";
 
 export function PlanningWorkspace() {
   const [step, setStep] = useState<StepId>(1);
   const [docSubstep, setDocSubstep] = useState<DocSubstep>("course_history");
-  const [aiSubstep, setAiSubstep] = useState<AiSubstep>("split");
+  const [aiSubstep, setAiSubstep] = useState<AiSubstep>("setup");
   const [hasEnteredDocuments, setHasEnteredDocuments] = useState(false);
   const [aiRecommendRequestId, setAiRecommendRequestId] = useState(0);
   const [aiRecommendAction, setAiRecommendAction] = useState({
@@ -110,7 +110,7 @@ export function PlanningWorkspace() {
       setHasEnteredPlanner(true);
     }
     if (nextStep === 5) {
-      setAiSubstep("split");
+      setAiSubstep("setup");
     }
   }
 
@@ -142,10 +142,6 @@ export function PlanningWorkspace() {
       setDocSubstep("graduation_requirements");
       return;
     }
-    if (step === 5 && aiSubstep === "split") {
-      setAiSubstep("setup");
-      return;
-    }
     if (step === 5 && aiSubstep === "setup") {
       if (!aiRecommendAction.canRun || aiRecommendAction.isRunning) {
         return;
@@ -171,10 +167,6 @@ export function PlanningWorkspace() {
     }
     if (step === 5 && aiSubstep === "results") {
       setAiSubstep("setup");
-      return;
-    }
-    if (step === 5 && aiSubstep === "setup") {
-      setAiSubstep("split");
       return;
     }
     if (step <= 1) {
@@ -223,24 +215,19 @@ export function PlanningWorkspace() {
         ? "내 기록 적용하기 · 수강/취득과목 (1/2)"
         : "내 기록 적용하기 · 졸업요건 충족현황 (2/2)"
       : step === 5
-        ? aiSubstep === "split"
-          ? "AI 시간표 추천 (1/3)"
-          : aiSubstep === "setup"
-            ? "AI 시간표 추천 (2/3)"
-            : "AI 시간표 추천 (3/3)"
+        ? aiSubstep === "setup"
+          ? "AI 시간표 추천 (1/2)"
+          : "AI 시간표 추천 (2/2)"
         : current.title;
   const plannerView =
     step === 5
       ? aiSubstep === "results"
         ? "ai-results"
-        : aiSubstep === "setup"
-          ? "ai-setup"
-          : "ai-split"
+        : "ai-setup"
       : step === 4
         ? "results"
         : "select";
-  const showNextButton =
-    step < STEPS.length || (step === 5 && (aiSubstep === "setup" || aiSubstep === "split"));
+  const showNextButton = step < STEPS.length || (step === 5 && aiSubstep === "setup");
   const nextLabel =
     step === 5 && aiSubstep === "setup"
       ? aiRecommendAction.isRunning
