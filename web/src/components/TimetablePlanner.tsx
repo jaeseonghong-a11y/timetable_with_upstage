@@ -1485,42 +1485,77 @@ export function TimetablePlanner({
     );
   }
 
-  // STEP 5-1(과목 분리)에서만 쓰는 카드 — STEP 3의 분반 선택 UI를 다시 노출하지 않고, "과목
-  // 위치"(필수/선택 그룹)만 바꿀 수 있게 해서 STEP 4에는 영향을 주지 않는 이 화면의 역할을 명확히 한다.
+  // STEP 5-1(과목 분리)에서만 쓰는 카드 — STEP 3의 "담은 과목 확인" 카드와 동일하게 분반 선택을
+  // 펼쳐 볼 수 있고, 여기에 더해 "과목 위치"(필수/선택 그룹)를 바꿀 수 있다. 분반을 바꿔도
+  // enabledSectionIds는 STEP 3·4와 공유하는 상태이므로 STEP 4 결과에도 그대로 반영된다 — 여기서
+  // STEP 4에 영향을 주지 않는 것은 오직 "과목 위치"(필수/선택 그룹 배정)뿐이다.
   function renderAssignmentCard(group: PlannerCourseGroup): ReactNode {
     const selectedSections =
       enabledSectionIds[group.selectionId] ?? getInitialSectionIds(group.candidates);
     const owner = courseOwners[group.selectionId] ?? "required";
     return (
-      <div className={styles.assignmentCard} key={group.selectionId}>
-        <span className={styles.summaryTitle}>
-          <strong>{group.title}</strong>
-          <small>
-            {group.id}
-            {group.credits > 0 ? ` · ${formatCredits(group.credits)}학점` : ""}
-            {` · 분반 ${selectedSections.length}/${group.candidates.length}`}
-          </small>
-        </span>
-        <label className={styles.subjectDestination}>
-          <span className={styles.srOnly}>과목 위치</span>
-          <select
-            value={owner}
-            onChange={(event) =>
-              setCourseOwners((owners) => ({
-                ...owners,
-                [group.selectionId]: event.target.value,
-              }))
-            }
-          >
-            <option value="required">필수 과목</option>
-            {choiceGroups.map((choiceGroup) => (
-              <option key={choiceGroup.id} value={choiceGroup.id}>
-                {choiceGroup.title}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+      <details className={styles.selectedSubject} key={group.selectionId}>
+        <summary>
+          <span className={styles.summaryTitle}>
+            <strong>{group.title}</strong>
+            <small>
+              {group.id}
+              {group.credits > 0 ? ` · ${formatCredits(group.credits)}학점` : ""}
+            </small>
+          </span>
+          <span className={styles.summaryActions}>
+            <small>
+              분반 {selectedSections.length}/{group.candidates.length}
+            </small>
+          </span>
+        </summary>
+        <div className={styles.subjectConfiguration}>
+          <label className={styles.subjectDestination}>
+            <span>과목 위치</span>
+            <select
+              value={owner}
+              onChange={(event) =>
+                setCourseOwners((owners) => ({
+                  ...owners,
+                  [group.selectionId]: event.target.value,
+                }))
+              }
+            >
+              <option value="required">필수 과목</option>
+              {choiceGroups.map((choiceGroup) => (
+                <option key={choiceGroup.id} value={choiceGroup.id}>
+                  {choiceGroup.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          {group.candidates.length > 1 ? (
+            <button
+              className={styles.selectAllSections}
+              type="button"
+              onClick={() =>
+                selectedSections.length === group.candidates.length
+                  ? deselectAllSections(group)
+                  : selectAllSections(group)
+              }
+            >
+              {selectedSections.length === group.candidates.length
+                ? "분반 전체 선택 해제"
+                : "분반 전체 선택"}
+            </button>
+          ) : null}
+          <SelectedSectionChoices
+            candidates={group.candidates}
+            selectedSectionIds={selectedSections}
+            onToggleSection={(sectionId) => toggleSection(group, sectionId)}
+          />
+          <div className={styles.selectedReviewLinks}>
+            {group.candidates
+              .filter((candidate) => selectedSections.includes(candidate.id))
+              .map((candidate) => <EverytimeReviewButton course={candidate} key={candidate.id} compact />)}
+          </div>
+        </div>
+      </details>
     );
   }
 
@@ -2199,21 +2234,21 @@ export function TimetablePlanner({
           ) : null}
 
           {showAiSplit ? (
-            <div className={styles.selectionPlanEditor}>
-              <div className={styles.selectionPlanHeading}>
-                <div>
-                  <strong className={styles.sectionTitle}>필수·선택 그룹 나누기</strong>
-                  <small>
-                    시간표에 항상 들어갈 필수 과목과, 그중 몇 개만 골라 넣을 선택 그룹을 나눌 수
-                    있습니다. 여기서 나눈 그룹은 다음 화면의 AI 추천에만 반영되고, 앞서 확인한
-                    유효 시간표에는 영향을 주지 않습니다.
-                  </small>
-                </div>
-                <button className={styles.addChoiceGroupButton} onClick={addChoiceGroup} type="button">
-                  + 선택 그룹 추가
-                </button>
+            <>
+            <div className={styles.selectionPlanHeading}>
+              <div>
+                <strong className={styles.sectionTitle}>필수·선택 그룹 나누기</strong>
+                <small>
+                  시간표에 항상 들어갈 필수 과목과, 그중 몇 개만 골라 넣을 선택 그룹을 나눌 수
+                  있습니다. 여기서 나눈 그룹은 다음 화면의 AI 추천에만 반영되고, 앞서 확인한
+                  유효 시간표에는 영향을 주지 않습니다.
+                </small>
               </div>
-
+              <button className={styles.addChoiceGroupButton} onClick={addChoiceGroup} type="button">
+                + 선택 그룹 추가
+              </button>
+            </div>
+            <div className={styles.selectionPlanEditor}>
               {selectedCourseGroups.length === 0 ? (
                 <p className={styles.empty}>STEP 3에서 담은 과목이 없습니다. 이전 단계에서 과목을 담아 주세요.</p>
               ) : (
@@ -2332,6 +2367,7 @@ export function TimetablePlanner({
                 </div>
               )}
             </div>
+            </>
           ) : null}
 
           {showAiSetup ? (

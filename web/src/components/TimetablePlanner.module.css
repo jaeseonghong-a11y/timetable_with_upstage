@@ -810,21 +810,16 @@
   cursor: pointer;
 }
 
-.assignmentCard {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 9px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  background: var(--surface-card);
-}
-
 .subjectDestination {
   display: grid;
-  flex: none;
+  justify-self: start;
   gap: 4px;
+}
+
+.subjectDestination > span {
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 800;
 }
 
 .subjectDestination select {
