@@ -218,6 +218,10 @@ function mergeProgramCourseGroups(
 /** How many extra elective subjects the AI recommendation step may consider/add as filler. */
 const MAX_FILLER_SHORTLIST = 8;
 const MAX_FILLER_SUBJECTS = 5;
+// Nothing in this component ever populates this — kept as a stable empty-array reference (not a
+// literal inside the component body) purely so the useMemo hooks that depend on it don't recompute
+// on every render just because `[]` is a new array identity each time.
+const NO_UNAVAILABLE_DAYS: Weekday[] = [];
 const AI_FILLER_BAG_ID = "ai-filler";
 const AI_FILLER_GROUP_TITLE = "AI 추천 보충 교양";
 
@@ -260,7 +264,7 @@ export function TimetablePlanner({
   const [courseOwners, setCourseOwners] = useState<Record<string, CourseDestination>>({});
   const [enabledSectionIds, setEnabledSectionIds] = useState<Record<string, string[]>>({});
   const [scheduleConflicts, setScheduleConflicts] = useState<ScheduleConflictPair[] | null>(null);
-  const unavailableDays: Weekday[] = [];
+  const unavailableDays = NO_UNAVAILABLE_DAYS;
   const [fixedEvents, setFixedEvents] = useState<FixedEvent[]>([]);
   const [newEventLabel, setNewEventLabel] = useState("");
   const [newEventDay, setNewEventDay] = useState<Weekday>("mon");
