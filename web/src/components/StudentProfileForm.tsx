@@ -401,7 +401,7 @@ export function StudentProfileForm({ profile, appliedProfile, onChange, onApply 
 
       <div className={styles.actions}>
         <p>이름과 전체 학번은 받지 않습니다. 선택한 학과 범위만 성대 공개 API에서 조회합니다.</p>
-        <button type="button" onClick={applyProfile}>이 조건으로 전공·교양 개설강좌 조회</button>
+        <button type="button" onClick={applyProfile}>확정</button>
       </div>
       {error ? <p className={styles.error} role="alert">{error}</p> : null}
     </section>

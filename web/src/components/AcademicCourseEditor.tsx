@@ -162,13 +162,6 @@ export function AcademicCourseEditor({ profile, onChange }: Props) {
 
         <div className={styles.cardBody}>
           <div className={`${styles.fieldGrid} ${styles.courseFieldGrid}`}>
-            <label className={`${styles.field} ${styles.wideField}`}>
-              <span>과목명</span>
-              <input
-                value={course.courseName}
-                onChange={(event) => updateCourse(index, { ...course, courseName: event.target.value })}
-              />
-            </label>
             <label className={styles.field}>
               <span>학수번호</span>
               <input
@@ -176,18 +169,6 @@ export function AcademicCourseEditor({ profile, onChange }: Props) {
                 value={course.courseCode}
                 onChange={(event) =>
                   updateCourse(index, { ...course, courseCode: event.target.value.toUpperCase() })
-                }
-              />
-            </label>
-            <label className={styles.field}>
-              <span>학점</span>
-              <input
-                min="0"
-                step="0.5"
-                type="number"
-                value={numberInputValue(course.credits)}
-                onChange={(event) =>
-                  updateCourse(index, { ...course, credits: event.target.valueAsNumber })
                 }
               />
             </label>
@@ -240,13 +221,6 @@ export function AcademicCourseEditor({ profile, onChange }: Props) {
                 onChange={(event) =>
                   updateCourse(index, { ...course, classification: event.target.value })
                 }
-              />
-            </label>
-            <label className={styles.field}>
-              <span>영역</span>
-              <input
-                value={course.area}
-                onChange={(event) => updateCourse(index, { ...course, area: event.target.value })}
               />
             </label>
             <label className={styles.field}>
