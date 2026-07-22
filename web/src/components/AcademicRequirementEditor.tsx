@@ -23,24 +23,22 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
   // 목록 전체를 하나의 단위로만 접고 편다 (개별 요건 접기는 없음). 수강내역 편집기와 같은
   // 이유로, 새 분석 결과가 들어올 때(sourceDocumentId 변경)마다 접힌 상태로 시작한다.
   const [isListCollapsed, setIsListCollapsed] = useState(true);
-  const [showUnmetGeneralOnly, setShowUnmetGeneralOnly] = useState(false);
+  const [showUnmetOnly, setShowUnmetOnly] = useState(false);
   const [lastSourceDocumentId, setLastSourceDocumentId] = useState(sourceDocumentId);
   if (sourceDocumentId !== lastSourceDocumentId) {
     setLastSourceDocumentId(sourceDocumentId);
     setIsListCollapsed(true);
-    setShowUnmetGeneralOnly(false);
+    setShowUnmetOnly(false);
   }
 
-  function isUnmetGeneralRequirement(requirement: Requirement): boolean {
-    return requirement.scope === "general" && requirement.status === "unmet";
+  function isUnmetRequirement(requirement: Requirement): boolean {
+    return requirement.status === "unmet";
   }
 
   const visibleRequirements = profile.requirements
     .map((requirement, index) => ({ requirement, index }))
-    .filter(
-      ({ requirement }) => !showUnmetGeneralOnly || isUnmetGeneralRequirement(requirement),
-    );
-  const unmetGeneralCount = profile.requirements.filter(isUnmetGeneralRequirement).length;
+    .filter(({ requirement }) => !showUnmetOnly || isUnmetRequirement(requirement));
+  const unmetCount = profile.requirements.filter(isUnmetRequirement).length;
   const needsReviewCount = profile.requirements.filter((requirement) =>
     requirement.reviewReasons.some((reason) => !isNonBlockingRequirementReview(requirement, reason)),
   ).length;
@@ -113,26 +111,26 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
         <div>
           <p>졸업요건</p>
           <h3>
-            {showUnmetGeneralOnly
-              ? `미충족 교양 ${visibleRequirements.length}개 / 전체 ${profile.requirements.length}개`
+            {showUnmetOnly
+              ? `미충족 ${visibleRequirements.length}개 / 전체 ${profile.requirements.length}개`
               : `${profile.requirements.length}개`}
           </h3>
         </div>
         <div className={styles.sectionControls}>
           <label className={styles.unmetOnlyToggle}>
             <input
-              checked={showUnmetGeneralOnly}
+              checked={showUnmetOnly}
               type="checkbox"
               onChange={(event) => {
-                setShowUnmetGeneralOnly(event.target.checked);
+                setShowUnmetOnly(event.target.checked);
                 if (event.target.checked) {
                   setIsListCollapsed(false);
                 }
               }}
             />
             <span>
-              미충족 교양 과목만 보기
-              {unmetGeneralCount > 0 ? ` (${unmetGeneralCount})` : ""}
+              미충족 요건만 보기
+              {unmetCount > 0 ? ` (${unmetCount})` : ""}
             </span>
           </label>
           {needsReviewCount > 0 ? (
@@ -167,7 +165,7 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
           )}
         </button>
       ) : visibleRequirements.length === 0 ? (
-        <p className={styles.dataEmpty}>미충족 교양 요건이 없습니다.</p>
+        <p className={styles.dataEmpty}>미충족 요건이 없습니다.</p>
       ) : (
         <ol className={styles.courseCardGrid}>
           {visibleRequirements.map(({ requirement, index }) => {
@@ -202,15 +200,6 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
 
               <div className={styles.cardBody}>
                 <div className={`${styles.fieldGrid} ${styles.courseFieldGrid}`}>
-                  <label className={`${styles.field} ${styles.wideField}`}>
-                    <span>요건명</span>
-                    <input
-                      value={requirement.label}
-                      onChange={(event) =>
-                        updateRequirement(index, { ...requirement, label: event.target.value })
-                      }
-                    />
-                  </label>
                   <label className={styles.field}>
                     <span>범위</span>
                     <select

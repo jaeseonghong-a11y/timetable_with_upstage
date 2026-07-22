@@ -372,7 +372,3 @@ function matchesCourseSearch(course: CompletedCourse, query: string): boolean {
     .toLowerCase();
   return haystack.includes(query);
 }
-
-function numberInputValue(value: number): number | "" {
-  return Number.isFinite(value) ? value : "";
-}

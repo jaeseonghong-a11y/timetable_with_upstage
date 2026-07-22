@@ -26,7 +26,6 @@ import {
   generateTimetablesForSelectionPlan,
   getAllSectionIds,
   getInitialSectionIds,
-  removeSubjectsOwnedBy,
   SelectionPlanError,
   SelectionPlanLimitError,
   toggleEnabledSectionId,
@@ -278,7 +277,6 @@ export function TimetablePlanner({
   const [isElectiveLoading, setIsElectiveLoading] = useState(false);
   const [loadingCourseNumbers, setLoadingCourseNumbers] = useState<string[]>([]);
   const [previewLoadingIds, setPreviewLoadingIds] = useState<string[]>([]);
-  const nextChoiceGroupId = useRef(2);
   const electivePreviewRequestIds = useRef(new Set<string>());
   const electivePreviewLanes = useRef<Promise<void>[]>(createElectivePreviewLanes());
   const electivePreviewLaneCursor = useRef(0);
@@ -319,7 +317,6 @@ export function TimetablePlanner({
       setPreviewLoadingIds([]);
       setDisabledCourseTypes(new Set());
       setDayOffFilters([]);
-      nextChoiceGroupId.current = 2;
       try {
         const programCodes = roadmapProgramCodes.length
           ? roadmapProgramCodes
@@ -535,50 +532,6 @@ export function TimetablePlanner({
     } else {
       selectCourseGroup(group, activeDestination, enabledSectionIds[group.selectionId]);
     }
-  }
-
-  function addChoiceGroup(): void {
-    const number = nextChoiceGroupId.current;
-    nextChoiceGroupId.current += 1;
-    const group = {
-      id: `choice-${number}`,
-      title: `선택 그룹 ${number}`,
-      minSubjects: 1,
-      maxSubjects: 1,
-    };
-    setChoiceGroups((groups) => [...groups, group]);
-    setActiveDestination(group.id);
-  }
-
-  function removeChoiceGroup(groupId: string): void {
-    const nextAssignment = removeSubjectsOwnedBy(
-      {
-        selectedIds: selectedGroupIds,
-        owners: courseOwners,
-        enabledSectionIds,
-      },
-      groupId,
-    );
-    const removedSelectionIds = new Set(nextAssignment.removedIds);
-    setChoiceGroups((groups) => groups.filter(({ id }) => id !== groupId));
-    setSelectedGroupIds(nextAssignment.selectedIds);
-    setCourseOwners(nextAssignment.owners);
-    setEnabledSectionIds(nextAssignment.enabledSectionIds);
-    setElectiveCourseGroups((groups) =>
-      groups.filter(({ selectionId }) => !removedSelectionIds.has(selectionId)),
-    );
-    if (activeDestination === groupId) {
-      setActiveDestination("required");
-    }
-  }
-
-  function updateChoiceGroup(
-    groupId: string,
-    update: Partial<Omit<ChoiceGroupConfig, "id">>,
-  ): void {
-    setChoiceGroups((groups) =>
-      groups.map((group) => (group.id === groupId ? { ...group, ...update } : group)),
-    );
   }
 
   function toggleSection(group: PlannerCourseGroup, sectionId: string): void {
@@ -1418,48 +1371,35 @@ export function TimetablePlanner({
   function renderSelectedSubjectCard(group: PlannerCourseGroup): ReactNode {
     const selectedSections =
       enabledSectionIds[group.selectionId] ?? getInitialSectionIds(group.candidates);
-    const owner = courseOwners[group.selectionId] ?? "required";
     return (
       <details className={styles.selectedSubject} key={group.selectionId}>
         <summary>
-          <span>
+          <span className={styles.summaryTitle}>
             <strong>{group.title}</strong>
             <small>
               {group.id}
               {group.credits > 0 ? ` · ${formatCredits(group.credits)}학점` : ""}
             </small>
           </span>
-          <small>
-            분반 {selectedSections.length}/{group.candidates.length}
-          </small>
+          <span className={styles.summaryActions}>
+            <small>
+              분반 {selectedSections.length}/{group.candidates.length}
+            </small>
+            <button
+              aria-label={`${group.title} 선택 해제`}
+              className={styles.removeSelectedCourseInline}
+              type="button"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                removeSelectedCourse(group);
+              }}
+            >
+              삭제
+            </button>
+          </span>
         </summary>
         <div className={styles.subjectConfiguration}>
-          <label className={styles.subjectDestination}>
-            <span>과목 위치</span>
-            <select
-              value={owner}
-              onChange={(event) =>
-                setCourseOwners((owners) => ({
-                  ...owners,
-                  [group.selectionId]: event.target.value,
-                }))
-              }
-            >
-              <option value="required">필수 과목</option>
-              {choiceGroups.map((choiceGroup) => (
-                <option key={choiceGroup.id} value={choiceGroup.id}>
-                  {choiceGroup.title}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            className={styles.removeSelectedCourse}
-            type="button"
-            onClick={() => removeSelectedCourse(group)}
-          >
-            이 과목 선택 해제
-          </button>
           {group.candidates.length > 1 ? (
             <button
               className={styles.selectAllSections}
@@ -1582,24 +1522,6 @@ export function TimetablePlanner({
                 교양 과목
               </button>
             </div>
-            <label className={styles.assignmentTarget}>
-              <span>새로 선택한 과목을 담을 곳</span>
-              <select
-                value={activeDestination}
-                onChange={(event) => setActiveDestination(event.target.value)}
-              >
-                <option value="required">필수 과목 (모든 조합에 포함)</option>
-                {choiceGroups.map((choiceGroup) => (
-                  <option key={choiceGroup.id} value={choiceGroup.id}>
-                    {choiceGroup.title} ({choiceGroup.minSubjects}~{choiceGroup.maxSubjects}과목 선택)
-                  </option>
-                ))}
-              </select>
-              <small>
-                위에서 고른 위치에 새 과목이 담깁니다. 선택 그룹 추가·수정은 아래 ‘담은 과목 확인’에서
-                할 수 있습니다.
-              </small>
-            </label>
             {courseSource === "major" ? (
               <div className={styles.majorFilters}>
             {majorProgramTabs.length > 1 ? (
@@ -1800,7 +1722,6 @@ export function TimetablePlanner({
             ) : null}
             <div className={styles.courseList}>
               {courseSource === "major" ? visibleMajorCourseGroups.map((group) => {
-                const isSelectedElsewhere = selectedGroupIds.includes(group.selectionId);
                 const checked = isAssignedToActiveDestination(group.selectionId);
                 const selectedSections = checked
                   ? enabledSectionIds[group.selectionId] ?? getInitialSectionIds(group.candidates)
@@ -1821,13 +1742,9 @@ export function TimetablePlanner({
                           {group.credits > 0 ? ` · ${formatCredits(group.credits)}학점` : ""}
                         </small>
                       </span>
-                      <small>
-                        {checked
-                          ? getDestinationLabel(courseOwners[group.selectionId], choiceGroups)
-                          : isSelectedElsewhere
-                            ? `${getDestinationLabel(courseOwners[group.selectionId], choiceGroups)}에 있음 · 눌러서 옮기기`
-                            : `${group.candidates.length}개 분반`}
-                      </small>
+                      {!checked ? (
+                        <small>{group.candidates.length}개 분반</small>
+                      ) : null}
                     </label>
                     {shouldShowSectionDetails(group.candidates.length)
                       ? (
@@ -1848,7 +1765,6 @@ export function TimetablePlanner({
                   (group) => group.selectionId === selectionId,
                 );
                 const previewGroup = electivePreviewGroups[selectionId];
-                const isSelectedElsewhere = Boolean(selectedGroup) && !isAssignedToActiveDestination(selectionId);
                 const checked = isAssignedToActiveDestination(selectionId);
                 const loading = loadingCourseNumbers.includes(selectionId);
                 const previewLoading = previewLoadingIds.includes(selectionId);
@@ -1882,19 +1798,17 @@ export function TimetablePlanner({
                             : ""}
                         </small>
                       </span>
-                      <small>
-                        {loading
-                          ? "분반 조회 중…"
-                          : checked
-                            ? getDestinationLabel(courseOwners[selectionId], choiceGroups)
-                            : isSelectedElsewhere
-                              ? `${getDestinationLabel(courseOwners[selectionId], choiceGroups)}에 있음 · 눌러서 옮기기`
-                              : previewGroup
-                                ? `${filterGroupCandidatesByFormat(previewGroup, disabledCourseTypes).candidates.length}개 분반`
-                                : previewLoading
-                                  ? "분반 확인 중…"
-                                  : "선택"}
-                      </small>
+                      {!checked ? (
+                        <small>
+                          {loading
+                            ? "분반 조회 중…"
+                            : previewGroup
+                              ? `${filterGroupCandidatesByFormat(previewGroup, disabledCourseTypes).candidates.length}개 분반`
+                              : previewLoading
+                                ? "분반 확인 중…"
+                                : "선택"}
+                        </small>
+                      ) : null}
                     </label>
                     {filteredDisplayedGroup && shouldShowSectionDetails(filteredDisplayedGroup.candidates.length)
                       ? (
@@ -1949,123 +1863,15 @@ export function TimetablePlanner({
               <div className={styles.selectionPlanHeading}>
                 <div>
                   <strong className={styles.sectionTitle}>담은 과목 확인</strong>
-                  <small>분반 선택, 선택 그룹 이름 변경, 그룹 이동을 할 수 있습니다.</small>
+                  <small>분반을 고르거나 과목을 뺄 수 있습니다.</small>
                 </div>
-                <button type="button" onClick={addChoiceGroup}>+ 선택 그룹 추가</button>
               </div>
 
-              <div className={styles.choiceGroupRules}>
-                <div className={styles.destinationBlock}>
-                  <div className={styles.requiredRule}>
-                    <span>필수 과목</span>
-                    <strong>
-                      {selectedCourseGroups.filter(
-                        ({ selectionId }) =>
-                          !courseOwners[selectionId] || courseOwners[selectionId] === "required",
-                      ).length}
-                      개
-                    </strong>
-                    <small>모든 시간표에 들어갑니다.</small>
-                  </div>
-                  <div className={styles.selectedSubjectList}>
-                    {selectedCourseGroups
-                      .filter(
-                        ({ selectionId }) =>
-                          !courseOwners[selectionId] || courseOwners[selectionId] === "required",
-                      )
-                      .map((group) => renderSelectedSubjectCard(group))}
-                    {selectedCourseGroups.filter(
-                      ({ selectionId }) =>
-                        !courseOwners[selectionId] || courseOwners[selectionId] === "required",
-                    ).length === 0 ? (
-                      <p className={styles.groupEmpty}>아직 담은 과목이 없습니다.</p>
-                    ) : null}
-                  </div>
-                </div>
-
-                {choiceGroups.map((choiceGroup) => {
-                    const groupSubjects = selectedCourseGroups.filter(
-                      ({ selectionId }) => courseOwners[selectionId] === choiceGroup.id,
-                    );
-                    return (
-                      <div className={styles.destinationBlock} key={choiceGroup.id}>
-                        <div className={styles.choiceGroupRule}>
-                          <div className={styles.choiceGroupRuleHeader}>
-                            <label>
-                              <span className={styles.srOnly}>선택 그룹 이름</span>
-                              <input
-                                type="text"
-                                value={choiceGroup.title}
-                                onChange={(event) =>
-                                  updateChoiceGroup(choiceGroup.id, {
-                                    title: event.target.value,
-                                  })
-                                }
-                              />
-                            </label>
-                            <strong>{groupSubjects.length}개</strong>
-                          </div>
-                          <div className={styles.cardinalityInputs}>
-                            <p className={styles.cardinalityLabel}>
-                              이 그룹에서 시간표에 넣을 과목 수 (예: 1개~2개면, 선택 그룹에 담긴
-                              과목 중 1개 또는 2개가 시간표에 포함됩니다)
-                            </p>
-                            <div className={styles.cardinalityFields}>
-                              <label>
-                                <span className={styles.srOnly}>최소 과목 수</span>
-                                <span className={styles.cardinalityField}>
-                                  <input
-                                    min="0"
-                                    max="20"
-                                    type="number"
-                                    value={choiceGroup.minSubjects}
-                                    onChange={(event) =>
-                                      updateChoiceGroup(choiceGroup.id, {
-                                        minSubjects: Number(event.target.value),
-                                      })
-                                    }
-                                  />
-                                  <span aria-hidden="true">개</span>
-                                </span>
-                              </label>
-                              <span aria-hidden="true">~</span>
-                              <label>
-                                <span className={styles.srOnly}>최대 과목 수</span>
-                                <span className={styles.cardinalityField}>
-                                  <input
-                                    min="0"
-                                    max="20"
-                                    type="number"
-                                    value={choiceGroup.maxSubjects}
-                                    onChange={(event) =>
-                                      updateChoiceGroup(choiceGroup.id, {
-                                        maxSubjects: Number(event.target.value),
-                                      })
-                                    }
-                                  />
-                                  <span aria-hidden="true">개</span>
-                                </span>
-                              </label>
-                            </div>
-                          </div>
-                          <button
-                            aria-label={`${choiceGroup.title} 삭제`}
-                            className={styles.removeChoiceGroup}
-                            type="button"
-                            onClick={() => removeChoiceGroup(choiceGroup.id)}
-                          >
-                            삭제
-                          </button>
-                        </div>
-                        <div className={styles.selectedSubjectList}>
-                          {groupSubjects.map((group) => renderSelectedSubjectCard(group))}
-                          {groupSubjects.length === 0 ? (
-                            <p className={styles.groupEmpty}>아직 담은 과목이 없습니다.</p>
-                          ) : null}
-                        </div>
-                      </div>
-                    );
-                  })}
+              <div className={styles.selectedSubjectList}>
+                {selectedCourseGroups.map((group) => renderSelectedSubjectCard(group))}
+                {selectedCourseGroups.length === 0 ? (
+                  <p className={styles.groupEmpty}>아직 담은 과목이 없습니다.</p>
+                ) : null}
               </div>
 
               <fieldset>
@@ -2821,16 +2627,6 @@ function filterGroupCandidatesByFormat<G extends { candidates: CourseCandidate[]
       (candidate) => !disabledCourseTypes.has(getCourseTypeLabel(candidate)),
     ),
   };
-}
-
-function getDestinationLabel(
-  destination: CourseDestination | undefined,
-  choiceGroups: readonly ChoiceGroupConfig[],
-): string {
-  if (!destination || destination === "required") {
-    return "필수";
-  }
-  return choiceGroups.find(({ id }) => id === destination)?.title ?? "필수";
 }
 
 function scopeElectiveGroup(
