@@ -8,19 +8,19 @@ const sandbox = { globalThis: {} };
 vm.runInNewContext(source, sandbox);
 const { chooseReviewAnchor } = sandbox.globalThis.SkkuTimetableReviewMatch;
 
-test("matches a single result only when course and professor agree", () => {
+test("selects the exact course from a professor-search result containing other courses", () => {
   const result = chooseReviewAnchor(
     { courseName: "건축설계스튜디오2", professor: "전경희" },
     [
       { id: "1", text: "건축설계스튜디오2 전경희" },
-      { id: "2", text: "건축설계스튜디오2 김교수" },
+      { id: "2", text: "건축구조 전경희" },
     ],
   );
   assert.equal(result.kind, "auto");
   assert.equal(result.entry.id, "1");
 });
 
-test("does not guess when several same course and professor results remain", () => {
+test("keeps needs-selection when a professor-search result has duplicate target lectures", () => {
   const result = chooseReviewAnchor(
     { courseName: "건축설계스튜디오2", professor: "전경희" },
     [

@@ -1375,62 +1375,63 @@ export function TimetablePlanner({
   function renderSelectedSubjectCard(group: PlannerCourseGroup): ReactNode {
     const selectedSections =
       enabledSectionIds[group.selectionId] ?? getInitialSectionIds(group.candidates);
+    const selectedCandidates = group.candidates.filter((candidate) => selectedSections.includes(candidate.id));
     return (
-      <details className={styles.selectedSubject} key={group.selectionId}>
-        <summary>
-          <span className={styles.summaryTitle}>
-            <strong>{group.title}</strong>
-            <small>
-              {group.id}
-              {group.credits > 0 ? ` · ${formatCredits(group.credits)}학점` : ""}
-            </small>
-          </span>
-          <span className={styles.summaryActions}>
-            <small>
-              분반 {selectedSections.length}/{group.candidates.length}
-            </small>
-            <button
-              aria-label={`${group.title} 선택 해제`}
-              className={styles.removeSelectedCourseInline}
-              type="button"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                removeSelectedCourse(group);
-              }}
-            >
-              삭제
-            </button>
-          </span>
-        </summary>
-        <div className={styles.subjectConfiguration}>
-          {group.candidates.length > 1 ? (
-            <button
-              className={styles.selectAllSections}
-              type="button"
-              onClick={() =>
-                selectedSections.length === group.candidates.length
-                  ? deselectAllSections(group)
-                  : selectAllSections(group)
-              }
-            >
-              {selectedSections.length === group.candidates.length
-                ? "분반 전체 선택 해제"
-                : "분반 전체 선택"}
-            </button>
-          ) : null}
-          <SelectedSectionChoices
-            candidates={group.candidates}
-            selectedSectionIds={selectedSections}
-            onToggleSection={(sectionId) => toggleSection(group, sectionId)}
-          />
-          <div className={styles.selectedReviewLinks}>
-            {group.candidates
-              .filter((candidate) => selectedSections.includes(candidate.id))
-              .map((candidate) => <EverytimeReviewButton course={candidate} key={candidate.id} compact />)}
+      <div className={styles.selectedSubjectCard} key={group.selectionId}>
+        <details className={styles.selectedSubject}>
+          <summary>
+            <span className={styles.summaryTitle}>
+              <strong>{group.title}</strong>
+              <small>
+                {group.id}
+                {group.credits > 0 ? ` · ${formatCredits(group.credits)}학점` : ""}
+              </small>
+            </span>
+            <span className={styles.summaryActions}>
+              <small>
+                분반 {selectedSections.length}/{group.candidates.length}
+              </small>
+              <button
+                aria-label={`${group.title} 선택 해제`}
+                className={styles.removeSelectedCourseInline}
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  removeSelectedCourse(group);
+                }}
+              >
+                삭제
+              </button>
+            </span>
+          </summary>
+          <div className={styles.subjectConfiguration}>
+            {group.candidates.length > 1 ? (
+              <button
+                className={styles.selectAllSections}
+                type="button"
+                onClick={() =>
+                  selectedSections.length === group.candidates.length
+                    ? deselectAllSections(group)
+                    : selectAllSections(group)
+                }
+              >
+                {selectedSections.length === group.candidates.length
+                  ? "분반 전체 선택 해제"
+                  : "분반 전체 선택"}
+              </button>
+            ) : null}
+            <SelectedSectionChoices
+              candidates={group.candidates}
+              selectedSectionIds={selectedSections}
+              onToggleSection={(sectionId) => toggleSection(group, sectionId)}
+            />
           </div>
+        </details>
+        <div className={styles.selectedReviewLinks}>
+          {selectedCandidates.map((candidate) => <EverytimeReviewButton course={candidate} key={candidate.id} compact />)}
         </div>
-      </details>
+      </div>
     );
   }
 

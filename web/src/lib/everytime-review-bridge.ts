@@ -11,7 +11,7 @@ export interface EverytimeReviewCourse {
   section: string;
 }
 
-interface ConnectorResponse {
+export interface EverytimeReviewResponse {
   requestId: string;
   status: "accepted" | "direct" | "matching" | "needs-selection" | "not-found" | "failed" | "complete";
   message?: string;
@@ -29,10 +29,30 @@ export function toEverytimeReviewCourse(course: CourseCandidate): EverytimeRevie
 }
 
 export function buildEverytimeReviewSearchUrl(course: EverytimeReviewCourse): string {
+  const professor = course.professor.trim();
   const url = new URL("https://everytime.kr/lecture/search");
-  url.searchParams.set("keyword", course.courseName);
-  url.searchParams.set("condition", "name");
+  // A professor search keeps the target section near the top when the same course title is
+  // offered many times. The extension still verifies both title and professor before opening a
+  // review, so this only narrows the navigation result; it never becomes a match by itself.
+  url.searchParams.set("keyword", professor || course.courseName);
+  url.searchParams.set("condition", professor ? "professor" : "name");
   return url.toString();
+}
+
+export function describeEverytimeReviewResponse(response: EverytimeReviewResponse): string {
+  if (response.status === "direct") {
+    return "저장된 강의평을 열었어요.";
+  }
+  if (response.status === "matching") {
+    return "과목·교수명으로 강의평을 찾는 중…";
+  }
+  if (response.status === "needs-selection") {
+    return "에타 탭에서 맞는 강의를 한 번 선택해 주세요.";
+  }
+  if (response.status === "not-found" || response.status === "failed") {
+    return response.message ?? "자동 연결하지 못했어요. 에타 검색 결과를 확인해 주세요.";
+  }
+  return response.message ?? "강의평 연결을 준비하는 중…";
 }
 
 export function isEverytimeConnectorAvailable(): boolean {
@@ -44,14 +64,14 @@ export function isEverytimeConnectorAvailable(): boolean {
 
 export function requestEverytimeReview(
   course: EverytimeReviewCourse,
-  onStatus?: (response: ConnectorResponse) => void,
+  onStatus?: (response: EverytimeReviewResponse) => void,
 ): boolean {
   return dispatchConnectorRequest("open-review", { course }, onStatus);
 }
 
 export function requestEverytimeReviewBatch(
   courses: readonly EverytimeReviewCourse[],
-  onStatus?: (response: ConnectorResponse) => void,
+  onStatus?: (response: EverytimeReviewResponse) => void,
 ): boolean {
   return dispatchConnectorRequest("resolve-review-batch", { courses }, onStatus);
 }
@@ -59,7 +79,7 @@ export function requestEverytimeReviewBatch(
 function dispatchConnectorRequest(
   type: "open-review" | "resolve-review-batch",
   payload: Record<string, unknown>,
-  onStatus?: (response: ConnectorResponse) => void,
+  onStatus?: (response: EverytimeReviewResponse) => void,
 ): boolean {
   if (typeof window === "undefined" || typeof document === "undefined" || !isEverytimeConnectorAvailable()) {
     return false;
@@ -87,7 +107,7 @@ function dispatchConnectorRequest(
   return true;
 }
 
-function isConnectorResponse(value: unknown): value is ConnectorResponse {
+function isConnectorResponse(value: unknown): value is EverytimeReviewResponse {
   if (typeof value !== "object" || value === null) {
     return false;
   }

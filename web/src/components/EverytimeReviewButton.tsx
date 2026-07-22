@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import {
   buildEverytimeReviewSearchUrl,
+  describeEverytimeReviewResponse,
   isEverytimeConnectorAvailable,
   requestEverytimeReview,
   requestEverytimeReviewBatch,
@@ -33,15 +34,7 @@ export function EverytimeReviewButton({
     }
     setStatus("에타 강의평을 연결하는 중…");
     requestEverytimeReview(reviewCourse, (response) => {
-      if (response.status === "direct") {
-        setStatus("저장된 강의평을 열었어요.");
-      } else if (response.status === "matching") {
-        setStatus("과목·교수명으로 강의평을 찾는 중…");
-      } else if (response.status === "needs-selection") {
-        setStatus("에타 탭에서 맞는 강의를 한 번 선택해 주세요.");
-      } else if (response.status === "not-found" || response.status === "failed") {
-        setStatus(response.message ?? "자동 연결하지 못했어요. 에타 검색 결과를 확인해 주세요.");
-      }
+      setStatus(describeEverytimeReviewResponse(response));
     });
   }
 

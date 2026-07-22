@@ -1,3 +1,5 @@
+import { makeResolverUrl } from "./everytime-search-url.js";
+
 const REVIEW_MAP_KEY = "reviewLinkMap";
 const BATCH_PREFIX = "reviewBatch:";
 const MAX_BATCH_SIZE = 12;
@@ -123,14 +125,6 @@ async function handleResolverResult(result, tabId) {
   state.active = null;
   await writeBatch(state);
   setTimeout(() => void processNextBatchItem(result.batchId), BATCH_DELAY_MS);
-}
-
-function makeResolverUrl(course, context) {
-  const url = new URL("https://everytime.kr/lecture/search");
-  url.searchParams.set("keyword", course.courseName);
-  url.searchParams.set("condition", "name");
-  url.hash = `skku-timetable=${encodeURIComponent(JSON.stringify({ ...context, course, mapKey: courseKey(course) }))}`;
-  return url.toString();
 }
 
 async function readReviewMap() {

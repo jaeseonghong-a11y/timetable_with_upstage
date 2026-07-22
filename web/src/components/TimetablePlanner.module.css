@@ -576,6 +576,9 @@
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
+  padding: 7px 9px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-note);
 }
 
 .courseSearch input {
@@ -702,11 +705,15 @@
   color: var(--text-error);
 }
 
-.selectedSubject {
+.selectedSubjectCard {
   border: 1px solid var(--border-subtle);
   border-radius: 10px;
   overflow: hidden;
   background: var(--surface-card);
+}
+
+.selectedSubject {
+  background: transparent;
 }
 
 .selectedSubject > summary {
@@ -1206,10 +1213,25 @@
   gap: 2px;
   padding: 5px;
   overflow: hidden;
+  border: 0;
   border-left: 3px solid rgb(24 105 76 / 75%);
   border-radius: 5px;
   background: #dcefe8;
   color: #124d3b;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.courseBlock:hover,
+.unscheduledChip:hover {
+  filter: brightness(0.97);
+}
+
+.courseBlock:focus-visible,
+.unscheduledChip:focus-visible {
+  outline: 3px solid var(--accent-strong);
+  outline-offset: 1px;
 }
 
 .courseBlock strong {
@@ -1331,10 +1353,14 @@
   flex-direction: column;
   gap: 1px;
   padding: 5px 8px;
+  border: 0;
   border-left: 3px solid rgb(24 105 76 / 75%);
   border-radius: 5px;
   background: #dcefe8;
   color: #124d3b;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
 }
 
 .unscheduledChip strong {
@@ -1432,6 +1458,13 @@
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
+}
+
+.timetableReviewStatus {
+  grid-column: 1 / -1;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.4;
 }
 
 .sharePanel {
