@@ -8,6 +8,7 @@ import type {
   RequirementRule,
 } from "@/lib/academic-profile";
 import { isNonBlockingRequirementReview } from "@/lib/academic-profile-client";
+import { GRADUATION_REQUIREMENT_TEMPLATES } from "@/lib/graduation-requirement-templates";
 
 import styles from "./AcademicDocumentManager.module.css";
 
@@ -30,6 +31,20 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
     setIsListCollapsed(true);
     setShowUnmetOnly(false);
   }
+
+  // 수동 추가 시 실제로 필요한 건 "어떤 영역에서 몇 학점이 부족한가"뿐이다 — 기준학점/취득학점은
+  // 학과·입학년도마다 달라 우리가 대신 채워줄 수 없고, 어차피 다운스트림(AI 추천)은 영역명과
+  // 미충족 여부만 본다. 그래서 목록에서 영역을 고르고 잔여학점만 입력하면 나머지 필드는
+  // 자동으로 채운다.
+  const [isAddingRequirement, setIsAddingRequirement] = useState(false);
+  const [templateChoice, setTemplateChoice] = useState("");
+  const [customLabelDraft, setCustomLabelDraft] = useState("");
+  const [remainingCreditsDraft, setRemainingCreditsDraft] = useState("");
+  const [addRequirementError, setAddRequirementError] = useState("");
+  const addedRequirementLabels = new Set(profile.requirements.map((requirement) => requirement.label));
+  const availableRequirementTemplates = GRADUATION_REQUIREMENT_TEMPLATES.filter(
+    (template) => !addedRequirementLabels.has(template.label),
+  );
 
   function isUnmetRequirement(requirement: Requirement): boolean {
     return requirement.status === "unmet";
@@ -72,9 +87,26 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
     }
   }
 
-  function addRequirement(): void {
+  const CUSTOM_TEMPLATE_VALUE = "__custom__";
+
+  function addTemplatedRequirement(): void {
     const sourceDocumentIdForNewRow = profile.sourceDocuments[0]?.id;
     if (!sourceDocumentIdForNewRow) {
+      return;
+    }
+    const isCustom = templateChoice === CUSTOM_TEMPLATE_VALUE;
+    const label = (isCustom ? customLabelDraft : templateChoice).trim();
+    const scope: Requirement["scope"] = isCustom
+      ? "other"
+      : (GRADUATION_REQUIREMENT_TEMPLATES.find((template) => template.label === templateChoice)
+          ?.scope ?? "other");
+    const remainingCredits = remainingCreditsDraft === "" ? NaN : Number(remainingCreditsDraft);
+    if (!label) {
+      setAddRequirementError("추가할 요건을 선택하거나 이름을 입력해 주세요.");
+      return;
+    }
+    if (!Number.isFinite(remainingCredits) || remainingCredits < 0) {
+      setAddRequirementError("잔여학점을 0 이상 숫자로 입력해 주세요.");
       return;
     }
     onChange({
@@ -83,19 +115,24 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
         ...profile.requirements,
         {
           requirementId: crypto.randomUUID(),
-          scope: "other",
-          label: "",
-          rule: { kind: "manual", rawText: "" },
+          scope,
+          label,
+          rule: { kind: "manual", rawText: label },
           earnedCredits: null,
           inProgressCredits: { spring: 0, summer: 0, fall: 0, winter: 0, total: 0 },
-          remainingCredits: null,
-          status: "review",
+          remainingCredits,
+          status: remainingCredits > 0 ? "unmet" : "satisfied",
           rawValues: {},
           sourceDocumentId: sourceDocumentIdForNewRow,
           reviewReasons: [],
         },
       ],
     });
+    setTemplateChoice("");
+    setCustomLabelDraft("");
+    setRemainingCreditsDraft("");
+    setAddRequirementError("");
+    setIsAddingRequirement(false);
   }
 
   function deleteRequirement(index: number): void {
@@ -142,11 +179,61 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
           <button type="button" onClick={() => setIsListCollapsed(false)}>
             전체 펼치기
           </button>
-          <button className={styles.secondaryButton} type="button" onClick={addRequirement}>
-            + 요건 수동 추가
+          <button
+            className={styles.secondaryButton}
+            type="button"
+            onClick={() => {
+              setIsAddingRequirement((current) => !current);
+              setAddRequirementError("");
+            }}
+          >
+            {isAddingRequirement ? "요건 추가 취소" : "+ 요건 수동 추가"}
           </button>
         </div>
       </div>
+
+      {isAddingRequirement ? (
+        <div className={styles.manualRequirementForm}>
+          <label className={styles.field}>
+            <span>요건 영역</span>
+            <select
+              value={templateChoice}
+              onChange={(event) => setTemplateChoice(event.target.value)}
+            >
+              <option value="">영역을 선택하세요</option>
+              {availableRequirementTemplates.map((template) => (
+                <option key={template.label} value={template.label}>
+                  {template.label}
+                </option>
+              ))}
+              <option value={CUSTOM_TEMPLATE_VALUE}>기타(목록에 없는 요건 직접 입력)</option>
+            </select>
+          </label>
+          {templateChoice === CUSTOM_TEMPLATE_VALUE ? (
+            <label className={styles.field}>
+              <span>요건명</span>
+              <input
+                value={customLabelDraft}
+                onChange={(event) => setCustomLabelDraft(event.target.value)}
+              />
+            </label>
+          ) : null}
+          <label className={styles.field}>
+            <span>잔여학점</span>
+            <input
+              min="0"
+              step="0.5"
+              type="number"
+              value={remainingCreditsDraft}
+              onChange={(event) => setRemainingCreditsDraft(event.target.value)}
+            />
+          </label>
+          {addRequirementError ? <p className={styles.error}>{addRequirementError}</p> : null}
+          <button className={styles.secondaryButton} type="button" onClick={addTemplatedRequirement}>
+            이 요건 추가하기
+          </button>
+        </div>
+      ) : null}
 
       {profile.requirements.length === 0 ? (
         <p className={styles.dataEmpty}>추출된 요건이 없습니다. 필요하면 수동으로 추가해 주세요.</p>

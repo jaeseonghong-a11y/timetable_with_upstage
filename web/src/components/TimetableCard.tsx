@@ -30,7 +30,6 @@ import {
 import { encodeShareableTimetable } from "@/lib/timetable-share";
 import { useLocalStorageItem } from "@/lib/use-local-storage-item";
 
-import { EverytimeReviewButton } from "./EverytimeReviewButton";
 import styles from "./TimetablePlanner.module.css";
 
 export const DAYS: ReadonlyArray<{ id: Weekday; label: string }> = [
@@ -248,6 +247,15 @@ export function TimetableCard({
         <p className={styles.mobileTimetableScrollHint}>
           옆으로 밀어서 다른 요일도 보세요
         </p>
+        <p className={styles.timetableReviewHint}>
+          <strong>강의평 보기</strong>
+          <span>시간표의 과목을 누르면 에브리타임 강의평으로 바로 연결돼요.</span>
+          {reviewStatus ? (
+            <span className={styles.timetableReviewStatus} role="status">
+              {reviewStatus}
+            </span>
+          ) : null}
+        </p>
         <div className={styles.weeklyViewport}>
           <div className={styles.weeklyTimetable} ref={gridRef}>
             <div className={styles.weekHeader}>
@@ -376,21 +384,6 @@ export function TimetableCard({
             {isShareOpen ? "공유 링크 닫기" : "1회용 링크로 공유"}
           </button>
           {saveImageError ? <span className={styles.saveImageError}>{saveImageError}</span> : null}
-        </div>
-        <div className={styles.timetableReviewLinks}>
-          <strong>강의평</strong>
-          <span>시간표 과목을 눌러도 열 수 있고, 확장프로그램이 있으면 교수·분반까지 자동 연결합니다.</span>
-          <div>
-            {timetable.courses.map((course) => (
-              <EverytimeReviewButton
-                course={course}
-                key={course.id}
-                label={`${course.courseName ?? course.title} 강의평`}
-                compact
-              />
-            ))}
-          </div>
-          {reviewStatus ? <span className={styles.timetableReviewStatus} role="status">{reviewStatus}</span> : null}
         </div>
         {isServerPanelOpen ? (
           <div className={styles.sharePanel}>

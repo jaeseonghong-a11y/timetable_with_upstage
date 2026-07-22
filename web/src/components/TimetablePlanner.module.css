@@ -1627,38 +1627,33 @@
   font-size: 12px;
 }
 
-.timetableReviewLinks {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 3px 8px;
-  margin: 0 14px 14px;
-  padding: 10px 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  background: var(--surface-page);
-}
-
-.timetableReviewLinks > strong {
-  color: var(--text-primary);
-  font-size: 12px;
-}
-
-.timetableReviewLinks > span {
-  color: var(--text-muted);
-  font-size: 10px;
+.timetableReviewHint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 8px;
+  margin: 0 14px;
+  padding: 8px 10px;
+  border: 1px solid #b8dfcf;
+  border-radius: 9px;
+  background: #f1faf6;
+  color: #19543f;
+  font-size: 11px;
+  font-weight: 700;
   line-height: 1.4;
 }
 
-.timetableReviewLinks > div {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
+.timetableReviewHint strong {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #d9f0e4;
+  color: #0a684a;
+  font-size: 10px;
 }
 
 .timetableReviewStatus {
-  grid-column: 1 / -1;
-  color: var(--text-muted);
+  flex-basis: 100%;
+  color: var(--text-secondary);
   font-size: 10px;
   line-height: 1.4;
 }
