@@ -213,19 +213,23 @@
   flex: none;
   width: 10px;
   height: 10px;
+  border: 1px solid;
   border-radius: 3px;
 }
 
 .sharedCourse {
-  background: var(--remix-shared-border);
+  border-color: var(--remix-shared-border);
+  background: var(--remix-shared-surface);
 }
 
 .friendOnlyCourse {
-  background: var(--remix-friend-border);
+  border-color: var(--remix-friend-border);
+  background: var(--remix-friend-surface);
 }
 
 .myOnlyCourse {
-  background: var(--remix-mine-border);
+  border-color: var(--remix-mine-border);
+  background: var(--remix-mine-surface);
 }
 
 /* TimetableCard keeps its weekly grid deliberately wider than a phone. Let its own
