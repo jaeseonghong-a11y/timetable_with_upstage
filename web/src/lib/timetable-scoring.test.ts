@@ -85,6 +85,25 @@ describe("timetable-scoring", () => {
     expect(first?.candidateId).toBe(getTimetableCandidateId(withLunch));
   });
 
+  it("uses a custom lunch window from weight config", () => {
+    // 12:00–14:00 창: 12시 수업이 있으면 나쁘고, 14시 이후만 있으면 좋음
+    const freeCustomLunch = timetable(
+      [course("A1")],
+      [meeting("mon", 540, 660), meeting("mon", 840, 900)],
+    );
+    const blocksCustomLunch = timetable([course("B1")], [meeting("mon", 720, 780)]);
+
+    const [first] = scoreTimetables(
+      [freeCustomLunch, blocksCustomLunch],
+      [
+        weight("lunch_break", {
+          config: { lunchStartMinutes: 12 * 60, lunchEndMinutes: 14 * 60 },
+        }),
+      ],
+    );
+    expect(first?.candidateId).toBe(getTimetableCandidateId(freeCustomLunch));
+  });
+
   it("avoids long back-to-back runs by default (direction=avoid)", () => {
     const longRun = timetable([course("A1")], [meeting("mon", 540, 750)]); // 210 min >= 180
     const shortRun = timetable([course("B1")], [meeting("mon", 540, 630)]); // 90 min

@@ -21,6 +21,10 @@ export interface RecommendationWeight {
     thresholdMinutes?: number;
     /** back_to_back 전용: 긴 연강을 선호할지 기피할지. 기본 기피(avoid). */
     direction?: "prefer" | "avoid";
+    /** lunch_break 전용: 점심 창 시작(분). 기본 11:00. */
+    lunchStartMinutes?: number;
+    /** lunch_break 전용: 점심 창 끝(분). 기본 13:00. */
+    lunchEndMinutes?: number;
   };
 }
 
@@ -40,8 +44,9 @@ export interface ScoredTimetable {
 export const WEEKDAYS: readonly Weekday[] = ["mon", "tue", "wed", "thu", "fri"];
 
 const DEFAULT_BACK_TO_BACK_THRESHOLD_MINUTES = 180;
-const LUNCH_WINDOW_START_MINUTES = 11 * 60;
-const LUNCH_WINDOW_END_MINUTES = 13 * 60;
+export const DEFAULT_LUNCH_WINDOW_START_MINUTES = 11 * 60;
+export const DEFAULT_LUNCH_WINDOW_END_MINUTES = 13 * 60;
+/** 점심 창 안에서 확보하려는 최소 연속 공백(분). 창이 더 짧으면 창 길이로 줄인다. */
 const LUNCH_DURATION_MINUTES = 60;
 const NINE_AM_MINUTES = 9 * 60;
 
@@ -55,7 +60,15 @@ export const DEFAULT_RECOMMENDATION_WEIGHTS: RecommendationWeight[] = [
     importance: "medium",
     config: { thresholdMinutes: DEFAULT_BACK_TO_BACK_THRESHOLD_MINUTES, direction: "avoid" },
   },
-  { id: "lunch_break", enabled: true, importance: "medium" },
+  {
+    id: "lunch_break",
+    enabled: true,
+    importance: "medium",
+    config: {
+      lunchStartMinutes: DEFAULT_LUNCH_WINDOW_START_MINUTES,
+      lunchEndMinutes: DEFAULT_LUNCH_WINDOW_END_MINUTES,
+    },
+  },
   { id: "avoid_9am", enabled: false, importance: "medium" },
   { id: "compact_days", enabled: false, importance: "low" },
   { id: "prefer_in_person", enabled: false, importance: "medium" },
@@ -124,7 +137,7 @@ function computeRawValue(timetable: Timetable, weight: RecommendationWeight): nu
     case "back_to_back":
       return backToBackScore(timetable, weight.config);
     case "lunch_break":
-      return lunchBreakScore(timetable);
+      return lunchBreakScore(timetable, weight.config);
     case "avoid_9am":
       return -countNineAmMeetings(timetable);
     case "compact_days":
@@ -227,14 +240,23 @@ function backToBackScore(timetable: Timetable, config: RecommendationWeight["con
   return direction === "prefer" ? longRunCount : -longRunCount;
 }
 
-function lunchBreakScore(timetable: Timetable): number {
+function lunchBreakScore(
+  timetable: Timetable,
+  config: RecommendationWeight["config"],
+): number {
+  const windowStart = config?.lunchStartMinutes ?? DEFAULT_LUNCH_WINDOW_START_MINUTES;
+  const windowEnd = config?.lunchEndMinutes ?? DEFAULT_LUNCH_WINDOW_END_MINUTES;
+  if (!Number.isFinite(windowStart) || !Number.isFinite(windowEnd) || windowEnd <= windowStart) {
+    return 0;
+  }
+  const minFreeMinutes = Math.min(LUNCH_DURATION_MINUTES, windowEnd - windowStart);
   let goodDays = 0;
   let badDays = 0;
   for (const blocks of mergedBlocksByDay(timetable).values()) {
     if (blocks.length === 0) {
       continue;
     }
-    if (hasFreeWindow(blocks, LUNCH_WINDOW_START_MINUTES, LUNCH_WINDOW_END_MINUTES, LUNCH_DURATION_MINUTES)) {
+    if (hasFreeWindow(blocks, windowStart, windowEnd, minFreeMinutes)) {
       goodDays += 1;
     } else {
       badDays += 1;

@@ -578,38 +578,24 @@
   display: grid;
   min-width: 0;
   flex: 1;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 2px 8px;
+  gap: 2px;
 }
 
 .courseSectionRow strong,
-.courseSectionRow span {
+.courseSectionRow small {
   min-width: 0;
-  font-size: 10px;
-  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .courseSectionRow strong {
   color: var(--text-primary);
+  font-size: 11px;
 }
 
-.courseSectionRow span {
-  overflow-wrap: anywhere;
+.courseSectionRow small {
   color: var(--text-secondary);
-}
-
-.courseSectionRow span:last-child {
-  grid-column: 1 / -1;
-  color: var(--accent-strong);
-}
-
-.selectedReviewLinks {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  padding: 7px 9px;
-  border-top: 1px solid var(--border-subtle);
-  background: var(--surface-note);
+  font-size: 10px;
+  line-height: 1.35;
 }
 
 .courseSearch input {
@@ -668,13 +654,6 @@
 .selectionPlanHeading > div {
   display: grid;
   gap: 4px;
-}
-
-.selectionPlanHeadingActions {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 6px;
 }
 
 .selectionPlanHeading strong.sectionTitle {
@@ -990,14 +969,22 @@
   overflow-y: auto;
 }
 
-.sectionChoices > label {
+.sectionChoiceRow {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  align-items: center;
+  gap: 7px;
   padding: 7px;
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   background: var(--surface-card);
+}
+
+.sectionChoiceRow > label {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: flex-start;
+  gap: 8px;
   cursor: pointer;
 }
 
@@ -1204,6 +1191,14 @@
   margin: 8px 0 0;
   color: var(--text-error);
   font-size: 12px;
+}
+
+.packedCreditRangeWarning {
+  margin: 7px 0 0;
+  color: var(--text-error);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.45;
 }
 
 .creditRangeInputs {
@@ -1955,6 +1950,11 @@
   color: var(--text-primary);
   font: inherit;
   font-size: 12px;
+}
+
+.backToBackConfig input[type="time"] {
+  width: auto;
+  min-width: 96px;
 }
 
 .customPreferenceInput {

@@ -23,6 +23,7 @@ import {
 } from "@/lib/skku-course-api";
 import {
   diagnoseEmptyTimetable,
+  estimateCreditRangeFromPlan,
   generateTimetablesForSelectionPlan,
   getAllSectionIds,
   getInitialSectionIds,
@@ -45,6 +46,8 @@ import {
   type Weekday,
 } from "@/lib/timetable";
 import {
+  DEFAULT_LUNCH_WINDOW_END_MINUTES,
+  DEFAULT_LUNCH_WINDOW_START_MINUTES,
   DEFAULT_RECOMMENDATION_WEIGHTS,
   getTimetableCandidateId,
   type RecommendationWeight,
@@ -54,7 +57,7 @@ import {
 } from "@/lib/timetable-scoring";
 
 import { DepartmentAddCombobox } from "./DepartmentAddCombobox";
-import { EverytimeReviewBatchButton, EverytimeReviewButton } from "./EverytimeReviewButton";
+import { EverytimeReviewButton } from "./EverytimeReviewButton";
 import { DAYS, formatCredits, formatMinutes, TimetableCard, type TimetableExtra } from "./TimetableCard";
 import styles from "./TimetablePlanner.module.css";
 
@@ -82,7 +85,7 @@ interface Props {
 const WEIGHT_LABELS: Record<WeightId, string> = {
   free_days: "공강 요일 만들기",
   back_to_back: "연강 선호/기피",
-  lunch_break: "점심시간(11~13시) 확보",
+  lunch_break: "점심시간 확보",
   avoid_9am: "오전 9시 수업 회피",
   compact_days: "수업일수 최소화",
   prefer_in_person: "대면 수업 선호",
@@ -257,15 +260,15 @@ export function TimetablePlanner({
   const [courseOwners, setCourseOwners] = useState<Record<string, CourseDestination>>({});
   const [enabledSectionIds, setEnabledSectionIds] = useState<Record<string, string[]>>({});
   const [scheduleConflicts, setScheduleConflicts] = useState<ScheduleConflictPair[] | null>(null);
-  const [unavailableDays, setUnavailableDays] = useState<Weekday[]>([]);
+  const unavailableDays: Weekday[] = [];
   const [fixedEvents, setFixedEvents] = useState<FixedEvent[]>([]);
   const [newEventLabel, setNewEventLabel] = useState("");
   const [newEventDay, setNewEventDay] = useState<Weekday>("mon");
   const [newEventStart, setNewEventStart] = useState("18:00");
   const [newEventEnd, setNewEventEnd] = useState("20:00");
   const [fixedEventError, setFixedEventError] = useState("");
-  const [minimumCredits, setMinimumCredits] = useState("12");
-  const [maximumCredits, setMaximumCredits] = useState("21");
+  const minimumCredits: string = "12";
+  const maximumCredits: string = "21";
   const [disabledCourseTypes, setDisabledCourseTypes] = useState<Set<string>>(new Set());
   const [dayOffFilters, setDayOffFilters] = useState<Weekday[]>([]);
   const [courseSearch, setCourseSearch] = useState("");
@@ -967,6 +970,21 @@ export function TimetablePlanner({
     return { requiredSubjects, choiceBags };
   }, [choiceGroups, courseOwners, enabledSectionIds, selectedCourseGroups]);
 
+  // 필수 과목 학점 + 선택 그룹별 최소/최대 선택 개수로 담긴 학점의 하한·상한을 자동 계산한다.
+  const packedCreditRange = useMemo(
+    () => estimateCreditRangeFromPlan(manualSelectionPlanSubjects),
+    [manualSelectionPlanSubjects],
+  );
+  // 담긴 학점 범위가 허용 범위(12~21학점)를 벗어나면 경고를 띄운다.
+  const packedCreditRangeOutOfBounds = useMemo(() => {
+    if (!packedCreditRange) {
+      return false;
+    }
+    const min = Number(minimumCredits);
+    const max = Number(maximumCredits);
+    return packedCreditRange.minCredits < min || packedCreditRange.maxCredits > max;
+  }, [packedCreditRange]);
+
   const result = useMemo(() => {
     if (selectedCourseGroups.length === 0) {
       return { entries: [], error: null };
@@ -1181,6 +1199,18 @@ export function TimetablePlanner({
     setRecommendationWeights((weights) =>
       weights.map((weight) =>
         weight.id === "back_to_back"
+          ? { ...weight, config: { ...weight.config, ...partial } }
+          : weight,
+      ),
+    );
+  }
+
+  function setLunchBreakConfig(
+    partial: Partial<NonNullable<RecommendationWeight["config"]>>,
+  ): void {
+    setRecommendationWeights((weights) =>
+      weights.map((weight) =>
+        weight.id === "lunch_break"
           ? { ...weight, config: { ...weight.config, ...partial } }
           : weight,
       ),
@@ -1410,7 +1440,6 @@ export function TimetablePlanner({
   function renderSelectedSubjectCard(group: PlannerCourseGroup): ReactNode {
     const selectedSections =
       enabledSectionIds[group.selectionId] ?? getInitialSectionIds(group.candidates);
-    const selectedCandidates = group.candidates.filter((candidate) => selectedSections.includes(candidate.id));
     const owner = courseOwners[group.selectionId] ?? "required";
     return (
       <div className={styles.selectedSubjectCard} key={group.selectionId}>
@@ -1486,9 +1515,6 @@ export function TimetablePlanner({
             />
           </div>
         </details>
-        <div className={styles.selectedReviewLinks}>
-          {selectedCandidates.map((candidate) => <EverytimeReviewButton course={candidate} key={candidate.id} compact />)}
-        </div>
       </div>
     );
   }
@@ -1558,7 +1584,7 @@ export function TimetablePlanner({
         <p className={styles.collectionError} role="alert">{electiveError}</p>
       ) : null}
 
-      <div className={showResults ? styles.grid : styles.aiOnlyGrid}>
+      <div className={styles.aiOnlyGrid}>
         {showSelect ? (
         <aside className={styles.controls}>
           <fieldset>
@@ -1957,20 +1983,11 @@ export function TimetablePlanner({
               <div className={styles.selectionPlanHeading}>
                 <div>
                   <strong className={styles.sectionTitle}>담은 과목 확인</strong>
-                  <small>분반 선택, 선택 그룹 이름 변경, 그룹 이동을 할 수 있습니다.</small>
+                  <small>분반 선택, 선택 그룹 추가 및 수정, 그룹 이동을 할 수 있습니다.</small>
                 </div>
-                <div className={styles.selectionPlanHeadingActions}>
-                  <button className={styles.addChoiceGroupButton} onClick={addChoiceGroup} type="button">
-                    + 선택 그룹 추가
-                  </button>
-                  <EverytimeReviewBatchButton
-                    courses={selectedCourseGroups.flatMap((group) => {
-                      const selectedSections =
-                        enabledSectionIds[group.selectionId] ?? getInitialSectionIds(group.candidates);
-                      return group.candidates.filter((candidate) => selectedSections.includes(candidate.id));
-                    })}
-                  />
-                </div>
+                <button className={styles.addChoiceGroupButton} onClick={addChoiceGroup} type="button">
+                  + 선택 그룹 추가
+                </button>
               </div>
 
               <div className={styles.choiceGroupRules}>
@@ -2115,17 +2132,17 @@ export function TimetablePlanner({
               ) : null}
 
               <fieldset>
-                <legend>원하는 학점 범위</legend>
+                <legend>현재 담긴 과목의 총 학점</legend>
                 <div className={styles.creditRangeInputs}>
                   <label>
                     <span>최소</span>
                     <input
                       inputMode="numeric"
                       min="0"
+                      readOnly
                       step="1"
                       type="number"
-                      value={minimumCredits}
-                      onChange={(event) => setMinimumCredits(event.target.value)}
+                      value={packedCreditRange?.minCredits ?? 0}
                     />
                   </label>
                   <span aria-hidden="true">~</span>
@@ -2134,46 +2151,25 @@ export function TimetablePlanner({
                     <input
                       inputMode="numeric"
                       min="0"
+                      readOnly
                       step="1"
                       type="number"
-                      value={maximumCredits}
-                      onChange={(event) => setMaximumCredits(event.target.value)}
+                      value={packedCreditRange?.maxCredits ?? 0}
                     />
                   </label>
                 </div>
-                <small>
-                  기본값은 12~21학점입니다. 담은 과목 학점 합이 이 범위를 벗어나면 시간표가
-                  만들어지지 않으니, 필요하면 직접 수정하세요.
-                </small>
+                {!packedCreditRange ? (
+                  <small>담은 과목이 없어 아직 계산할 수 없습니다.</small>
+                ) : null}
+                {packedCreditRangeOutOfBounds ? (
+                  <p className={styles.packedCreditRangeWarning}>
+                    총 학점은 12~21학점 사이로 구성해주세요. 이 범위를 벗어나면 시간표가
+                    만들어지지 않습니다.
+                  </p>
+                ) : null}
               </fieldset>
-            </section>
-          </fieldset>
-        </aside>
-        ) : null}
 
-        {showResults ? (
-        <aside className={styles.controls}>
-          <fieldset>
-            <legend>수업 없는 요일</legend>
-            <div className={styles.dayChoices}>
-              {DAYS.map(({ id, label }) => {
-                const checked = unavailableDays.includes(id);
-                return (
-                  <label className={styles.dayChoice} key={id}>
-                    <input
-                      checked={checked}
-                      type="checkbox"
-                      onChange={() =>
-                        setUnavailableDays((days) =>
-                          checked ? days.filter((day) => day !== id) : [...days, id],
-                        )
-                      }
-                    />
-                    <span>{label}</span>
-                  </label>
-                );
-              })}
-            </div>
+            </section>
           </fieldset>
 
           <fieldset>
@@ -2344,6 +2340,37 @@ export function TimetablePlanner({
                       <option value="medium">보통</option>
                       <option value="high">높음</option>
                     </select>
+                  ) : null}
+                  {weight.enabled && weight.id === "lunch_break" ? (
+                    <span className={styles.backToBackConfig}>
+                      <input
+                        aria-label="점심 시작 시각"
+                        type="time"
+                        value={formatMinutes(
+                          weight.config?.lunchStartMinutes ?? DEFAULT_LUNCH_WINDOW_START_MINUTES,
+                        )}
+                        onChange={(event) => {
+                          const minutes = parseTimeInputToMinutes(event.target.value);
+                          if (minutes !== null) {
+                            setLunchBreakConfig({ lunchStartMinutes: minutes });
+                          }
+                        }}
+                      />
+                      <span aria-hidden="true">~</span>
+                      <input
+                        aria-label="점심 종료 시각"
+                        type="time"
+                        value={formatMinutes(
+                          weight.config?.lunchEndMinutes ?? DEFAULT_LUNCH_WINDOW_END_MINUTES,
+                        )}
+                        onChange={(event) => {
+                          const minutes = parseTimeInputToMinutes(event.target.value);
+                          if (minutes !== null) {
+                            setLunchBreakConfig({ lunchEndMinutes: minutes });
+                          }
+                        }}
+                      />
+                    </span>
                   ) : null}
                   {weight.enabled && weight.id === "back_to_back" ? (
                     <span className={styles.backToBackConfig}>
@@ -2645,23 +2672,26 @@ function SelectedSectionChoices({
       ) : (
         <div className={styles.sectionChoices}>
           {filteredCandidates.map((candidate) => (
-            <label key={candidate.id}>
-              <input
-                checked={selectedSectionIds.includes(candidate.id)}
-                type="checkbox"
-                onChange={() => onToggleSection(candidate.id)}
-              />
-              <span>
-                <strong>{candidate.title}</strong>
-                <small>
-                  {candidate.professor || "교수 미정"} · {getCourseTypeLabel(candidate)}
-                </small>
-                <small>
-                  {candidate.schedule || "시간 미정/온라인"}
-                  {candidate.campus ? ` · ${candidate.campus}` : ""}
-                </small>
-              </span>
-            </label>
+            <div className={styles.sectionChoiceRow} key={candidate.id}>
+              <label>
+                <input
+                  checked={selectedSectionIds.includes(candidate.id)}
+                  type="checkbox"
+                  onChange={() => onToggleSection(candidate.id)}
+                />
+                <span>
+                  <strong>{candidate.title}</strong>
+                  <small>
+                    {candidate.professor || "교수 미정"} · {getCourseTypeLabel(candidate)}
+                  </small>
+                  <small>
+                    {candidate.schedule || "시간 미정/온라인"}
+                    {candidate.campus ? ` · ${candidate.campus}` : ""}
+                  </small>
+                </span>
+              </label>
+              <EverytimeReviewButton course={candidate} compact />
+            </div>
           ))}
         </div>
       )}
@@ -2692,12 +2722,14 @@ function CourseSectionChoice({
 function CourseSectionMetadata({ candidate }: { candidate: CourseCandidate }) {
   return (
     <span className={styles.courseSectionRow}>
-      <strong>{candidate.section ? `${candidate.section}분반` : "분반 미정"}</strong>
-      <span>{candidate.professor || "교수 미정"}</span>
-      <span>
-        {getCourseTypeLabel(candidate)}
+      <strong>{candidate.title}</strong>
+      <small>
+        {candidate.professor || "교수 미정"} · {getCourseTypeLabel(candidate)}
+      </small>
+      <small>
+        {candidate.schedule || "시간 미정/온라인"}
         {candidate.campus ? ` · ${candidate.campus}` : ""}
-      </span>
+      </small>
     </span>
   );
 }

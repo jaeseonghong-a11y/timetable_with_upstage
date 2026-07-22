@@ -560,9 +560,19 @@ function parseWeightConfig(value: unknown): RecommendationWeight["config"] {
   }
   const thresholdMinutes = typeof value.thresholdMinutes === "number" ? value.thresholdMinutes : undefined;
   const direction = value.direction === "prefer" || value.direction === "avoid" ? value.direction : undefined;
-  return thresholdMinutes === undefined && direction === undefined
-    ? undefined
-    : { thresholdMinutes, direction };
+  const lunchStartMinutes =
+    typeof value.lunchStartMinutes === "number" ? value.lunchStartMinutes : undefined;
+  const lunchEndMinutes =
+    typeof value.lunchEndMinutes === "number" ? value.lunchEndMinutes : undefined;
+  if (
+    thresholdMinutes === undefined &&
+    direction === undefined &&
+    lunchStartMinutes === undefined &&
+    lunchEndMinutes === undefined
+  ) {
+    return undefined;
+  }
+  return { thresholdMinutes, direction, lunchStartMinutes, lunchEndMinutes };
 }
 
 /** 필수(고정) 과목 제목 목록 — 추천 이유를 이 과목들이 아닌 '추가된' 과목에 집중시키는 데 쓴다. */
