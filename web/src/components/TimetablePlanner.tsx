@@ -36,8 +36,10 @@ import {
 import {
   CombinationLimitError,
   meetingsConflict,
+  parseSchedule,
   type CourseCandidate,
   type FixedEvent,
+  type Meeting,
   type Timetable,
   type Weekday,
 } from "@/lib/timetable";
@@ -258,6 +260,7 @@ export function TimetablePlanner({
   const [activeDestination, setActiveDestination] = useState<CourseDestination>("required");
   const [courseOwners, setCourseOwners] = useState<Record<string, CourseDestination>>({});
   const [enabledSectionIds, setEnabledSectionIds] = useState<Record<string, string[]>>({});
+  const [scheduleConflicts, setScheduleConflicts] = useState<ScheduleConflictPair[] | null>(null);
   const [unavailableDays, setUnavailableDays] = useState<Weekday[]>([]);
   const [earliestStart, setEarliestStart] = useState("");
   const [fixedEvents, setFixedEvents] = useState<FixedEvent[]>([]);
@@ -1874,6 +1877,33 @@ export function TimetablePlanner({
                 ) : null}
               </div>
 
+              <button
+                className={styles.checkScheduleConflicts}
+                type="button"
+                onClick={() =>
+                  setScheduleConflicts(findScheduleConflicts(selectedCourseGroups, enabledSectionIds))
+                }
+              >
+                시간 겹치는 과목 확인하기
+              </button>
+
+              {scheduleConflicts !== null ? (
+                <div className={styles.scheduleConflictResult} role="status">
+                  {scheduleConflicts.length > 0 ? (
+                    <ul>
+                      {scheduleConflicts.map((conflict) => (
+                        <li key={`${conflict.firstLabel}__${conflict.secondLabel}`}>
+                          {conflict.firstLabel}과 {conflict.secondLabel}은 시간이 겹칩니다. 시간표
+                          추천 시 두 분반은 함께 포함되지 않습니다.
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>시간이 겹치는 과목이 없습니다.</p>
+                  )}
+                </div>
+              ) : null}
+
               <fieldset>
                 <legend>원하는 학점 범위</legend>
                 <div className={styles.creditRangeInputs}>
@@ -2548,6 +2578,60 @@ function describeTimetableExtras(
 function isDayFree(timetable: Timetable, day: Weekday): boolean {
   return !timetable.meetings.some((meeting) => meeting.day === day) &&
     !timetable.fixedEvents.some((event) => event.day === day);
+}
+
+interface ScheduleConflictPair {
+  firstLabel: string;
+  secondLabel: string;
+}
+
+/**
+ * Compares every currently-checked section (과목명 + 분반 + 요일/시간, the smallest unit a user can
+ * pick) across every course card in "담은 과목 확인" and returns each pair whose meetings overlap.
+ * Deliberately a plain function called from a button click (not a useMemo) — the result must only
+ * refresh when the user explicitly re-checks, not on every checkbox toggle.
+ */
+function findScheduleConflicts(
+  groups: readonly PlannerCourseGroup[],
+  enabledSectionIds: Record<string, string[]>,
+): ScheduleConflictPair[] {
+  const instances: Array<{ groupId: string; label: string; meetings: Meeting[] }> = [];
+  for (const group of groups) {
+    const enabledIds = new Set(
+      enabledSectionIds[group.selectionId] ?? getInitialSectionIds(group.candidates),
+    );
+    for (const candidate of group.candidates) {
+      if (!enabledIds.has(candidate.id)) {
+        continue;
+      }
+      const label = candidate.campus ? `${candidate.title} (${candidate.campus})` : candidate.title;
+      instances.push({
+        groupId: group.selectionId,
+        label,
+        meetings: parseSchedule(candidate.schedule),
+      });
+    }
+  }
+
+  const conflicts: ScheduleConflictPair[] = [];
+  for (let i = 0; i < instances.length; i += 1) {
+    for (let j = i + 1; j < instances.length; j += 1) {
+      const first = instances[i];
+      const second = instances[j];
+      // Sections of the same course are alternatives, never taken together — comparing them
+      // against each other would just flag "conflicts" between choices the user picks between.
+      if (first.groupId === second.groupId) {
+        continue;
+      }
+      const overlaps = first.meetings.some((firstMeeting) =>
+        second.meetings.some((secondMeeting) => meetingsConflict(firstMeeting, secondMeeting)),
+      );
+      if (overlaps) {
+        conflicts.push({ firstLabel: first.label, secondLabel: second.label });
+      }
+    }
+  }
+  return conflicts;
 }
 
 /** Parses an `<input type="time">` value ("HH:MM", 24-hour) into minutes since midnight. */

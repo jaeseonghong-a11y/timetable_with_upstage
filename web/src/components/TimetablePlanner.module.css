@@ -645,6 +645,45 @@
   line-height: 1.45;
 }
 
+.checkScheduleConflicts {
+  justify-self: start;
+  padding: 7px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-card);
+  color: var(--accent-strong);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.checkScheduleConflicts:hover {
+  background: var(--surface-note);
+}
+
+.scheduleConflictResult {
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-card);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.scheduleConflictResult p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.scheduleConflictResult ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-error);
+}
+
 .selectedSubject {
   border: 1px solid var(--border-subtle);
   border-radius: 10px;
