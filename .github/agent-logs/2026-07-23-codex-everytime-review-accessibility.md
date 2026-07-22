@@ -29,4 +29,9 @@
 ## 의도적으로 제외
 
 - 에타 비공개 API, 로그인 쿠키, 강의평 본문·별점·댓글의 호출·수집·저장·캐싱은 추가하지 않았다.
-- 커밋, push, Vercel 배포는 하지 않았다.
+
+## 전달
+
+- 사용자 승인 후 `41be4b8 feat: improve Everytime review navigation`을 `origin/main`으로 push했다.
+- Vercel production 배포 `dpl_7jzHr5RWJ7Vhcwcnz8V9LiLfpkZ4`가 `Ready`가 되었고,
+  `https://timetable-with-upstage.vercel.app` 별칭이 해당 배포를 가리키는 것을 확인했다.
