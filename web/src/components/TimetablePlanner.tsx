@@ -151,6 +151,9 @@ interface ChoiceGroupConfig {
 
 type CourseDestination = "required" | string;
 
+/** 요일 제외 UI 제거 후: 항상 빈 배열. 모듈 상수로 두어 useMemo deps가 매 렌더마다 바뀌지 않게 한다. */
+const NO_UNAVAILABLE_DAYS: Weekday[] = [];
+
 const INITIAL_CHOICE_GROUPS: ChoiceGroupConfig[] = [
   { id: "choice-1", title: "선택 그룹 1", minSubjects: 1, maxSubjects: 1 },
 ];
@@ -260,7 +263,7 @@ export function TimetablePlanner({
   const [courseOwners, setCourseOwners] = useState<Record<string, CourseDestination>>({});
   const [enabledSectionIds, setEnabledSectionIds] = useState<Record<string, string[]>>({});
   const [scheduleConflicts, setScheduleConflicts] = useState<ScheduleConflictPair[] | null>(null);
-  const unavailableDays: Weekday[] = [];
+  const unavailableDays = NO_UNAVAILABLE_DAYS;
   const [fixedEvents, setFixedEvents] = useState<FixedEvent[]>([]);
   const [newEventLabel, setNewEventLabel] = useState("");
   const [newEventDay, setNewEventDay] = useState<Weekday>("mon");
@@ -1149,8 +1152,10 @@ export function TimetablePlanner({
   }, [onRecommendationsAvailabilityChange, recommendations]);
 
   const canRunAiRecommend =
-    manualSelectionPlanSubjects.requiredSubjects.length > 0 ||
-    manualSelectionPlanSubjects.choiceBags.length > 0;
+    !result.error &&
+    result.entries.length > 0 &&
+    (manualSelectionPlanSubjects.requiredSubjects.length > 0 ||
+      manualSelectionPlanSubjects.choiceBags.length > 0);
 
   useEffect(() => {
     onAiRecommendActionStateChange?.({
@@ -1330,6 +1335,12 @@ export function TimetablePlanner({
       manualSelectionPlanSubjects.choiceBags.length > 0;
     if (!hasAnySelection) {
       setRecommendationError("이전 단계에서 필수 과목이나 선택 그룹 후보를 먼저 추가해 주세요.");
+      setIsRecommending(false);
+      return;
+    }
+    if (result.error || result.entries.length === 0) {
+      setRecommendationError("유효 시간표가 없어 AI 추천을 만들 수 없습니다. 과목·조건을 조정해 주세요.");
+      setIsRecommending(false);
       return;
     }
     track("ai_recommend_click");
@@ -2414,6 +2425,22 @@ export function TimetablePlanner({
                 onChange={(event) => setCustomPreference(event.target.value)}
               />
             </label>
+
+            {result.error ? <p className={styles.error}>{result.error}</p> : null}
+            {!result.error && effectiveSelectedGroupIds.length === 0 ? (
+              <p className={styles.empty}>이전 단계에서 필수 과목이나 선택 그룹 후보를 추가해 주세요.</p>
+            ) : null}
+            {!result.error && effectiveSelectedGroupIds.length > 0 && result.entries.length === 0
+              ? (() => {
+                  const diagnosisText = describeEmptyTimetableDiagnosis(emptyTimetableDiagnosis);
+                  return (
+                    <p className={styles.emptyDiagnosis} role="alert">
+                      <strong>{diagnosisText.title}</strong>
+                      {diagnosisText.detail}
+                    </p>
+                  );
+                })()
+              : null}
 
             {recommendationError ? <p className={styles.error}>{recommendationError}</p> : null}
               </>

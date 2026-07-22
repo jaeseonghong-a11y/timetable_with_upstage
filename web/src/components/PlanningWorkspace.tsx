@@ -472,7 +472,9 @@ export function PlanningWorkspace() {
           <p className={styles.navHint}>
             {aiRecommendAction.isRunning
               ? "AI가 분석 중입니다... 완료되면 결과 화면으로 이동합니다."
-              : "조건을 고른 뒤 AI 추천 받기를 누르면 결과 화면으로 바로 이동합니다."}
+              : !aiRecommendAction.canRun
+                ? "유효 시간표가 없어 AI 추천을 받을 수 없습니다. 위의 안내를 확인한 뒤 과목·조건을 조정해 주세요."
+                : "조건을 고른 뒤 AI 추천 받기를 누르면 결과 화면으로 바로 이동합니다."}
           </p>
         ) : null}
       </div>
