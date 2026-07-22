@@ -33,4 +33,9 @@
 - 시간표 배치·충돌 처리와 에타 강의평 연결 로직은 변경하지 않았다.
 - 에타 API 호출·리뷰 데이터 저장, Upstage 호출 없는 수동 입력의 개인정보 동의 요구 추가,
   Vercel 배포는 수행하지 않았다.
-- 이 로그를 포함한 변경은 사용자 지시로 커밋·push하되 배포하지 않는다.
+
+## 전달
+
+- 기능 변경은 `42ca331 fix: improve academic entry and mobile timetable`로 `main`에 커밋하고
+  `origin/main`으로 push했다.
+- Vercel 배포는 사용자 지시대로 실행하지 않았다.
