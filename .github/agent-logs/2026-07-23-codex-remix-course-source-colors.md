@@ -20,4 +20,10 @@
 ## 의도적으로 하지 않은 것
 
 - `selection-plan.ts`, `friend-remix-scoring.ts`, 기존 추천 API 및 서버 저장 동작은 수정하지 않았다.
-- 커밋, push, Vercel 배포는 실행하지 않았다.
+
+## 후속 배포 기록
+
+- 사용자 요청으로 `83a2745 feat: 친구 리믹스 과목 출처 색상 구분`을 `origin/main`에 푸시했다.
+- 루트에서 `npx.cmd vercel deploy --prod --yes`를 실행했고, 배포
+  `dpl_CDmDPh3SNUh9QacMW5szBX2Hn36F`가 `Ready` 상태가 된 것을 확인했다.
+- 운영 주소 `https://timetable-with-upstage.vercel.app/`는 HTTP 200으로 응답했다.
