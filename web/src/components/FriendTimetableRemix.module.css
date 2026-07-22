@@ -1,17 +1,17 @@
 .page {
-  --remix-shared-border: #00866c;
-  --remix-shared-surface: #d9f3ea;
-  --remix-shared-text: #075846;
-  --remix-friend-border: #536fcb;
-  --remix-friend-surface: #e3e9ff;
-  --remix-friend-text: #29468f;
-  --remix-mine-border: #c0792e;
-  --remix-mine-surface: #fff0dc;
-  --remix-mine-text: #774512;
+  --remix-shared-border: #27b783;
+  --remix-shared-surface: #d8f4e8;
+  --remix-shared-text: #07553d;
+  --remix-friend-border: #4f9e87;
+  --remix-friend-surface: #dcefe7;
+  --remix-friend-text: #174f40;
+  --remix-mine-border: #91a94f;
+  --remix-mine-surface: #eef3d7;
+  --remix-mine-text: #4f621e;
   min-height: 100vh;
   padding: 36px 20px 64px;
-  background: #111525;
-  color: #f5f7ff;
+  background: #06100b;
+  color: #edf8f1;
 }
 
 .hero,
@@ -29,7 +29,7 @@
 .panelHeading p,
 .resultHeading p {
   margin: 0 0 7px;
-  color: #7ce5d2;
+  color: #77d6a5;
   font-size: 12px;
   font-weight: 900;
   letter-spacing: 0.09em;
@@ -39,7 +39,7 @@
 .panelHeading h2,
 .resultHeading h2 {
   margin: 0;
-  color: #fff;
+  color: #eff9f2;
   letter-spacing: -0.04em;
 }
 
@@ -50,17 +50,17 @@
 .hero span {
   display: block;
   margin-top: 11px;
-  color: #bcc6df;
+  color: #a7c9b7;
   font-size: 15px;
 }
 
 .panel,
 .results {
   padding: 24px;
-  border: 1px solid rgb(162 178 223 / 24%);
+  border: 1px solid #274736;
   border-radius: 20px;
-  background: rgb(24 30 52 / 88%);
-  box-shadow: 0 20px 55px rgb(0 0 0 / 24%);
+  background: #0b1912;
+  box-shadow: 0 20px 55px rgb(0 0 0 / 42%);
 }
 
 .panelHeading {
@@ -79,9 +79,9 @@
 .panelHeading a {
   flex: none;
   padding: 8px 11px;
-  border: 1px solid rgb(124 229 210 / 46%);
+  border: 1px solid #3b8964;
   border-radius: 999px;
-  color: #7ce5d2;
+  color: #8adab1;
   font-size: 13px;
   font-weight: 800;
 }
@@ -90,7 +90,7 @@
   display: grid;
   gap: 7px;
   max-width: 430px;
-  color: #cad3ed;
+  color: #c0d8ca;
   font-size: 13px;
   font-weight: 800;
 }
@@ -98,10 +98,10 @@
 .friendSelect select {
   min-height: 46px;
   padding: 8px 12px;
-  border: 1px solid rgb(162 178 223 / 38%);
+  border: 1px solid #365a47;
   border-radius: 10px;
-  background: #0e1325;
-  color: #fff;
+  background: #07110c;
+  color: #eff9f2;
   font: inherit;
 }
 
@@ -117,7 +117,7 @@
 .optionGroup legend {
   width: 100%;
   margin-bottom: 7px;
-  color: #aeb9d7;
+  color: #b2cbbb;
   font-size: 13px;
   font-weight: 800;
 }
@@ -128,17 +128,17 @@
   gap: 7px;
   min-height: 38px;
   padding: 7px 11px;
-  border: 1px solid rgb(162 178 223 / 34%);
+  border: 1px solid #345743;
   border-radius: 999px;
-  background: rgb(10 14 30 / 70%);
-  color: #f1f4ff;
+  background: #07110c;
+  color: #e6f4eb;
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
 }
 
 .optionGroup input {
-  accent-color: #ff5fa6;
+  accent-color: #64c796;
 }
 
 .disabledGroup {
@@ -149,7 +149,7 @@
 .ruleHint,
 .status {
   margin: -7px 0 16px;
-  color: #aeb9d7;
+  color: #9ebbaa;
   font-size: 13px;
   line-height: 1.55;
 }
@@ -163,8 +163,8 @@
   padding: 10px 17px;
   border: 0;
   border-radius: 11px;
-  background: #d64785;
-  color: #fff;
+  background: #1d7652;
+  color: #f2fbf5;
   font: inherit;
   font-size: 15px;
   font-weight: 900;
@@ -179,7 +179,7 @@
 .error {
   max-width: 920px;
   margin: 0 auto 20px;
-  color: #ffadb5;
+  color: #f3a5a5;
   font-size: 13px;
   line-height: 1.55;
 }
@@ -197,7 +197,7 @@
   flex-wrap: wrap;
   gap: 7px 14px;
   margin: 15px 0 0;
-  color: #d8e0f3;
+  color: #d1e4d8;
   font-size: 12px;
   font-weight: 700;
 }
@@ -248,19 +248,19 @@
 .scoreLine > span {
   padding: 4px 7px;
   border-radius: 6px;
-  background: #7ce5d2;
-  color: #10213a;
+  background: #61c99a;
+  color: #062016;
   font-size: 12px;
   font-weight: 900;
 }
 
 .scoreLine strong {
-  color: #fff;
+  color: #eff9f2;
   font-size: 14px;
 }
 
 .scoreLine small {
-  color: #aeb9d7;
+  color: #a9c8b7;
   font-size: 12px;
 }
 

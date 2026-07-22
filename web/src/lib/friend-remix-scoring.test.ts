@@ -33,6 +33,31 @@ describe("scoreFriendRemixTimetables", () => {
     expect(result?.totalScore).toBe(2);
   });
 
+  it("can score only major courses when major-only scope is selected", () => {
+    const [result] = scoreFriendRemixTimetables(
+      [timetable(course("GED001", "균형교양"), course("MAJ001", "전공핵심"))],
+      { friendCourses, mode: "together", scope: "major_only", strength: "strong", unmetRequirementLabels: [] },
+    );
+
+    expect(result?.totalScore).toBe(1);
+    expect(result?.matches.map((match) => match.courseNumber)).toEqual(["MAJ001"]);
+  });
+
+  it("uses the legacy course id prefix when an old shared timecode lacks a course number", () => {
+    const [result] = scoreFriendRemixTimetables(
+      [timetable({ ...course("unused", "전공핵심", "MAJ001-01"), courseNumber: undefined })],
+      {
+        friendCourses: [{ ...course("unused", "전공핵심", "MAJ001-02"), courseNumber: undefined }],
+        mode: "together",
+        scope: "major_only",
+        strength: "strong",
+        unmetRequirementLabels: [],
+      },
+    );
+
+    expect(result?.matchedCourseCount).toBe(1);
+  });
+
   it("adds only an unmet-area overlap for weak together mode", () => {
     const [result] = scoreFriendRemixTimetables(
       [timetable(course("GED001", "균형교양"), course("MAJ001", "전공핵심"))],

@@ -62,6 +62,7 @@ export function TimetableCard({
   heading,
   index,
   timetable,
+  tone = "default",
 }: {
   courseColorsById?: ReadonlyMap<string, TimetableCourseColor>;
   extras: readonly TimetableExtra[];
@@ -69,6 +70,7 @@ export function TimetableCard({
   heading?: string;
   index: number;
   timetable: Timetable;
+  tone?: "default" | "remix";
 }) {
   const scheduledCourses = timetable.courses.flatMap((course, courseIndex) =>
     mergeMeetingsForDisplay(parseSchedule(course.schedule)).map((meeting) => ({
@@ -229,7 +231,7 @@ export function TimetableCard({
   }
 
   return (
-    <li className={styles.timetableCard}>
+    <li className={styles.timetableCard} data-tone={tone === "remix" ? "remix" : undefined}>
       <details open={index === 0}>
         <summary>
           <span>

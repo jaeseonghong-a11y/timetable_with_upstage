@@ -1,4 +1,5 @@
 import type { ChoiceBag, SelectionPlan, SubjectOption } from "./selection-plan";
+import { getFriendRemixCourseKey } from "./friend-remix-course-origin";
 import type { CourseCandidate, Timetable } from "./timetable";
 
 /**
@@ -25,7 +26,7 @@ export function createFriendRemixSelectionPlan(
 function toSubjects(courses: readonly CourseCandidate[]): SubjectOption[] {
   const groups = new Map<string, CourseCandidate[]>();
   for (const course of courses) {
-    const id = course.courseNumber?.trim().toUpperCase() || course.id;
+    const id = getFriendRemixCourseKey(course);
     const group = groups.get(id) ?? [];
     if (!group.some((candidate) => candidate.id === course.id)) group.push(course);
     groups.set(id, group);

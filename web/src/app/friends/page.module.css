@@ -198,9 +198,8 @@
   cursor: pointer;
 }
 
-/* 예전엔 그냥 텍스트 링크였는데 눈에 잘 안 띈다는 지적을 받아, 메인 페이지 상단의
-   "친구 시간표 보기" 버튼(page.module.css의 .friendsButton)과 같은 톤의 버튼으로 통일했다. */
-.backButton {
+/* 리믹스는 이전 화면으로 돌아가기와 다른, 친구 시간표에서 실행하는 별도 행동이다. */
+.remixButton {
   display: inline-block;
   padding: 10px 18px;
   border: 1px solid var(--accent-strong);
@@ -211,6 +210,6 @@
   font-weight: 800;
 }
 
-.backButton:hover {
+.remixButton:hover {
   background: var(--surface-note);
 }

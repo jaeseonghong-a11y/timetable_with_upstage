@@ -1285,6 +1285,30 @@
   overflow: hidden;
 }
 
+/* The remix screen intentionally has its own low-light atmosphere. Scope these token overrides
+   to that card so the regular planner, shared links, and friend comparison keep the light theme. */
+.timetableCard[data-tone="remix"] {
+  --surface-page: #08130e;
+  --surface-card: #0b1811;
+  --surface-note: #10251a;
+  --text-primary: #eff9f2;
+  --text-secondary: #a4c4b2;
+  --text-muted: #789b88;
+  --accent-strong: #62c996;
+  --border-subtle: #294b3a;
+}
+
+.timetableCard[data-tone="remix"] .timetableReviewHint {
+  border-color: #2f654a;
+  background: #10291d;
+  color: #bce9cf;
+}
+
+.timetableCard[data-tone="remix"] .timetableReviewHint strong {
+  background: #1e5a3d;
+  color: #e1f8e9;
+}
+
 .timetableCard summary {
   display: flex;
   justify-content: space-between;

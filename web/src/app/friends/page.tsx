@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { MergedTimetableView } from "@/components/MergedTimetableView";
+import { PageReturnLink } from "@/components/PageReturnLink";
 import { TimetableCard } from "@/components/TimetableCard";
 import timetableStyles from "@/components/TimetablePlanner.module.css";
 import {
@@ -234,6 +235,7 @@ export default function FriendsPage() {
 
   return (
     <main className={pageStyles.page}>
+      <PageReturnLink href="/" label="시간표 만들기로 돌아가기" />
       <section className={pageStyles.hero}>
         <p className={pageStyles.eyebrow}>SKKU TIMETABLE</p>
         <h1>친구 시간표</h1>
@@ -302,7 +304,7 @@ export default function FriendsPage() {
         <section className={styles.myCodeSection}>
           <h2>친구 시간표 리믹스</h2>
           <p className={styles.emptyHint}>내 시간표와 친구 시간표를 섞어 재미있는 조합을 만들어 보세요.</p>
-          <Link className={styles.backButton} href="/friends/remix">
+          <Link className={styles.remixButton} href="/friends/remix">
             리믹스 화면으로 가기
           </Link>
         </section>
@@ -392,11 +394,6 @@ export default function FriendsPage() {
         </section>
       ) : null}
 
-      <footer className={pageStyles.footer}>
-        <Link className={styles.backButton} href="/">
-          SKKU TIMETABLE로 돌아가기
-        </Link>
-      </footer>
     </main>
   );
 }

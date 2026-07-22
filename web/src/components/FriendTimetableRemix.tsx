@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -28,6 +27,7 @@ import { SelectionPlanLimitError, generateTimetablesForSelectionPlan } from "@/l
 import { CombinationLimitError } from "@/lib/timetable";
 
 import { TimetableCard } from "./TimetableCard";
+import { PageReturnLink } from "./PageReturnLink";
 import styles from "./FriendTimetableRemix.module.css";
 
 interface SourceState {
@@ -48,7 +48,7 @@ export function FriendTimetableRemix() {
   const [sourceState, setSourceState] = useState<SourceState>(INITIAL_SOURCE_STATE);
   const [selectedFriendCode, setSelectedFriendCode] = useState("");
   const [mode, setMode] = useState<FriendRemixMode>("together");
-  const [scope, setScope] = useState<FriendRemixScope>("general_only");
+  const [scope, setScope] = useState<FriendRemixScope>("general_and_major");
   const [strength, setStrength] = useState<FriendRemixStrength>("strong");
   const [results, setResults] = useState<ScoredFriendRemixTimetable[]>([]);
   const [generationError, setGenerationError] = useState("");
@@ -131,6 +131,7 @@ export function FriendTimetableRemix() {
 
   return (
     <main className={styles.page}>
+      <PageReturnLink href="/friends" label="친구 시간표로 돌아가기" tone="dark" width="compact" />
       <section className={styles.hero}>
         <p>FRIEND REMIX LAB</p>
         <h1>친구 시간표 기반 리믹스</h1>
@@ -143,7 +144,6 @@ export function FriendTimetableRemix() {
             <p>01 · 대상 선택</p>
             <h2>누구의 시간표를 기준으로 할까요?</h2>
           </div>
-          <Link href="/friends">친구 목록으로</Link>
         </div>
 
         {sourceState.status === "loading" ? <p className={styles.status}>시간표를 불러오는 중…</p> : null}
@@ -195,6 +195,10 @@ export function FriendTimetableRemix() {
             {mode === "together" ? "교양만 같이 듣기" : "교양만 피하기"}
           </label>
           <label>
+            <input checked={scope === "major_only"} name="scope" type="radio" value="major_only" onChange={() => setScope("major_only")} />
+            {mode === "together" ? "전공만 같이 듣기" : "전공만 피하기"}
+          </label>
+          <label>
             <input checked={scope === "general_and_major"} name="scope" type="radio" value="general_and_major" onChange={() => setScope("general_and_major")} />
             {mode === "together" ? "교양+전공 같이 듣기" : "교양+전공 피하기"}
           </label>
@@ -226,8 +230,8 @@ export function FriendTimetableRemix() {
           시간표 만들기
         </button>
         <p className={styles.ruleHint}>
-          두 시간표에 이미 있는 과목·분반만 섞고, 내 시간표와 같은 과목 수로 조합합니다.
-          새 과목을 찾거나 서버에 저장하지 않아요.
+          기본은 교양+전공을 모두 보고, 비슷하게는 친구 과목이 포함된 유효 조합을 먼저 보여줘요.
+          두 시간표에 이미 있는 과목·분반만 섞고 새 과목을 찾거나 서버에 저장하지 않아요.
         </p>
       </section>
 
@@ -249,7 +253,7 @@ export function FriendTimetableRemix() {
                 <div className={styles.scoreLine}>
                   <span>#{index + 1}</span>
                   <strong>{result.totalScore >= 0 ? "+" : ""}{result.totalScore} remix point</strong>
-                  <small>점수 반영 겹침 {result.matchedCourseCount}개</small>
+                  <small>점수에 반영된 친구 과목 {result.matchedCourseCount}개</small>
                 </div>
                 <TimetableCard
                   courseColorsById={courseColorsById}
@@ -257,6 +261,7 @@ export function FriendTimetableRemix() {
                   heading={`${index + 1}번 리믹스`}
                   index={index}
                   timetable={result.timetable}
+                  tone="remix"
                 />
               </li>
             ))}

@@ -1,8 +1,9 @@
 import { areaMatchesUnmetLabels } from "./ai-filler-selection";
+import { getFriendRemixCourseKey } from "./friend-remix-course-origin";
 import type { CourseCandidate, Timetable } from "./timetable";
 
 export type FriendRemixMode = "together" | "opposite";
-export type FriendRemixScope = "general_only" | "general_and_major";
+export type FriendRemixScope = "general_only" | "major_only" | "general_and_major";
 export type FriendRemixStrength = "strong" | "weak";
 
 export interface FriendRemixScoreInput {
@@ -97,11 +98,16 @@ export function isGeneralEducationCourse(course: CourseCandidate): boolean {
 }
 
 function normalizedCourseNumber(course: CourseCandidate): string {
-  return course.courseNumber?.trim().toUpperCase() ?? "";
+  return getFriendRemixCourseKey(course);
 }
 
 function isInScope(course: CourseCandidate, scope: FriendRemixScope): boolean {
-  return scope === "general_and_major" || isGeneralEducationCourse(course);
+  if (scope === "general_and_major") return true;
+  return scope === "general_only" ? isGeneralEducationCourse(course) : isMajorCourse(course);
+}
+
+function isMajorCourse(course: CourseCandidate): boolean {
+  return getFriendRemixCourseTypeLabel(course).includes("전공");
 }
 
 function matchesUnmetArea(course: CourseCandidate, labels: readonly string[]): boolean {
