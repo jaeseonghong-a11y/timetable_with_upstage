@@ -31,7 +31,7 @@ const KIND_DETAILS: Record<
     label: "수강/취득과목",
     heading: "수강/취득 과목 첨부하기",
     description:
-      "이미 이수한 과목을 확인해 주세요. 확인된 과목은 이후 과목 후보에서 제외됩니다. 재수강이 필요하면 과목 검색 후 재수강을 체크해 주세요.\n해당 과목만 다시 후보에 포함됩니다.",
+      "문서 분석을 통해 기수강 과목을 한눈에 확인하세요. 기수강 과목은 앞으로 담을 과목 후보에서 제외됩니다. 재수강이 필요한 과목은 검색 후 '재수강'을 체크하면 다시 후보에 포함됩니다.",
     attachGuide:
       "성균관대학교 GLS → 학적/개인영역 → 졸업자가진단 → 졸업요건충족현황조회 → 수강/취득 과목 출력 → PDF 저장 → 업로드",
   },
@@ -543,6 +543,15 @@ export function AcademicDocumentManager({
 
       <p className={styles.attachGuide}>
         <strong>어디서 받나요?</strong> {detail.attachGuide}
+        <br />
+        성균관대학교 GLS 링크:{" "}
+        <a
+          href="https://kingoinfo.skku.edu/gaia/nxui/index.html"
+          rel="noreferrer"
+          target="_blank"
+        >
+          https://kingoinfo.skku.edu/gaia/nxui/index.html
+        </a>
       </p>
 
       <div className={styles.uploadRow}>

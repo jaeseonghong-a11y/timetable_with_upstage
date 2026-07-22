@@ -338,6 +338,10 @@
   color: var(--text-primary);
 }
 
+.attachGuide a {
+  color: #2563eb;
+}
+
 .uploadRow {
   display: flex;
   flex-wrap: wrap;
@@ -671,7 +675,7 @@
 .courseYearHeading {
   margin: 0;
   color: var(--accent-strong);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.04em;
 }
@@ -686,7 +690,7 @@
 .courseTermHeading {
   margin: 0 0 0 2px;
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
 }
 

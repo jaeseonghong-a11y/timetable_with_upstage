@@ -215,15 +215,6 @@ export function AcademicCourseEditor({ profile, onChange }: Props) {
               />
             </label>
             <label className={styles.field}>
-              <span>이수구분</span>
-              <input
-                value={course.classification}
-                onChange={(event) =>
-                  updateCourse(index, { ...course, classification: event.target.value })
-                }
-              />
-            </label>
-            <label className={styles.field}>
               <span>이수 상태</span>
               <select
                 value={course.completionStatus}
