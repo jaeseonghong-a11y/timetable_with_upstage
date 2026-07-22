@@ -1,10 +1,16 @@
 .page {
+  --remix-shared-border: #00866c;
+  --remix-shared-surface: #d9f3ea;
+  --remix-shared-text: #075846;
+  --remix-friend-border: #536fcb;
+  --remix-friend-surface: #e3e9ff;
+  --remix-friend-text: #29468f;
+  --remix-mine-border: #c0792e;
+  --remix-mine-surface: #fff0dc;
+  --remix-mine-text: #774512;
   min-height: 100vh;
   padding: 36px 20px 64px;
-  background:
-    radial-gradient(circle at 85% 8%, rgb(255 82 160 / 24%), transparent 28rem),
-    radial-gradient(circle at 8% 24%, rgb(66 220 196 / 16%), transparent 30rem),
-    #111525;
+  background: #111525;
   color: #f5f7ff;
 }
 
@@ -157,7 +163,7 @@
   padding: 10px 17px;
   border: 0;
   border-radius: 11px;
-  background: linear-gradient(125deg, #f04e99, #8d5cff);
+  background: #d64785;
   color: #fff;
   font: inherit;
   font-size: 15px;
@@ -184,6 +190,42 @@
   margin: 18px 0 0;
   padding: 0;
   list-style: none;
+}
+
+.courseLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 14px;
+  margin: 15px 0 0;
+  color: #d8e0f3;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.courseLegend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.courseLegend i {
+  display: inline-block;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.sharedCourse {
+  background: var(--remix-shared-border);
+}
+
+.friendOnlyCourse {
+  background: var(--remix-friend-border);
+}
+
+.myOnlyCourse {
+  background: var(--remix-mine-border);
 }
 
 /* TimetableCard keeps its weekly grid deliberately wider than a phone. Let its own

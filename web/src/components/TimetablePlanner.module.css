@@ -1470,6 +1470,27 @@
   color: #69591f;
 }
 
+/* Friend remix cards classify courses by their source timetable instead of the usual rotating
+   course palette. The custom properties are supplied only by the remix page, leaving every
+   normal planner/share card unchanged. */
+.courseBlock[data-color="friend-shared"] {
+  border-left-color: var(--remix-shared-border, #00866c);
+  background: var(--remix-shared-surface, #d9f3ea);
+  color: var(--remix-shared-text, #075846);
+}
+
+.courseBlock[data-color="friend-only"] {
+  border-left-color: var(--remix-friend-border, #536fcb);
+  background: var(--remix-friend-surface, #e3e9ff);
+  color: var(--remix-friend-text, #29468f);
+}
+
+.courseBlock[data-color="mine-only"] {
+  border-left-color: var(--remix-mine-border, #c0792e);
+  background: var(--remix-mine-surface, #fff0dc);
+  color: var(--remix-mine-text, #774512);
+}
+
 /* 겹쳐보기(MergedTimetableView) 전용: 특정 과목으로 특정할 필요 없는 "누군가 바쁜 시간"을 단색
    으로만 채운다 — 같이 듣는 과목(공유 수업)은 이 블록 위에 .courseBlock을 그대로 덧그려 이름이
    보이게 하고, 그 외 시간은 이 블록만 남아 "누구 수업인지는 몰라도 비어있진 않다"는 것만
@@ -1597,6 +1618,24 @@
   border-left-color: #9a812e;
   background: #f5edcf;
   color: #69591f;
+}
+
+.unscheduledChip[data-color="friend-shared"] {
+  border-left-color: var(--remix-shared-border, #00866c);
+  background: var(--remix-shared-surface, #d9f3ea);
+  color: var(--remix-shared-text, #075846);
+}
+
+.unscheduledChip[data-color="friend-only"] {
+  border-left-color: var(--remix-friend-border, #536fcb);
+  background: var(--remix-friend-surface, #e3e9ff);
+  color: var(--remix-friend-text, #29468f);
+}
+
+.unscheduledChip[data-color="mine-only"] {
+  border-left-color: var(--remix-mine-border, #c0792e);
+  background: var(--remix-mine-surface, #fff0dc);
+  color: var(--remix-mine-text, #774512);
 }
 
 .saveImageRow {

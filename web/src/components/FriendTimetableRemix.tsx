@@ -15,6 +15,7 @@ import {
   loadFriendRemixSources,
   type FriendRemixSource,
 } from "@/lib/friend-remix-data";
+import { getFriendRemixCourseOrigins } from "@/lib/friend-remix-course-origin";
 import { createFriendRemixSelectionPlan } from "@/lib/friend-remix-plan";
 import {
   scoreFriendRemixTimetables,
@@ -76,6 +77,13 @@ export function FriendTimetableRemix() {
   }, []);
 
   const selectedFriend = sourceState.friends.find((friend) => friend.code === selectedFriendCode) ?? null;
+  const courseColorsById = useMemo(
+    () =>
+      sourceState.mine && selectedFriend
+        ? getFriendRemixCourseOrigins(sourceState.mine.timetable.courses, selectedFriend.timetable.courses)
+        : new Map(),
+    [selectedFriend, sourceState.mine],
+  );
   const strengthAvailable = requirementSummaries !== null && requirementSummaries.length > 0;
   const unmetRequirementLabels = useMemo(
     () =>
@@ -230,6 +238,11 @@ export function FriendTimetableRemix() {
             <p>TOP 5 REMIXES</p>
             <h2>{selectedFriend?.label ?? "친구"} 기준 결과</h2>
           </div>
+          <div className={styles.courseLegend} aria-label="리믹스 과목 색상 구분">
+            <span><i className={styles.sharedCourse} aria-hidden="true" />대상 친구와 겹치는 과목</span>
+            <span><i className={styles.friendOnlyCourse} aria-hidden="true" />친구만 듣는 과목</span>
+            <span><i className={styles.myOnlyCourse} aria-hidden="true" />나만 듣는 과목</span>
+          </div>
           <ol>
             {results.map((result, index) => (
               <li key={result.candidateId}>
@@ -239,6 +252,7 @@ export function FriendTimetableRemix() {
                   <small>점수 반영 겹침 {result.matchedCourseCount}개</small>
                 </div>
                 <TimetableCard
+                  courseColorsById={courseColorsById}
                   extras={[]}
                   heading={`${index + 1}번 리믹스`}
                   index={index}

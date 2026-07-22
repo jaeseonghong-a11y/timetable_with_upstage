@@ -29,6 +29,7 @@ import {
 } from "@/lib/timetable";
 import { encodeShareableTimetable } from "@/lib/timetable-share";
 import { useLocalStorageItem } from "@/lib/use-local-storage-item";
+import type { FriendRemixCourseOrigin } from "@/lib/friend-remix-course-origin";
 
 import styles from "./TimetablePlanner.module.css";
 
@@ -52,13 +53,17 @@ export interface TimetableExtra {
   classification: string;
 }
 
+type TimetableCourseColor = FriendRemixCourseOrigin;
+
 export function TimetableCard({
+  courseColorsById,
   extras,
   footer,
   heading,
   index,
   timetable,
 }: {
+  courseColorsById?: ReadonlyMap<string, TimetableCourseColor>;
   extras: readonly TimetableExtra[];
   footer?: ReactNode;
   heading?: string;
@@ -295,7 +300,7 @@ export function TimetableCard({
                           <button
                             aria-label={`${course.title} 강의평 보기`}
                             className={styles.courseBlock}
-                            data-color={courseIndex % 6}
+                            data-color={courseColorsById?.get(course.id) ?? courseIndex % 6}
                             key={`${course.id}-${meeting.startMinutes}`}
                             onClick={() => handleCourseReview(course)}
                             style={{
@@ -358,7 +363,7 @@ export function TimetableCard({
                     <button
                       aria-label={`${course.title} 강의평 보기`}
                       className={styles.unscheduledChip}
-                      data-color={courseIndex % 6}
+                      data-color={courseColorsById?.get(course.id) ?? courseIndex % 6}
                       key={course.id}
                       onClick={() => handleCourseReview(course)}
                       title={`${course.title} · 클릭하여 강의평 보기`}
