@@ -1,0 +1,115 @@
+.wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.button,
+.compactButton {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+}
+
+.button {
+  padding: 6px 9px;
+  font-size: 11px;
+}
+
+.compactButton {
+  padding: 4px 7px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.button:hover,
+.compactButton:hover {
+  background: var(--surface-note);
+  color: var(--accent-strong);
+}
+
+.hasNote {
+  border-color: var(--accent-strong);
+  background: var(--surface-note);
+  color: var(--accent-strong);
+}
+
+.panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  display: grid;
+  gap: 8px;
+  width: min(280px, 78vw);
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--surface-card);
+  box-shadow: 0 10px 28px rgba(20, 40, 30, 0.12);
+}
+
+.panelHeading {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+
+.panelHeading strong {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.panelHeading span {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.panelHint {
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.panel textarea {
+  width: 100%;
+  min-height: 88px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-page);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.panelActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.panelActions button {
+  padding: 6px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-page);
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.panelActions button[data-primary="true"] {
+  border-color: var(--accent-strong);
+  background: var(--accent-strong);
+  color: #fff;
+}

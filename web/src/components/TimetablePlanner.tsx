@@ -58,6 +58,7 @@ import {
 
 import { DepartmentAddCombobox } from "./DepartmentAddCombobox";
 import { EverytimeReviewButton } from "./EverytimeReviewButton";
+import { CourseReviewNoteButton } from "./CourseReviewNoteButton";
 import { DAYS, formatCredits, formatMinutes, TimetableCard, type TimetableExtra } from "./TimetableCard";
 import styles from "./TimetablePlanner.module.css";
 
@@ -1107,30 +1108,6 @@ export function TimetablePlanner({
   const [recommendationError, setRecommendationError] = useState("");
   const [aiExplanationFailed, setAiExplanationFailed] = useState(false);
 
-  // STEP 4에서 사라진 공강 가능 요일은 STEP 5 선호에서도 빼 둔다.
-  useEffect(() => {
-    const allowed = new Set(dayOffOptions.map(({ id }) => id));
-    setRecommendationWeights((weights) => {
-      let changed = false;
-      const next = weights.map((weight) => {
-        if (weight.id !== "free_days") {
-          return weight;
-        }
-        const preferred = weight.config?.preferredFreeDays ?? [];
-        const filtered = preferred.filter((day) => allowed.has(day));
-        if (filtered.length === preferred.length) {
-          return weight;
-        }
-        changed = true;
-        return {
-          ...weight,
-          config: { ...weight.config, preferredFreeDays: filtered },
-        };
-      });
-      return changed ? next : weights;
-    });
-  }, [dayOffOptions]);
-
   useEffect(() => {
     if (!isRecommending || recommendationStage !== 1) {
       return;
@@ -1490,9 +1467,22 @@ export function TimetablePlanner({
       setAiCandidateTimetables(candidateMap);
 
       setRecommendationStage(1);
+      const allowedFreeDays = new Set(dayOffOptions.map(({ id }) => id));
+      const weightsForRequest = recommendationWeights.map((weight) => {
+        if (weight.id !== "free_days") {
+          return weight;
+        }
+        const preferredFreeDays = (weight.config?.preferredFreeDays ?? []).filter((day) =>
+          allowedFreeDays.has(day),
+        );
+        return {
+          ...weight,
+          config: { ...weight.config, preferredFreeDays },
+        };
+      });
       const payload = await postJson("/api/timetable-recommendations", {
         timetables: dayFiltered,
-        weights: recommendationWeights,
+        weights: weightsForRequest,
         // 필수(고정) 과목 제목 — Solar가 추천 이유를 이 과목들이 아니라 '추가로 담긴' 과목에
         // 집중해서 쓰도록 알려준다.
         requiredCourseTitles: manualSelectionPlanSubjects.requiredSubjects.map(
@@ -2481,7 +2471,11 @@ export function TimetablePlanner({
                           <>
                             <label className={styles.anyDayChoice}>
                               <input
-                                checked={(weight.config?.preferredFreeDays ?? []).length === 0}
+                                checked={
+                                  (weight.config?.preferredFreeDays ?? []).filter((day) =>
+                                    dayOffOptions.some((option) => option.id === day),
+                                  ).length === 0
+                                }
                                 type="checkbox"
                                 onChange={() => setFreeDaysConfig({ preferredFreeDays: [] })}
                               />
@@ -2764,7 +2758,10 @@ function CourseSectionDetails({
     return (
       <div className={styles.singleCourseSection}>
         <CourseSectionMetadata candidate={group.candidates[0]!} />
-        <EverytimeReviewButton course={group.candidates[0]!} compact />
+        <span className={styles.sectionReviewActions}>
+          <EverytimeReviewButton course={group.candidates[0]!} compact />
+          <CourseReviewNoteButton course={group.candidates[0]!} compact />
+        </span>
       </div>
     );
   }
@@ -2886,7 +2883,10 @@ function SelectedSectionChoices({
                   </small>
                 </span>
               </label>
-              <EverytimeReviewButton course={candidate} compact />
+              <span className={styles.sectionReviewActions}>
+                <EverytimeReviewButton course={candidate} compact />
+                <CourseReviewNoteButton course={candidate} compact />
+              </span>
             </div>
           ))}
         </div>
@@ -2910,7 +2910,10 @@ function CourseSectionChoice({
         <input checked={checked} type="checkbox" onChange={onToggle} />
         <CourseSectionMetadata candidate={candidate} />
       </label>
-      <EverytimeReviewButton course={candidate} compact />
+      <span className={styles.sectionReviewActions}>
+        <EverytimeReviewButton course={candidate} compact />
+        <CourseReviewNoteButton course={candidate} compact />
+      </span>
     </div>
   );
 }

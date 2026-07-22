@@ -979,6 +979,13 @@
   background: var(--surface-card);
 }
 
+.sectionReviewActions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+
 .sectionChoiceRow > label {
   display: flex;
   min-width: 0;
