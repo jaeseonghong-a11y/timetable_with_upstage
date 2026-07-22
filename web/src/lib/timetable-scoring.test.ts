@@ -33,7 +33,7 @@ function weight(
   id: RecommendationWeight["id"],
   overrides: Partial<RecommendationWeight> = {},
 ): RecommendationWeight {
-  return { id, enabled: true, importance: "medium", ...overrides };
+  return { id, enabled: true, importance: 3, ...overrides };
 }
 
 describe("timetable-scoring", () => {
@@ -127,32 +127,44 @@ describe("timetable-scoring", () => {
     const inPerson = timetable([course("A1", "오프라인")], [meeting("mon", 600, 660)]);
     const online = timetable([course("B1", "온라인(사전제작)")], [meeting("mon", 600, 660)]);
 
-    const [firstInPerson] = scoreTimetables([inPerson, online], [weight("prefer_in_person")]);
+    const [firstInPerson] = scoreTimetables(
+      [inPerson, online],
+      [weight("course_format", { config: { format: "in_person" } })],
+    );
     expect(firstInPerson?.candidateId).toBe(getTimetableCandidateId(inPerson));
 
-    const [firstOnline] = scoreTimetables([inPerson, online], [weight("prefer_online")]);
+    const [firstOnline] = scoreTimetables(
+      [inPerson, online],
+      [weight("course_format", { config: { format: "online" } })],
+    );
     expect(firstOnline?.candidateId).toBe(getTimetableCandidateId(online));
   });
 
-  it("prefers fewer active days under compact_days", () => {
+  it("prefers fewer active days when packing=compact", () => {
     const compact = timetable([course("A1")], [meeting("mon", 600, 660), meeting("mon", 660, 720)]);
     const spread = timetable([course("B1")], [meeting("mon", 600, 660), meeting("tue", 600, 660)]);
 
-    const [first] = scoreTimetables([compact, spread], [weight("compact_days")]);
+    const [first] = scoreTimetables(
+      [compact, spread],
+      [weight("day_packing", { config: { packing: "compact" } })],
+    );
     expect(first?.candidateId).toBe(getTimetableCandidateId(compact));
   });
 
-  it("prefers a smaller total daily span under minimize_daily_span", () => {
+  it("prefers a smaller total daily span when packing=spread", () => {
     const tight = timetable([course("A1")], [meeting("mon", 600, 660)]);
     const spanning = timetable([course("B1")], [meeting("mon", 540, 900)]);
 
-    const [first] = scoreTimetables([tight, spanning], [weight("minimize_daily_span")]);
+    const [first] = scoreTimetables(
+      [tight, spanning],
+      [weight("day_packing", { config: { packing: "spread" } })],
+    );
     expect(first?.candidateId).toBe(getTimetableCandidateId(tight));
   });
 
   it("weighs a high-importance preference over a low-importance conflicting one", () => {
     // A wins free_days (4 free days) but starts at 9am; B wins avoid_9am (no 9am start) but
-    // uses every weekday. With avoid_9am set to "high" it should outweigh a "low" free_days.
+    // uses every weekday. With avoid_9am set to 5 it should outweigh a importance-1 free_days.
     const a = timetable([course("A1")], [meeting("mon", 540, 600)]);
     const b = timetable(
       [course("B1")],
@@ -168,8 +180,8 @@ describe("timetable-scoring", () => {
     const [first] = scoreTimetables(
       [a, b],
       [
-        weight("free_days", { importance: "low" }),
-        weight("avoid_9am", { importance: "high" }),
+        weight("free_days", { importance: 1 }),
+        weight("avoid_9am", { importance: 5 }),
       ],
     );
     expect(first?.candidateId).toBe(getTimetableCandidateId(b));
@@ -179,8 +191,8 @@ describe("timetable-scoring", () => {
     const ids = new Set(DEFAULT_RECOMMENDATION_WEIGHTS.map((entry) => entry.id));
     expect(ids.size).toBe(DEFAULT_RECOMMENDATION_WEIGHTS.length);
     expect(ids.has("free_days")).toBe(true);
-    expect(ids.has("prefer_in_person")).toBe(true);
-    expect(ids.has("prefer_online")).toBe(true);
+    expect(ids.has("course_format")).toBe(true);
+    expect(ids.has("day_packing")).toBe(true);
   });
 
   // Regression: a day with zero course meetings but a fixed personal event (알바 등) must not be

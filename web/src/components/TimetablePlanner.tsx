@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import type { Requirement } from "@/lib/academic-profile";
 import { areaMatchesUnmetLabels, selectAiFillerSubjects } from "@/lib/ai-filler-selection";
@@ -87,10 +87,8 @@ const WEIGHT_LABELS: Record<WeightId, string> = {
   back_to_back: "연강 선호/기피",
   lunch_break: "점심시간 확보",
   avoid_9am: "오전 9시 수업 회피",
-  compact_days: "수업일수 최소화",
-  prefer_in_person: "대면 수업 선호",
-  prefer_online: "온라인 수업 선호",
-  minimize_daily_span: "하루 재학시간 최소화",
+  day_packing: "하루에 몰아듣기 / 여러날 나눠듣기",
+  course_format: "대면/온라인 수업 선호",
 };
 
 interface TimetableRecommendationItem {
@@ -1177,18 +1175,11 @@ export function TimetablePlanner({
 
   function toggleRecommendationWeight(id: WeightId): void {
     track("weight_adjust", { weight_type: id });
-    setRecommendationWeights((weights) => {
-      const nextEnabled = !(weights.find((weight) => weight.id === id)?.enabled ?? false);
-      return weights.map((weight) => {
-        if (weight.id === id) {
-          return { ...weight, enabled: nextEnabled };
-        }
-        const isOppositeFormatPreference =
-          (id === "prefer_in_person" && weight.id === "prefer_online") ||
-          (id === "prefer_online" && weight.id === "prefer_in_person");
-        return nextEnabled && isOppositeFormatPreference ? { ...weight, enabled: false } : weight;
-      });
-    });
+    setRecommendationWeights((weights) =>
+      weights.map((weight) =>
+        weight.id === id ? { ...weight, enabled: !weight.enabled } : weight,
+      ),
+    );
   }
 
   function setRecommendationWeightImportance(id: WeightId, importance: WeightImportance): void {
@@ -1215,6 +1206,30 @@ export function TimetablePlanner({
     setRecommendationWeights((weights) =>
       weights.map((weight) =>
         weight.id === "lunch_break"
+          ? { ...weight, config: { ...weight.config, ...partial } }
+          : weight,
+      ),
+    );
+  }
+
+  function setCourseFormatConfig(
+    partial: Partial<NonNullable<RecommendationWeight["config"]>>,
+  ): void {
+    setRecommendationWeights((weights) =>
+      weights.map((weight) =>
+        weight.id === "course_format"
+          ? { ...weight, config: { ...weight.config, ...partial } }
+          : weight,
+      ),
+    );
+  }
+
+  function setDayPackingConfig(
+    partial: Partial<NonNullable<RecommendationWeight["config"]>>,
+  ): void {
+    setRecommendationWeights((weights) =>
+      weights.map((weight) =>
+        weight.id === "day_packing"
           ? { ...weight, config: { ...weight.config, ...partial } }
           : weight,
       ),
@@ -2319,32 +2334,59 @@ export function TimetablePlanner({
             <h3>AI 추천 조건</h3>
 
             <div className={styles.recommendationWeights}>
+              <datalist id="importance-ticks">
+                <option value="1" />
+                <option value="2" />
+                <option value="3" />
+                <option value="4" />
+                <option value="5" />
+              </datalist>
               {recommendationWeights.map((weight) => (
                 <div className={styles.recommendationWeight} key={weight.id}>
-                  <label className={styles.recommendationWeightToggle}>
-                    <input
-                      checked={weight.enabled}
-                      type="checkbox"
-                      onChange={() => toggleRecommendationWeight(weight.id)}
-                    />
-                    <span>{WEIGHT_LABELS[weight.id]}</span>
-                  </label>
-                  {weight.enabled ? (
-                    <select
-                      aria-label={`${WEIGHT_LABELS[weight.id]} 중요도`}
-                      value={weight.importance}
-                      onChange={(event) =>
-                        setRecommendationWeightImportance(
-                          weight.id,
-                          event.target.value as WeightImportance,
-                        )
-                      }
-                    >
-                      <option value="low">낮음</option>
-                      <option value="medium">보통</option>
-                      <option value="high">높음</option>
-                    </select>
-                  ) : null}
+                  <div className={styles.recommendationWeightMain}>
+                    <label className={styles.recommendationWeightToggle}>
+                      <input
+                        checked={weight.enabled}
+                        type="checkbox"
+                        onChange={() => toggleRecommendationWeight(weight.id)}
+                      />
+                      <span>{WEIGHT_LABELS[weight.id]}</span>
+                    </label>
+                    {weight.enabled ? (
+                      <label className={styles.importanceSlider}>
+                        <span className={styles.srOnly}>{WEIGHT_LABELS[weight.id]} 중요도</span>
+                        <span className={styles.importanceSliderTrack}>
+                          <input
+                            aria-label={`${WEIGHT_LABELS[weight.id]} 중요도`}
+                            list="importance-ticks"
+                            max={5}
+                            min={1}
+                            step={1}
+                            style={
+                              {
+                                "--importance-pct": `${((weight.importance - 1) / 4) * 100}%`,
+                              } as CSSProperties
+                            }
+                            type="range"
+                            value={weight.importance}
+                            onChange={(event) =>
+                              setRecommendationWeightImportance(
+                                weight.id,
+                                Number(event.target.value) as WeightImportance,
+                              )
+                            }
+                          />
+                          <span className={styles.importanceTicks} aria-hidden="true">
+                            <i>1</i>
+                            <i>2</i>
+                            <i>3</i>
+                            <i>4</i>
+                            <i>5</i>
+                          </span>
+                        </span>
+                      </label>
+                    ) : null}
+                  </div>
                   {weight.enabled && weight.id === "lunch_break" ? (
                     <span className={styles.backToBackConfig}>
                       <input
@@ -2374,6 +2416,38 @@ export function TimetablePlanner({
                           }
                         }}
                       />
+                    </span>
+                  ) : null}
+                  {weight.enabled && weight.id === "day_packing" ? (
+                    <span className={styles.backToBackConfig}>
+                      <select
+                        aria-label="하루에 몰아듣기 / 여러날 나눠듣기"
+                        value={weight.config?.packing ?? "compact"}
+                        onChange={(event) =>
+                          setDayPackingConfig({
+                            packing: event.target.value as "compact" | "spread",
+                          })
+                        }
+                      >
+                        <option value="compact">하루에 몰아듣기</option>
+                        <option value="spread">여러날 나눠듣기</option>
+                      </select>
+                    </span>
+                  ) : null}
+                  {weight.enabled && weight.id === "course_format" ? (
+                    <span className={styles.backToBackConfig}>
+                      <select
+                        aria-label="대면/온라인 수업 선호"
+                        value={weight.config?.format ?? "in_person"}
+                        onChange={(event) =>
+                          setCourseFormatConfig({
+                            format: event.target.value as "in_person" | "online",
+                          })
+                        }
+                      >
+                        <option value="in_person">대면</option>
+                        <option value="online">온라인</option>
+                      </select>
                     </span>
                   ) : null}
                   {weight.enabled && weight.id === "back_to_back" ? (

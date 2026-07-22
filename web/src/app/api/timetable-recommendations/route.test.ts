@@ -62,7 +62,7 @@ describe("POST /api/timetable-recommendations", () => {
     const response = await POST(
       jsonRequest({
         timetables: [weekdayFilledTimetable, spaciousTimetable],
-        weights: [{ id: "free_days", enabled: true, importance: "medium" }],
+        weights: [{ id: "free_days", enabled: true, importance: 3 }],
       }),
     );
     const body = (await response.json()) as {
@@ -94,7 +94,7 @@ describe("POST /api/timetable-recommendations", () => {
     const response = await POST(
       jsonRequest({
         timetables: [weekdayFilledTimetable, spaciousTimetable],
-        weights: [{ id: "free_days", enabled: true, importance: "medium" }],
+        weights: [{ id: "free_days", enabled: true, importance: 3 }],
         requiredCourseTitles: ["과목 A1"],
       }),
     );
@@ -134,7 +134,7 @@ describe("POST /api/timetable-recommendations", () => {
     const response = await POST(
       jsonRequest({
         timetables: [weekdayFilledTimetable, spaciousTimetable],
-        weights: [{ id: "free_days", enabled: true, importance: "medium" }],
+        weights: [{ id: "free_days", enabled: true, importance: 3 }],
       }),
     );
     const body = (await response.json()) as {
@@ -164,7 +164,7 @@ describe("POST /api/timetable-recommendations", () => {
     const response = await POST(
       jsonRequest({
         timetables: [weekdayFilledTimetable, spaciousTimetable],
-        weights: [{ id: "free_days", enabled: true, importance: "medium" }],
+        weights: [{ id: "free_days", enabled: true, importance: 3 }],
         customPreference: "화요일 수업은 피하고 싶어요",
       }),
     );
@@ -194,7 +194,7 @@ describe("POST /api/timetable-recommendations", () => {
     const response = await POST(
       jsonRequest({
         timetables: [weekdayFilledTimetable, spaciousTimetable],
-        weights: [{ id: "free_days", enabled: true, importance: "medium" }],
+        weights: [{ id: "free_days", enabled: true, importance: 3 }],
       }),
     );
     const body = (await response.json()) as {
@@ -239,7 +239,7 @@ describe("POST /api/timetable-recommendations", () => {
     const response = await POST(
       jsonRequest({
         timetables: [timetableWithProfessor("X1", "김교수"), timetableWithProfessor("X2", "이교수")],
-        weights: [{ id: "free_days", enabled: true, importance: "medium" }],
+        weights: [{ id: "free_days", enabled: true, importance: 3 }],
       }),
     );
     const body = (await response.json()) as {
@@ -277,7 +277,7 @@ describe("POST /api/timetable-recommendations", () => {
     const response = await POST(
       jsonRequest({
         timetables: [timetableWithWednesdayFixedEvent],
-        weights: [{ id: "free_days", enabled: true, importance: "medium" }],
+        weights: [{ id: "free_days", enabled: true, importance: 3 }],
       }),
     );
     const body = (await response.json()) as { recommendations: Array<{ reason: string | null }> };

@@ -1893,20 +1893,25 @@
 }
 
 .recommendationWeight {
+  display: grid;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--surface-card);
+}
+
+.recommendationWeightMain {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .recommendationWeightToggle {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 999px;
-  background: var(--surface-card);
   color: var(--text-secondary);
   font-size: 12px;
   font-weight: 700;
@@ -1918,38 +1923,137 @@
 }
 
 .recommendationWeightToggle:has(input:checked) {
-  border-color: var(--accent-strong);
-  background: var(--surface-note);
   color: var(--accent-strong);
 }
 
-.recommendationWeight select {
-  padding: 6px 8px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  background: var(--surface-card);
-  color: var(--text-primary);
-  font: inherit;
-  font-size: 12px;
+.importanceSlider {
+  display: inline-flex;
+  align-items: center;
+  flex: 1;
+  gap: 6px;
+  min-width: 180px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.importanceSliderTrack {
+  position: relative;
+  display: block;
+  flex: 1;
+  min-width: 100px;
+  padding-bottom: 14px;
+}
+
+.importanceSlider input[type="range"] {
+  display: block;
+  width: 100%;
+  height: 16px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.importanceSlider input[type="range"]::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    #b7e0cb 0%,
+    #176a4c var(--importance-pct, 50%),
+    #e4ebe7 var(--importance-pct, 50%),
+    #e4ebe7 100%
+  );
+}
+
+.importanceSlider input[type="range"]::-moz-range-track {
+  height: 8px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    #b7e0cb 0%,
+    #176a4c var(--importance-pct, 50%),
+    #e4ebe7 var(--importance-pct, 50%),
+    #e4ebe7 100%
+  );
+}
+
+.importanceSlider input[type="range"]::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+  margin-top: -2px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #2f9a6e, #176a4c);
+  box-shadow: 0 0 0 1px rgba(23, 106, 76, 0.35);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.importanceSlider input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #2f9a6e, #176a4c);
+  box-shadow: 0 0 0 1px rgba(23, 106, 76, 0.35);
+  cursor: pointer;
+}
+
+.importanceTicks {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.importanceTicks i {
+  display: block;
+  width: 1.1em;
+  color: color-mix(in srgb, var(--accent-strong) 70%, var(--text-secondary));
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
 }
 
 .backToBackConfig {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  padding-left: 22px;
   color: var(--text-secondary);
   font-size: 12px;
 }
 
+.backToBackConfig select,
 .backToBackConfig input {
-  width: 48px;
-  padding: 6px 8px;
+  min-height: 32px;
+  padding: 6px 10px;
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  background: var(--surface-card);
+  background: var(--surface-page);
   color: var(--text-primary);
   font: inherit;
   font-size: 12px;
+}
+
+.backToBackConfig select {
+  min-width: 72px;
+  max-width: 100%;
+}
+
+.backToBackConfig input[type="number"] {
+  width: 56px;
 }
 
 .backToBackConfig input[type="time"] {

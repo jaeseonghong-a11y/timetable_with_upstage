@@ -5,12 +5,10 @@ export type WeightId =
   | "back_to_back"
   | "lunch_break"
   | "avoid_9am"
-  | "compact_days"
-  | "prefer_in_person"
-  | "prefer_online"
-  | "minimize_daily_span";
+  | "day_packing"
+  | "course_format";
 
-export type WeightImportance = "low" | "medium" | "high";
+export type WeightImportance = 1 | 2 | 3 | 4 | 5;
 
 export interface RecommendationWeight {
   id: WeightId;
@@ -25,6 +23,10 @@ export interface RecommendationWeight {
     lunchStartMinutes?: number;
     /** lunch_break 전용: 점심 창 끝(분). 기본 13:00. */
     lunchEndMinutes?: number;
+    /** course_format 전용: 대면/온라인 중 선호. 기본 대면. */
+    format?: "in_person" | "online";
+    /** day_packing 전용: 하루에 몰아듣기(compact) / 여러날 나눠듣기(spread). 기본 compact. */
+    packing?: "compact" | "spread";
   };
 }
 
@@ -50,30 +52,44 @@ export const DEFAULT_LUNCH_WINDOW_END_MINUTES = 13 * 60;
 const LUNCH_DURATION_MINUTES = 60;
 const NINE_AM_MINUTES = 9 * 60;
 
-const IMPORTANCE_MULTIPLIER: Record<WeightImportance, number> = { low: 1, medium: 2, high: 3 };
+const IMPORTANCE_MULTIPLIER: Record<WeightImportance, number> = {
+  1: 1,
+  2: 2,
+  3: 3,
+  4: 4,
+  5: 5,
+};
 
 export const DEFAULT_RECOMMENDATION_WEIGHTS: RecommendationWeight[] = [
-  { id: "free_days", enabled: true, importance: "medium" },
+  { id: "free_days", enabled: true, importance: 3 },
   {
     id: "back_to_back",
     enabled: false,
-    importance: "medium",
+    importance: 3,
     config: { thresholdMinutes: DEFAULT_BACK_TO_BACK_THRESHOLD_MINUTES, direction: "avoid" },
   },
   {
     id: "lunch_break",
     enabled: true,
-    importance: "medium",
+    importance: 3,
     config: {
       lunchStartMinutes: DEFAULT_LUNCH_WINDOW_START_MINUTES,
       lunchEndMinutes: DEFAULT_LUNCH_WINDOW_END_MINUTES,
     },
   },
-  { id: "avoid_9am", enabled: false, importance: "medium" },
-  { id: "compact_days", enabled: false, importance: "low" },
-  { id: "prefer_in_person", enabled: false, importance: "medium" },
-  { id: "prefer_online", enabled: false, importance: "medium" },
-  { id: "minimize_daily_span", enabled: false, importance: "low" },
+  { id: "avoid_9am", enabled: false, importance: 3 },
+  {
+    id: "day_packing",
+    enabled: false,
+    importance: 2,
+    config: { packing: "compact" },
+  },
+  {
+    id: "course_format",
+    enabled: false,
+    importance: 3,
+    config: { format: "in_person" },
+  },
 ];
 
 /** Stable identity for a timetable candidate, independent of array order. */
@@ -140,14 +156,10 @@ function computeRawValue(timetable: Timetable, weight: RecommendationWeight): nu
       return lunchBreakScore(timetable, weight.config);
     case "avoid_9am":
       return -countNineAmMeetings(timetable);
-    case "compact_days":
-      return -countActiveDays(timetable);
-    case "prefer_in_person":
-      return countCoursesByFormat(timetable, false);
-    case "prefer_online":
-      return countCoursesByFormat(timetable, true);
-    case "minimize_daily_span":
-      return -totalDailySpanMinutes(timetable);
+    case "day_packing":
+      return dayPackingScore(timetable, weight.config);
+    case "course_format":
+      return courseFormatScore(timetable, weight.config);
   }
 }
 
@@ -289,6 +301,24 @@ function hasFreeWindow(
     cursor = Math.max(cursor, end);
   }
   return windowEnd - cursor >= minFreeMinutes;
+}
+
+function dayPackingScore(
+  timetable: Timetable,
+  config: RecommendationWeight["config"],
+): number {
+  // 하루에 몰아듣기 = 수업 일수 최소화, 여러날 나눠듣기 = 하루 재학시간(첫~끝 수업 폭) 최소화.
+  return config?.packing === "spread"
+    ? -totalDailySpanMinutes(timetable)
+    : -countActiveDays(timetable);
+}
+
+function courseFormatScore(
+  timetable: Timetable,
+  config: RecommendationWeight["config"],
+): number {
+  const preferOnline = config?.format === "online";
+  return countCoursesByFormat(timetable, preferOnline);
 }
 
 function countCoursesByFormat(timetable: Timetable, online: boolean): number {

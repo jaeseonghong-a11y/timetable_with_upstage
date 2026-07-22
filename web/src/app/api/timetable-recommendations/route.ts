@@ -30,12 +30,10 @@ const WEIGHT_ID_SET = new Set<WeightId>([
   "back_to_back",
   "lunch_break",
   "avoid_9am",
-  "compact_days",
-  "prefer_in_person",
-  "prefer_online",
-  "minimize_daily_span",
+  "day_packing",
+  "course_format",
 ]);
-const IMPORTANCE_SET = new Set<WeightImportance>(["low", "medium", "high"]);
+const IMPORTANCE_SET = new Set<WeightImportance>([1, 2, 3, 4, 5]);
 
 interface TimetableRecommendationItem {
   candidateId: string;
@@ -539,7 +537,7 @@ function parseWeights(value: unknown): RecommendationWeight[] {
       typeof entry.id !== "string" ||
       !WEIGHT_ID_SET.has(entry.id as WeightId) ||
       typeof entry.enabled !== "boolean" ||
-      typeof entry.importance !== "string" ||
+      typeof entry.importance !== "number" ||
       !IMPORTANCE_SET.has(entry.importance as WeightImportance)
     ) {
       continue;
@@ -564,15 +562,19 @@ function parseWeightConfig(value: unknown): RecommendationWeight["config"] {
     typeof value.lunchStartMinutes === "number" ? value.lunchStartMinutes : undefined;
   const lunchEndMinutes =
     typeof value.lunchEndMinutes === "number" ? value.lunchEndMinutes : undefined;
+  const format = value.format === "in_person" || value.format === "online" ? value.format : undefined;
+  const packing = value.packing === "compact" || value.packing === "spread" ? value.packing : undefined;
   if (
     thresholdMinutes === undefined &&
     direction === undefined &&
     lunchStartMinutes === undefined &&
-    lunchEndMinutes === undefined
+    lunchEndMinutes === undefined &&
+    format === undefined &&
+    packing === undefined
   ) {
     return undefined;
   }
-  return { thresholdMinutes, direction, lunchStartMinutes, lunchEndMinutes };
+  return { thresholdMinutes, direction, lunchStartMinutes, lunchEndMinutes, format, packing };
 }
 
 /** 필수(고정) 과목 제목 목록 — 추천 이유를 이 과목들이 아닌 '추가된' 과목에 집중시키는 데 쓴다. */
