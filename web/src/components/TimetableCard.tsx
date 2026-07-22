@@ -245,6 +245,9 @@ export function TimetableCard({
               .join(", ")}
           </p>
         ) : null}
+        <p className={styles.mobileTimetableScrollHint}>
+          옆으로 밀어서 다른 요일도 보세요
+        </p>
         <div className={styles.weeklyViewport}>
           <div className={styles.weeklyTimetable} ref={gridRef}>
             <div className={styles.weekHeader}>
@@ -302,8 +305,10 @@ export function TimetableCard({
                             type="button"
                           >
                             <strong>{course.title}</strong>
-                            {course.professor ? <small>{course.professor}</small> : null}
-                            <small>{formatMinutes(meeting.startMinutes)}-{formatMinutes(meeting.endMinutes)}</small>
+                            {course.professor ? <small className={styles.courseProfessor}>{course.professor}</small> : null}
+                            <small className={styles.courseTime}>
+                              {formatMinutes(meeting.startMinutes)}-{formatMinutes(meeting.endMinutes)}
+                            </small>
                           </button>
                         );
                       })}

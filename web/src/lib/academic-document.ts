@@ -1103,9 +1103,9 @@ function normalizeRequirement(
   const rawValues = normalizeRawValues(value.rawValues);
   const scope = normalizeRequirementScope(value.scope, label, normalizationReasons);
   const rule = normalizeRequirementRule(value.rule, rawValues, normalizationReasons);
-  const earnedCredits = normalizeNullableCredit(
-    value.earnedCredits,
-    "취득학점",
+  const earnedCredits = reconcileEarnedCreditsWithRawValue(
+    normalizeNullableCredit(value.earnedCredits, "취득학점", normalizationReasons),
+    rawValues["취득학점"],
     normalizationReasons,
   );
   const inProgressCredits = normalizeInProgressCredits(value.inProgressCredits);
@@ -1158,6 +1158,33 @@ function normalizeRequirement(
     sourceDocumentId,
     reviewReasons,
   };
+}
+
+/**
+ * Solar's structured JSON fills 취득학점 twice per row — once as the interpreted `earnedCredits`
+ * number, once as a verbatim text echo in `rawValues.취득학점` — and nothing cross-checks them
+ * against each other for rows the deterministic table parser never matched (see
+ * supplementGraduationRequirementsFromMarkdown: only table-matched rows get their earnedCredits
+ * re-derived from a raw cell; unmatched rows fall straight through with whatever Solar put in the
+ * number field). Live-observed case (2026-07-23): a row displayed 취득학점 36 while its own "원본
+ * 셀 값" echoed 9 — Solar's interpreted field diverged from the text it had just copied. The raw
+ * echo only requires copying, not interpreting, so when it parses cleanly and disagrees with the
+ * structured number, prefer the raw-parsed value and leave a visible trail rather than silently
+ * trusting whichever field happened to be asked for first.
+ */
+function reconcileEarnedCreditsWithRawValue(
+  earnedCredits: number | null,
+  rawEarnedCredits: string | undefined,
+  reviewReasons: string[],
+): number | null {
+  const rawParsed = readCoercibleNonNegativeNumber(rawEarnedCredits);
+  if (rawParsed === null || rawParsed === earnedCredits) {
+    return earnedCredits;
+  }
+  reviewReasons.push(
+    `취득학점 값이 원문("${rawEarnedCredits}")과 달라 원문 기준(${rawParsed}학점)으로 바로잡았습니다.`,
+  );
+  return rawParsed;
 }
 
 function normalizeRequirementScope(

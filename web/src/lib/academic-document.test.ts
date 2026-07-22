@@ -381,6 +381,41 @@ ${JSON.stringify({
     });
   });
 
+  it("prefers the raw 취득학점 text echo over Solar's structured earnedCredits when they disagree", () => {
+    // Live-observed 2026-07-23: Solar reported earnedCredits 36 while its own rawValues.취득학점
+    // echoed "9" for the same row — the interpreted number diverged from the text it had just
+    // copied. 45 - 36 - 0 = 0 still "looks" arithmetically consistent, which is why this needed a
+    // cross-check against the raw echo rather than trusting whichever number sounded plausible.
+    const profile = parseAcademicExtraction(
+      JSON.stringify({
+        completedCourses: [],
+        requirements: [
+          {
+            scope: "primary_major",
+            label: "제1전공 코어학점",
+            rule: { kind: "credit_minimum", credits: 45 },
+            earnedCredits: 36,
+            remainingCredits: 0,
+            status: "satisfied",
+            rawValues: { 기준학점: "45", 취득학점: "9", 잔여학점: "9" },
+            reviewReasons: [],
+          },
+        ],
+        reviewIssues: [],
+      }),
+      "graduation_requirements",
+      "source-earned-credits-mismatch",
+    );
+
+    expect(profile.requirements[0]).toMatchObject({
+      earnedCredits: 9,
+      remainingCredits: 36,
+    });
+    expect(profile.requirements[0]?.reviewReasons).toEqual(
+      expect.arrayContaining([expect.stringContaining('원문("9")과 달라')]),
+    );
+  });
+
   it("recomputes remaining credits from code instead of trusting Solar's own arithmetic, and flags a mismatch", () => {
     const profile = parseAcademicExtraction(
       JSON.stringify({

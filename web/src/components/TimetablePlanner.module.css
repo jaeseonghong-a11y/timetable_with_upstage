@@ -1148,6 +1148,10 @@
   overflow-x: auto;
 }
 
+.mobileTimetableScrollHint {
+  display: none;
+}
+
 .weeklyTimetable {
   min-width: 620px;
   border: 1px solid var(--border-subtle);
@@ -1806,4 +1810,55 @@
     padding: 22px;
   }
 
+}
+
+/* Keep the weekly grid horizontally scrollable on phones: five readable day columns are more
+   useful than shrinking course labels below a tappable size. The snap area is each real day
+   column; scroll padding preserves the compact time axis while moving day-by-day. */
+@media (max-width: 480px) {
+  .mobileTimetableScrollHint {
+    display: block;
+    margin: 0 14px -6px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.4;
+  }
+
+  .weeklyViewport {
+    padding: 12px 14px 14px;
+    scroll-padding-left: 40px;
+    scroll-snap-type: x mandatory;
+  }
+
+  .weeklyTimetable {
+    min-width: 560px;
+  }
+
+  .weekHeader {
+    grid-template-columns: 40px repeat(5, minmax(104px, 1fr));
+  }
+
+  .dayColumns {
+    inset: 0 0 0 40px;
+    grid-template-columns: repeat(5, minmax(104px, 1fr));
+  }
+
+  .dayColumn {
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+
+  .timetableCard .courseBlock {
+    min-height: 44px;
+  }
+
+  .timetableCard .courseBlock strong,
+  .timetableCard .courseBlock .courseTime {
+    font-size: 11px;
+  }
+
+  .timetableCard .courseBlock .courseProfessor {
+    display: none;
+  }
 }

@@ -321,6 +321,31 @@ export function AcademicDocumentManager({
     }
   }
 
+  // 문서를 분석하지 않고도 졸업요건을 직접 입력할 수 있게 하는 진입점 — analyzeDocument()가
+  // 만드는 것과 똑같은 모양의 빈 초안을 만들어 준다. 이 초안이 일단 profiles[kind]에 들어가면,
+  // 이후 흐름(요건 카드 추가/편집/확정, 확정된 값이 STEP5 AI 추천에 반영되는 것)은
+  // AcademicRequirementEditor의 기존 "+ 요건 수동 추가" 버튼과 confirmProfile을 그대로
+  // 탄다 — 문서에서 왔는지 직접 입력했는지 이후 코드는 구분하지 않는다. sourceDocuments에
+  // id가 있어야 addRequirement()가 새 행을 만들 수 있어서(비어 있으면 조용히 무시됨) 빈
+  // 배열이 아니라 draft 상태의 항목 하나를 반드시 넣는다. 업로드가 없으니 Upstage로 아무것도
+  // 보내지 않고, 따라서 개인정보 수집 동의 체크와도 무관하다.
+  function startManualEntry(): void {
+    const manualProfile: AcademicProfile = {
+      schemaVersion: "1.0",
+      profile: { departmentCode: null, majorCodes: [], admissionYear: null, currentGrade: null, primaryCampus: null },
+      sourceDocuments: [{ id: crypto.randomUUID(), kind, status: "draft" }],
+      completedCourses: [],
+      requirements: [],
+      reviewIssues: [],
+    };
+    setError("");
+    setProfiles((current) => ({ ...current, [kind]: manualProfile }));
+    onWorkingProfileChange?.(kind, manualProfile);
+    onConfirmedProfileChange?.(kind, undefined);
+    setAcknowledgements((current) => ({ ...current, [kind]: [] }));
+    setCollapsedResults((current) => ({ ...current, [kind]: false }));
+  }
+
   function updateProfile(nextProfile: AcademicProfile): void {
     const draftProfile = markAcademicProfileDraft(nextProfile);
     setProfiles((current) => ({ ...current, [kind]: draftProfile }));
@@ -579,6 +604,11 @@ export function AcademicDocumentManager({
           {isAnalyzing ? "Parse + Solar 분석 중…" : profile ? "다시 분석하기" : "문서 분석하기"}
         </button>
       </div>
+      {kind === "graduation_requirements" && !profile ? (
+        <button className={styles.manualEntryButton} type="button" onClick={startManualEntry}>
+          서류 없이 직접 입력하기
+        </button>
+      ) : null}
       {isAnalyzing ? (
         <div className={styles.analysisProgress} role="status" aria-live="polite">
           <div className={styles.analysisProgressBar} />

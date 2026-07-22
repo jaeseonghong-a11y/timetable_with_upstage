@@ -310,6 +310,20 @@
   gap: 8px;
 }
 
+.manualEntryButton {
+  align-self: flex-start;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px dashed var(--border-subtle);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .resultToggleButton {
   min-height: 34px;
   padding: 6px 10px;

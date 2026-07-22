@@ -294,3 +294,29 @@
     font-size: 11px;
   }
 }
+
+@media (max-width: 480px) {
+  .progress {
+    padding: 18px 12px;
+  }
+
+  .stepList::before,
+  .stepList::after {
+    top: 16px;
+  }
+
+  .stepList > li > button {
+    gap: 8px;
+    padding: 0 2px;
+  }
+
+  .stepIndex {
+    min-width: 34px;
+    height: 34px;
+    font-size: 11px;
+  }
+
+  .stepLabel {
+    font-size: 10px;
+  }
+}
