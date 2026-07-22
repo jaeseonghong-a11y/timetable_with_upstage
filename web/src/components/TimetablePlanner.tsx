@@ -2116,9 +2116,6 @@ export function TimetablePlanner({
             ) : (
               <>
             <h3>AI 추천 조건</h3>
-            <p className={styles.recommendationHint}>
-              졸업요건을 아직 충족하지 못한 교양 영역을 우선으로 추천해드립니다.
-            </p>
 
             <div className={styles.recommendationWeights}>
               {recommendationWeights.map((weight) => (
