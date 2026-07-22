@@ -69,15 +69,8 @@ export function requestEverytimeReview(
   return dispatchConnectorRequest("open-review", { course }, onStatus);
 }
 
-export function requestEverytimeReviewBatch(
-  courses: readonly EverytimeReviewCourse[],
-  onStatus?: (response: EverytimeReviewResponse) => void,
-): boolean {
-  return dispatchConnectorRequest("resolve-review-batch", { courses }, onStatus);
-}
-
 function dispatchConnectorRequest(
-  type: "open-review" | "resolve-review-batch",
+  type: "open-review",
   payload: Record<string, unknown>,
   onStatus?: (response: EverytimeReviewResponse) => void,
 ): boolean {
