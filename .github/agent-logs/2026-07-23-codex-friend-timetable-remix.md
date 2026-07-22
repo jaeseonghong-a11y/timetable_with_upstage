@@ -27,9 +27,10 @@
 - No new API route, no server persistence, no server-side timetable fetch, and no modification to
   recommendation scoring, `ai-filler-selection.ts`, `selection-plan.ts`, or the timetable
   recommendation API route.
-- No commit, push, or deployment command was run by this session. During parallel worktree sync,
-  the core feature appeared as commit `56ac4ac`; this log and `CURRENT_STATE.md` remain
-  uncommitted.
+- During parallel worktree sync, the core feature appeared as commit `56ac4ac`. This session
+  committed the handoff record as `1c31f3b`, pushed `main`, and deployed Vercel production:
+  `dpl_4K6NCL59FraVbsXh7YtrmyoTUKo8` (`Ready`, primary alias
+  `https://timetable-with-upstage.vercel.app`, HTTP 200 verified).
 - The remix does not claim to be an AI recommendation; it is a local, deterministic, playful
   variation based on two already shared timetables.
 
