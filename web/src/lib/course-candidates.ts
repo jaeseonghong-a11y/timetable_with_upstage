@@ -83,6 +83,8 @@ export function courseGroupsFromCollection(collection: unknown): CourseCandidate
       id: course.course_id,
       title: formatCandidateTitle(course),
       schedule: course.schedule,
+      ...(course.course_number ? { courseNumber: course.course_number } : {}),
+      ...(course.name ? { courseName: course.name } : {}),
       credits: course.credits,
       ...(course.section ? { section: course.section } : {}),
       ...(course.professor ? { professor: course.professor } : {}),

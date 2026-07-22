@@ -8,7 +8,7 @@
 
 ---
 
-## 📌 지금 상태 (마지막 갱신: 2026-07-14 / 갱신한 도구: Claude Code)
+## 📌 지금 상태 (마지막 갱신: 2026-07-22 / 갱신한 도구: Codex)
 
 ### 프로젝트 한 줄
 성균관대 시간표 조합 추천 서비스. Upstage Document Builders Challenge 출품작 (데모데이 2026-07-25).
@@ -2870,32 +2870,373 @@ curl -o /dev/null -w "%{http_code}" https://timetable-with-upstage.vercel.app/  
   AI 필러 후보 수 축소 보류, `docs/09` 데모 대본을 사람이 마무리해야 함(데모데이 2026-07-25
   임박), 시작 가이드 7단계·`/friends` 버튼 등 이전 세션 UI 변경분도 브라우저 미검증.
 
+## ⏸️ 2026-07-21(1) Claude Code — 학수번호 검증 재발 근본 수정(단일 소스 통합), 시간표 공유 안내문 반복 개선, 개인정보 수집·이용 동의 UI 정리
+
+### 이번에 한 일
+
+**1. 학수번호 검증 버그 — 두 번째 재발, 이번엔 구조적으로 재발 불가능하게 수정**
+- 사용자가 "16번째 학수번호 고치라고 뜨는데 과목 16 가보니 이미 정상"이라고 재신고 —
+  지난 체크포인트(2026-07-20(8))에서 EXGLV 2자리 코드 지원을 `academic-document.ts`에만
+  넓히고 `academic-profile-client.ts`(확정 시점 클라이언트 검증)의 복사본은 안 고쳐서
+  발생했던 것과 같은 유형의 재발.
+- 1차 수정(커밋 `0d363b0`): `academic-profile-client.ts`의 `COURSE_CODE_PATTERN`을
+  `{2,4}`로 맞춤 + `REQUIREMENT_SCOPES`에 빠져있던 `secondary_major` 추가 + 검증 오류
+  메시지의 "N번째 과목"이 원본 배열 순서를 쓰고 있어 화면에 보이는 카드 번호(그룹/정렬
+  순서)와 어긋나던 버그를 `course-history-grouping.ts`의 새 `getCourseDisplayNumbers`
+  헬퍼로 통일. 검토 카드 제목(`.cardIdentity > span`)의 ellipsis가 매우 긴 영문 과목명에서
+  카드 폭을 밀어낼 수 있던 것도 `min-width:0`/`flex-shrink:0` 명시로 방어.
+- 사용자가 같은 증상으로 재신고하자, 대증 패치 대신 재발 자체가 구조적으로 불가능하도록
+  2차 수정(커밋 `8146ea2`):
+  - `COURSE_CODE_PATTERN`을 `academic-profile.ts`(양쪽이 이미 import하고 있던 types 파일)
+    하나로 통합, `academic-document.ts`/`academic-profile-client.ts`의 복사본 제거 — "한쪽만
+    고치고 다른 쪽을 깜빡하는" 구조 자체를 없앰.
+  - `normalizeCourseCodeForMatch` 신규: 표준 `.trim()`으로는 안 지워지는 제로폭 문자
+    (U+200B/200C/200D, BOM U+FEFF)를 학수번호에서 제거 — Document Parse/Solar 원문에
+    이런 문자가 남으면 화면엔 멀쩡해 보여도 정규식 검사에 계속 걸릴 수 있음. 서버 파싱
+    (`normalizeCompletedCourse`)에서도 이 정규화를 적용해 저장 시점부터 걸러냄.
+  - 검증 오류 메시지가 번호에만 의존하지 않도록 과목명(없으면 학수번호)을 같이 표시
+    (`"16번째 과목 "OOO"의 학수번호를 확인해 주세요."`) — 번호 매기기 로직이 앞으로 또
+    어긋나도 검토 화면 검색창에 과목명을 붙여넣어 바로 찾을 수 있음.
+- 테스트: `academic-profile-client.test.ts`에 EXGLV 수용/제로폭 공백 수용/식별자 포함
+  메시지 검증 추가, `academic-document.test.ts`에 Solar JSON 경로에서 제로폭 공백이 섞인
+  학수번호를 정규화해 받아들이는 테스트 추가(둘 다 `String.fromCharCode`로 코드 포인트에서
+  문자를 만들어 테스트 파일 자체에 리터럴 invisible 문자가 들어가지 않게 함).
+
+**2. 시간표 공유 안내문 — 사용자 피드백 2라운드로 반복 개선**
+- 배경: "친구에게 공유"(URL 스냅샷, 매번 새 링크)와 "친구에게 서버로 공유"(코드, 재사용
+  가능)가 있는데 사용자가 후자를 몰라서 매번 새 코드를 보내고 있었음 — 이미 구현돼 있던
+  기능을 못 찾은 것으로 확인. 버튼 라벨을 "코드로 공유(계속 최신 유지)"/"1회용 링크로
+  공유"로 명확히 하고, 서버 공유를 먼저 배치.
+- 1차 안내문("이 링크는 나중에 안 바뀌니...")에 대해 사용자가 "뭐가 안 바뀌는지 애매하다"고
+  재피드백 → 2차로 "링크는 시간표 고정" / "코드는 자동 최신화" 구도로 재작성(커밋
+  `2bace1a`) — 무엇이 고정되고 왜 문제인지, 어떻게 최신을 유지하는지를 각각 한 문장씩
+  명시.
+
+**3. 개인정보 수집 및 이용 동의 UI 정리**
+- 학사문서 업로드 화면의 동의 체크박스("파일을 외부 API로 전송하는 데 동의합니다")를
+  개인정보보호위원회 가이드의 4대 필수 고지사항(수집·이용 목적/수집 항목/보유 및 이용
+  기간/동의 거부 권리 및 불이익) 구조로 재작성, 제목을 "[개인정보 수집 및 이용 동의]"로
+  명시(커밋 `d641af7`).
+- 체크하면 4개 항목 상세가 자동으로 접히고 한 줄 요약으로 바뀜("간략히 보기"), "자세히
+  보기" 버튼으로 언제든 재확장 가능.
+- 사용자가 참고할 스크린샷을 실제로는 첨부하지 않아, 코드베이스 전체에서 "개인정보"
+  관련 UI를 찾아 이 컴포넌트 하나뿐임을 확인한 뒤 진행 — 응답에 "다른 화면이면 알려달라"고
+  명시해 대상 오인 리스크를 사용자에게 투명하게 알림.
+- Upstage 쪽 보관 기간은 실제로 확인한 바가 없어 "Upstage의 개인정보처리방침을 따름"까지만
+  적었고 구체적 기간을 추측해서 쓰지 않았다(이 프로젝트의 실측 우선 원칙).
+
+### 문제 상황 → 해결 과정 (요약)
+학수번호 검증 버그가 "고쳤다"고 보고한 지 한 턴 만에 같은 증상으로 재발했다. 원인은 똑같이
+"검증 규칙이 두 파일에 복사돼 있어 한쪽만 고침" 패턴 — 1차 수정 때도 이걸 몰랐던 게 아니라
+고쳤는데, 이후 다른 이유로 또 어긋날 여지가 여전히 있었다(번호 매기기 의존). 사용자가
+"이번엔 완벽히 고쳐봐. 다른 방식으로 고쳐보던가"라고 명시적으로 요구해서, 증상만 patch하는
+대신 (a) 중복 정의를 완전히 제거해 구조적으로 재발 불가능하게 만들고 (b) 오류 메시지가
+번호라는 단일 실패점에 의존하지 않도록 과목명을 같이 보여주는 이중 방어로 바꿨다. 정규식에
+zero-width 문자를 넣는 테스트/소스 코드를 작성하다가 두 번이나 실수로 리터럴 invisible
+유니코드 문자를 그대로 타이핑해 파일에 심을 뻔했다 — `node -e`로 코드포인트 스캔해서
+확인 후 `String.fromCharCode`/코드포인트 배열 방식으로 다시 작성해 소스에 리터럴 invisible
+문자가 전혀 없음을 검증했다.
+
+배포 과정에서 별도로, `web/.vercel/project.json`이 실제 서비스 도메인(`timetable-with-upstage`)이
+아닌 별개 프로젝트("web")로 잘못 링크돼 있던 걸 발견 — 예전 세션에서 `web/` 안에서
+`vercel deploy`를 실행해 생긴 것으로 추정. 삭제 완료. **배포는 반드시 저장소 루트에서
+`npx vercel deploy --prod --yes`로 해야 한다** (루트의 `.vercel/project.json`만
+`timetable-with-upstage`를 가리킴).
+
+### 변경한 파일 목록
+- `web/src/lib/academic-profile.ts` — `COURSE_CODE_PATTERN`/`normalizeCourseCodeForMatch`
+  신규(단일 소스), `RequirementScope`에 `secondary_major`(이전 세션에서 이미 추가됨, 유지)
+- `web/src/lib/academic-profile-client.ts` — 로컬 `COURSE_CODE_PATTERN` 제거하고 공유
+  import로 교체, `getAcademicProfileValidationErrors`가 `getCourseDisplayNumbers` +
+  과목명 기반 식별자 사용하도록 재작성
+- `web/src/lib/academic-document.ts` — 로컬 `COURSE_CODE_PATTERN` 제거, `COURSE_CODE_SCAN_PATTERN`은
+  유지(다른 용도라 공유 불필요), `normalizeCompletedCourse`가 `normalizeCourseCodeForMatch` 사용
+- `web/src/lib/course-history-grouping.ts` — `getCourseDisplayNumbers` 신규 export
+- `web/src/lib/academic-profile-client.test.ts`, `web/src/lib/academic-document.test.ts`,
+  `web/src/lib/course-history-grouping.test.ts` — 관련 테스트 추가/갱신
+- `web/src/components/AcademicCourseEditor.tsx` — 카드 번호 계산을
+  `getCourseDisplayNumbers`로 교체(중복 로직 제거)
+- `web/src/components/AcademicDocumentManager.module.css` — `.cardIdentity` 방어,
+  `.privacyNotice*` 신규 클래스 다수
+- `web/src/components/AcademicDocumentManager.tsx` — 개인정보 동의 UI 재작성
+  (`isPrivacyNoticeExpanded` 상태 추가)
+- `web/src/components/TimetableCard.tsx` — 공유 버튼 라벨/순서/안내문 2회 수정
+- `web/src/app/friends/page.tsx` — 버튼 이름 참조 동기화
+- `web/.vercel/` — 삭제(잘못 링크된 프로젝트)
+
+### 실행한 명령어
+- `cd web && npm run lint && npm run typecheck && npm run test && npm run build` — 매
+  수정 후 반복 실행, 전부 통과(최종 226개 테스트).
+- `node -e '...'` — 소스/테스트 파일에 리터럴 invisible 유니코드 문자가 실수로 섞였는지
+  코드포인트 스캔으로 확인(있었음 → 재작성 → 재확인 0건).
+- `git add <파일> && git commit -m "..."` (4회) → `git push origin main` (4회) →
+  저장소 **루트**에서 `npx vercel deploy --prod --yes` (4회) → `npx vercel alias ls`로
+  `timetable-with-upstage.vercel.app`이 매번 최신 배포를 가리키는지 확인.
+- `rm -rf web/.vercel` — 잘못 링크된 프로젝트 제거.
+
+### ⚠️ 남은 문제 / 막힌 곳
+- 학수번호 검증 재발이 이번 구조 변경으로 완전히 끝났는지 **사용자의 실사용 확인 대기 중**.
+  또 재발하면(과목명이 오류 메시지에 뜨므로 이번엔 검색으로 바로 찾을 수 있을 것) 실제
+  데이터를 debug 훅으로 캡처해서 봐야 한다 — 계속 추측하지 말 것.
+- 개인정보 동의 UI 수정은 사용자가 참고 이미지를 실제로 첨부하지 않은 상태에서 "코드베이스에
+  이것 하나뿐"이라는 추론으로 진행했다 — 다른 화면(예: 회원가입, 다른 데이터 수집 지점)을
+  의도했을 가능성이 있으니 다음 세션에서 맞았는지 확인 필요.
+- 개인정보 동의 문구 중 "Upstage의 개인정보처리방침을 따름"이라고만 적은 부분은 Upstage
+  약관을 실제로 확인해서 더 구체화할 수 있으면 좋다(현재는 확인된 바 없어 추측하지 않음).
+- 나머지 미해결 항목은 이전 체크포인트와 동일(진전 없음): 복수전공 학사문서 분석 브라우저
+  실사용 최종 확인 여부, GA4 속성/스트림 ID·맞춤 정의 등록 상태, 사용자가 윤서 조원에게 GA4
+  ID 변경을 전달했는지, `GEMINI_API_KEY` Vercel 삭제(하네스 차단, 사용자가 직접 해야 함),
+  규나 조원 새 브랜치 여부, GitHub PR #1 상태, 정현 조원 `YJH-1023/h` 연결 안 됨, AI 필러
+  후보 수 축소 보류, `docs/09` 데모 대본 사람 마무리 필요(데모데이 2026-07-25 임박), UI
+  변경분 전반의 브라우저 직접 검증 미실시.
+
+## ⏸️ 2026-07-22(1) Claude Code — 데모데이 제출 요건 확정, 필드 사용처 전수조사(코드 변경 없음)
+
+### 이번에 한 일
+이번 세션은 **코드를 전혀 건드리지 않은 조사/문서화 세션**이다. 사용자가 명시적으로 요청한
+것은 (a) 데모데이 발표 형식 공지 저장, (b) 디자인 리뉴얼 워크플로우 가능 여부 질의응답,
+(c)(d) 학사문서 파싱 필드가 실제로 어디에 쓰이는지 전수조사였다.
+
+**1. 데모데이 제출 요건 메모리 저장**
+대학혁신과공유센터(이다지) 공지: 제출 마감 **2026-07-24(금) 18:00**(발표자료+Live
+URL+시연 영상, `builderwillow@gmail.com`·`dishonge@skku.edu` 양쪽 이메일), 발표 당일
+**2026-07-25(토) 12:00-18:00**(삼성학술정보관 48B108), 발표는 시연 영상 포함 7분 이내
++ Q&A 5분. 프로젝트 메모리(`demoday_submission_requirements.md`)에 저장해 향후 세션에서
+누락 방지.
+
+**2. 디자인 리뉴얼 워크플로우 질의응답**
+사용자가 "클로드디자인으로 시안을 만들어서 주면, 기존 기능은 그대로 두고 배치/문구/색감만
+교체할 수 있는지" 질문. 현재 앱이 Next.js + CSS Modules로 로직과 스타일이 파일 단위로
+분리돼 있어 가능하다고 답변(이미지/Figma/HTML 시안을 주면 CSS·문구만 교체, 레이아웃
+구조 자체가 크게 바뀌면 JSX도 손대야 함을 설명). 아직 시안이 전달되지 않아 실제 작업은
+시작 안 함 — **다음 세션에서 이어질 가능성이 높은 요청.**
+
+**3. 학사문서 파싱 필드 전수 사용처 조사** (Explore 서브에이전트 2회 실행)
+사용자가 "수강/취득과목에서 뽑히는 9개 필드(과목명/학수번호/학점/이수년도/학기/전공범위/
+이수구분/영역/이수상태) 중 안 쓰이는 게 있는지", 이어서 "졸업요건충족현황 필드도"
+질문. 코드를 직접 추적해 다음을 확인(추측 없이 file:line 근거로 답변):
+- **`CompletedCourse`(수강/취득과목)**: 실제 추천 로직에 쓰이는 건 `courseCode`+
+  `completionStatus`(+`recommendationPolicy`)뿐 —
+  `planning-profile.ts:85-93`의 `getExcludedCourseNumbers()`가 "이미 이수한 과목 제외"에만
+  사용. 나머지 6개(`courseName`/`majorScope`/`classification`/`year`/`term`/`area`/
+  `credits`)는 검토 화면 표시·그룹핑·편집용일 뿐 계산에 안 들어감. **중요 발견**:
+  `Requirement.earnedCredits`는 `CompletedCourse`를 합산해서 계산하는 게 아니라 문서가
+  추출한 값을 그대로 신뢰함 — 수강내역과 졸업요건을 코드로 매칭하는 로직 자체가 없음.
+- **`Requirement`(졸업요건충족현황)**: 이쪽은 실제로 추천에 영향을 준다. `scope`+
+  `label`+`status`가 `TimetablePlanner.tsx:656-661` → `ai-filler-selection.ts`의
+  `selectAiFillerSubjects`로 이어져 미충족 교양영역을 우선 추천(또는 충족 시 제외)한다.
+  `credit_minimum` 규칙은 서버가 `earnedCredits`+`inProgressCredits.total`로
+  `remainingCredits`/`status`를 직접 재계산(문서 추출값 불신, `academic-document.ts:
+  1290-1364`)하지만, `distribution_minimum`/`completion`/`manual` 규칙은 문서 추출값을
+  그대로 신뢰. `isDistributionMinimumSatisfied`(`academic-profile.ts:70`)는 **프로덕션
+  어디서도 호출 안 되는 죽은 코드**(테스트에서만 사용). `rawValues`는 write-only(감사용,
+  재사용 안 됨). `profile.departmentCode`/`majorCodes`/`admissionYear`/`currentGrade`/
+  `primaryCampus`는 두 문서 어느 쪽 파싱에서도 채워지지 않고 항상 `null`/`[]` —
+  실제 값은 전부 별도 수동 입력 폼(`StudentPlanningProfile`)에서만 온다.
+
+### 문제 상황 → 해결 과정
+버그 수정이 아니라 순수 조사였다. 조사 방법 자체가 재사용 가능한 패턴이라 기록: 필드
+하나하나에 대해 "정의 → grep으로 모든 사용처 → 계산에 실제로 읽히는지 vs 표시/그룹핑에만
+쓰이는지"를 Explore 서브에이전트로 검증하게 해서, 추측 없이 file:line 근거로만 답했다.
+
+### 변경한 파일 목록
+- (코드 변경 없음 — 이번 세션은 조사/질의응답만 진행)
+- `C:\Users\jaese\.claude\projects\...\memory\demoday_submission_requirements.md` — 신규
+  (프로젝트 메모리, 저장소 밖)
+- `C:\Users\jaese\.claude\projects\...\memory\MEMORY.md` — 위 메모리 인덱스 항목 추가
+
+### 실행한 명령어
+- `git status --short`, `git log --oneline -6` — 상태 확인용(수정 없음 확인)
+- Grep/Read로 `academic-profile.ts`의 `CompletedCourse`/`Requirement` 타입 정의 확인
+- Explore 서브에이전트 2회(`CompletedCourse` 필드 추적, `Requirement` 필드 추적) —
+  `planning-profile.ts`/`TimetablePlanner.tsx`/`ai-filler-selection.ts`/
+  `academic-document.ts`/`AcademicRequirementEditor.tsx`/`AcademicCourseEditor.tsx`/
+  `course-history-grouping.ts` 전수 grep
+
+### ⚠️ 남은 문제 / 막힌 곳
+- 사용자가 예고한 "클로드디자인 시안" 파일/링크가 아직 전달되지 않았다 — 다음 세션에서
+  시안을 받으면 기존 기능(로직) 보존 + 스타일/문구/색감만 교체하는 작업으로 이어질 가능성이
+  높다. 시안 형식(이미지 vs Figma 링크 vs HTML)에 따라 접근이 달라짐.
+- 이번 조사로 드러난 사실 하나가 `plans/ai-jiggly-reef.md`(복수전공 학사문서 분석 오류
+  수정, 미착수)의 우선순위 판단에 영향을 줄 수 있다: `majorScope`/`classification`이
+  계산에 안 쓰이고 **검토 화면 표시 정확성에만 쓰인다**는 게 이번에 확인됐으므로, 그 플랜의
+  목적은 "요건 자동 계산 정확도"가 아니라 "사용자가 검토 화면에서 스스로 판단할 수 있게
+  정확한 정보를 보여주는 것"임을 분명히 하고 착수해야 한다.
+- 나머지 미해결 항목은 이전 체크포인트와 동일(진전 없음, 07-21(1) 이후 변화 없음): 학수번호
+  검증 재발 여부 사용자 확인 대기, 개인정보 동의 UI가 의도한 화면이 맞는지 확인 대기,
+  Upstage 데이터 보유기간 문구 구체화, 복수전공 분석·공유 버튼·개인정보 동의 UI 등 이번
+  세션들의 브라우저 직접 검증 미실시, GA4 속성/스트림 ID·맞춤 정의 등록 상태, 윤서 조원에게
+  GA4 ID 변경 전달 여부, `GEMINI_API_KEY` Vercel 삭제(하네스 차단, 사용자가 직접 해야 함),
+  규나 조원 새 브랜치 여부, GitHub PR #1 상태, 정현 조원 `YJH-1023/h` 연결 안 됨, AI 필러
+  후보 수 축소 보류, `docs/09` 데모 대본 마무리 필요(데모데이 2026-07-25, D-3).
+
+## ⏸️ 2026-07-22(2) Codex — 최신 상태 재확인, 모델 오류 진단, 로컬 브라우저 검증
+
+### 이번에 한 일
+
+- 사용자의 지시대로 `AGENTS.md`, `CURRENT_STATE.md`, `docs/08_데모데이_평가항목_루브릭.md`,
+  `docs/00_프로젝트_현황_요약.md`, `docs/05_미해결_과제.md`와 현재 git diff를 먼저 읽었다.
+- 사용자가 다시 요청한 강의형식 필터, 동적 공강 필터, 학사문서 카드 압축·업로드 안내,
+  필수/선택 체크 상태 분리, 조합 버전·추가과목·총학점 표시, 기본 최대 21학점은 이후 세션에서
+  이미 구현·테스트·커밋·Vercel 배포된 상태임을 확인했다. 같은 기능을 중복 수정하지 않았다.
+- `gpt-5.6-sol` 미지원 오류를 공식 Codex 매뉴얼과 로컬 설정으로 진단했다. 잔여 토큰 문제가
+  아니라 로그인 방식·워크스페이스 권한·클라이언트에서 실제 제공되는 모델과 원시 모델 지정이
+  맞지 않을 때 나는 가용성 오류다. 현재 `~/.codex/config.toml`은 `gpt-5.6-terra`, high로
+  설정돼 있고 이 세션은 정상 실행됐다. 로컬 Codex CLI는 `0.145.0-alpha.27`이다.
+- 최신 코드를 변경하지 않은 상태에서 web 전체 품질 게이트를 다시 실행했다.
+- Next production 서버를 `localhost:3001`에 띄우고 Chrome CDP로 실제 렌더링과 단계 이동을
+  확인했다. 기본정보는 경영학과(316901), 2022년 입학, 3학년, 인문사회과학캠퍼스,
+  2026년 2학기로 입력해 공개 강좌 조회까지 진행했다.
+
+### 브라우저에서 확인한 것
+
+- 홈페이지 HTTP 200, 한국어 문서, 제목·시작 가이드·기본정보·시간표 진입 UI 정상.
+- 2-1 수강/취득과목 단계에서 `[개인정보 수집 및 이용 동의]`와 `수강/취득 과목 출력`까지의
+  파일 확보 경로 안내가 표시됨.
+- 2-2 졸업요건 단계에서 `영역별 학점취득/수강현황` 스크린샷·붙여넣기 안내가 표시됨.
+- 과목 담기 화면에서 강의형식 필터가 렌더링되고 `수업 방식 미정`, `오프라인`,
+  `온라인[사전제작]`, `온라인[사전제작]+오프라인`, `플립러닝`, `PBL`이 모두 기본 체크됨.
+- 원하는 학점 범위가 실제 입력값 기준 최소 12, 최대 21로 표시됨.
+- 필수/선택 상태 분리는 `TimetablePlanner.tsx`가 활성 목적지에 배정된 과목만 체크하도록
+  `isAssignedToActiveDestination`을 사용하고, 다른 그룹에 있는 과목은 `눌러서 옮기기`로
+  표시하는 현재 구현을 재확인했다.
+- 동적 결과 필터는 실제 생성 결과에서 가능한 공강 요일만 `dayOffOptions`로 만들며 기본
+  `dayOffFilters=[]`, 조합 카드는 `TimetableCard`에서 버전·추가 과목·영역·총학점을 표시한다.
+
+### 실행한 명령어 / 검증 결과
+
+- `npm run lint` — 통과.
+- `npm run typecheck` — 통과.
+- `npm run test` — 27개 테스트 파일, 226개 테스트 통과.
+- `npm run build` — Next.js production build 및 14개 라우트 생성 통과.
+- `npm run start -- -p 3001` — 로컬 production 서버 정상 기동 후 종료.
+- 일회성 Node/Chrome CDP 스크립트로 폼 입력·공개 강좌 조회·2-1/2-2·과목 담기 화면 확인.
+- 커밋, push, Vercel 재배포는 실행하지 않았다. 서비스 코드는 수정하지 않았다.
+
+### 남은 직접 확인
+
+- Chrome 자동화가 마지막 과목 선택 시점에 과목 목록 로딩을 안정적으로 기다리지 못해,
+  필수 과목 선택 → 선택 그룹 전환 → 결과 생성 → 공강 필터 체크 → 조합 카드 버전 확인의
+  연속 클릭은 이번 세션에 완주하지 못했다. 구현 코드와 자동 테스트·빌드는 정상이다.
+- 실제 사용자가 브라우저에서 학수번호 검증 재발 여부와 개인정보 동의 UI 대상 화면이 맞는지
+  확인하는 일은 여전히 필요하다.
+
+## ⏸️ 2026-07-22(3) Codex — 에타 강의평 Connector 확장프로그램 + 웹 버튼 구현 (미커밋·미배포)
+
+### 이번에 한 일
+
+- 사용자가 제시한 `GLS SugangMate` 확장프로그램의 공개 패키지를 **메타데이터·동작 경로만**
+  조사했다. 강의평 연결은 비공개 API가 아니라 에타 `lecture/search` 페이지에서
+  `lecture/view/{id}` 이동 URL을 과목명·교수명으로 골라 브라우저에 캐시하는 방식임을 확인했다.
+  강의평 본문·별점·댓글 코드는 읽거나 복사하지 않았다.
+- 새 `extension/` 폴더에 Manifest V3 Chromium(Chrome·Edge·Whale) 확장프로그램을 구현했다.
+  `timetable-with-upstage.vercel.app`, localhost 개발 주소, 에타 **강의평 검색 경로만** 권한으로
+  둔다. `api.everytime.kr` 권한·호출은 넣지 않았다.
+- `에타 강의평 보기` 동작:
+  1. 이미 이 브라우저에서 매핑한 `학수번호+교수명`이면 즉시 `lecture/view/{id}`를 새 탭으로 연다.
+  2. 처음이면 에타 과목명 검색을 열고, 과목명·교수명이 정확히 한 개로 일치할 때만 자동 이동하고
+     이동 URL만 `chrome.storage.local`에 저장한다.
+  3. 동명·동일 교수 결과가 여러 개면 강조 표시 후 사용자가 에타 화면에서 고르게 하고, 그 선택만
+     다음부터 재사용한다. 확장프로그램 미설치 시에는 기존처럼 에타 검색 결과만 연다.
+- 선택 과목은 **최대 12개**를 사용자가 한 번 눌러 순차 연결할 수 있게 했다. 이미 캐시된 항목은
+  즉시 건너뛰며, 자동 매칭된 배경 탭은 닫아 탭이 쌓이지 않게 했다.
+- `CourseCandidate`에 원본 `courseNumber`/`courseName`을 보존해, 화면 표시용 `· 41분반` 제목을
+  파싱해 추측하지 않고 정확한 학수번호·과목명·교수명을 확장프로그램으로 전달하게 했다.
+- 웹 UI는 전공/교양의 분반 상세, 담은 과목 확인, 생성된 시간표 카드에 강의평 버튼을 추가했다.
+  시간표 카드에서는 과목명별 버튼으로 구분해 보인다.
+- 데이터 안전선을 문서화했다: `AGENTS.md`, `docs/04_규칙과_지켜야할것.md`,
+  `docs/01_의사결정_로그.md` D-23에 "이동 URL 한 개만·사용자 선택 최대 12개·로컬 캐시·
+  서버/비공개 API/강의평 내용 금지" 예외 범위를 명시했다. `extension/README.md`와
+  `web/README.md`, `docs/PROJECT_STRUCTURE.md`에 설치·구조를 추가했다.
+
+### 변경한 파일 목록
+
+- 신규: `extension/manifest.json`, `extension/src/background.js`, `extension/src/site-bridge.js`,
+  `extension/src/review-match.js`, `extension/src/everytime-review-resolver.js`,
+  `extension/test/review-match.test.mjs`, `extension/package.json`, `extension/README.md`
+- 신규: `web/src/lib/everytime-review-bridge.ts`,
+  `web/src/lib/everytime-review-bridge.test.ts`, `web/src/components/EverytimeReviewButton.tsx`,
+  `web/src/components/EverytimeReviewButton.module.css`
+- 수정: `web/src/lib/timetable.ts`, `web/src/lib/course-candidates.ts`,
+  `web/src/lib/course-candidates.test.ts`, `web/src/components/TimetablePlanner.tsx`,
+  `web/src/components/TimetablePlanner.module.css`, `web/src/components/TimetableCard.tsx`,
+  `web/README.md`
+- 문서/규칙: `AGENTS.md`, `docs/01_의사결정_로그.md`, `docs/04_규칙과_지켜야할것.md`,
+  `docs/PROJECT_STRUCTURE.md`, `.github/agent-logs/2026-07-22-codex-everytime-connector.md`
+
+### 실행한 명령어 / 검증 결과
+
+- `extension`: `npm.cmd test` — 3개 매칭 규칙 테스트 통과.
+- `extension`: `node --check src/*.js`, `node -e "JSON.parse(manifest.json)"` — JavaScript 문법과
+  Manifest JSON 통과.
+- `web`: `npm.cmd run lint`, `npm.cmd run typecheck`, `npm.cmd run test`, `npm.cmd run build` —
+  전부 통과. 최종 Vitest는 **28개 파일, 229개 테스트** 통과.
+- PowerShell 실행 정책 때문에 `npm.ps1`이 막혀 `npm` 대신 `npm.cmd`를 사용했다. 이는 코드 오류가
+  아니다.
+- `npm.cmd run start -- -p 3001`로 production 서버를 잠시 기동한 뒤 종료했다.
+- 새 Chrome 프로필에 확장프로그램을 자동 로드하려 했으나 이 환경의 프로세스 실행 정책이
+  `Start-Process`를 차단했다. 따라서 브라우저 런타임에서의 실제 에타 로그인 매칭은 아직 미실측이다.
+- 커밋·push·Vercel 재배포는 실행하지 않았다.
+
+### 남은 문제 / 막힌 곳
+
+- **현재 Vercel 실서비스에는 이 UI가 아직 배포되지 않았다.** 사용자가 확인하려면 우선 변경분을
+  커밋·push·저장소 루트에서 Vercel production 배포해야 한다. 배포 전에 사용자의 최종 허가가 필요하다.
+- 확장프로그램은 개발자 모드에서 `extension/`을 압축해제 로드한 뒤, 에타에 로그인하고 웹앱을
+  새로고침해야 한다. 실제 과목으로 ① 단일 정확 매칭 ② 동명/복수 후보 수동 선택 후 재클릭
+  ③ 최대 12개 일괄 연결 ④ 미설치 폴백 검색을 확인해야 한다.
+- 에타의 DOM 구조·이용약관이 바뀌면 자동 매칭이 멈출 수 있다. 이 경우에는 `extension/src/
+  everytime-review-resolver.js`만 수정하고, 비공개 API나 리뷰 본문 수집으로 우회하지 않는다.
+- GLS 책가방 추가·에타 시간표 내보내기는 이번 구현 범위에 넣지 않았다. 인증 뒤 시스템을 자동
+  조작하거나 비공개 API를 쓰는 범위라, 별도 사용자의 명시 요청·정책 검토·실사용 검증 없이 추가하지 말 것.
+
 ## ▶️ Recommended Next Step (다음 도구가 이어서 할 일)
 
 1. 시작 즉시 `git status --short`와 `git log --oneline -6`을 읽는다. **최우선 확인 사항**:
-   a. **사용자에게 실서비스에서 복수전공 PDF 재확인 결과를 물어본다** — 이 세션에서 배포까지는
-      했지만 사용자 본인의 최종 확인은 못 받았다. 문제가 남아있다면 반드시 debug 훅
-      (`writeFileSync`로 markdown/profile 캡처, `app/api/parse-academic-document/route.ts`에
-      임시로 넣었다 진단 후 제거하는 패턴)으로 실제 데이터를 다시 확보해서 고칠 것 — 추측 금지.
-   b. **브라우저로 직접 열어서 클릭해본다** — `cd web && npm run dev` 후
-      `http://localhost:3000`. 이번 세션 변경분(STEP 3 박스 분리·줄바꿈, 복수전공 그룹 분리
-      화면)과 이전 세션 변경분(온보딩 가이드 7단계, `/friends` 버튼, 겹쳐보기)을 함께 확인.
-      여러 세션째 브라우저 직접 검증이 안 됐다.
-   c. `docs/09_데모데이_발표_준비.md`를 사용자와 함께 검토해 실제 발표 대본/슬라이드로
-      다듬는다 — 특히 §6 시연 스크립트 중 라이브 시연 vs 사전 녹화 구간을 정해야 한다.
-      데모데이(2026-07-25)가 임박했다.
-   d. 사용자에게 GA4 측정 ID 변경 사실을 윤서 조원에게 전달했는지 확인한다.
-   e. 규나 조원이 `uiux-redesign-6` 이상 새 브랜치를 또 만들었는지 확인한다. 병합 시 반드시
+   a. **에타 강의평 Connector의 실사용 검증·배포 여부를 사용자에게 확인한다.** 사용자가 허가하면
+      먼저 `extension/README.md`대로 Chrome/Edge/Whale에 `extension/`을 압축해제 로드하고,
+      로그인된 에타에서 단일 매칭·복수 후보·12개 일괄·미설치 폴백을 확인한다. 그 다음에만
+      변경분을 커밋·push하고 저장소 루트에서 production 배포한다. Vercel 배포 후에는 확장프로그램
+      관리 화면에서 새로고침해야 최신 웹 브리지가 작동한다.
+   b. **사용자가 "클로드디자인" 시안을 전달했는지 확인한다.** 전달됐다면 기존 기능(상태
+      관리/API 호출/이벤트 핸들러)은 그대로 두고 CSS Modules·JSX 문구·색상 토큰만 교체하는
+      작업으로 진행 — 시안 형식(이미지/Figma 링크/HTML)에 맞춰 우선 톤(색상 팔레트, 폰트,
+      여백 스케일)을 먼저 추출해 합의한 뒤 컴포넌트별로 순차 적용할 것.
+   c. **사용자에게 학수번호 검증 문제가 이전 구조 변경(단일 소스 통합 + 제로폭 문자 방어 +
+      과목명 포함 메시지, 07-21) 이후로도 재발했는지 확인한다.** 재발했다면 이번엔 오류
+      메시지에 과목명이 있으니 검색으로 실제 과목을 특정한 뒤, debug 훅(`writeFileSync`로
+      markdown/profile 캡처, `app/api/parse-academic-document/route.ts`에 임시로 넣었다
+      진단 후 제거하는 패턴)으로 실제 데이터를 확보해서 고칠 것 — 추측 금지.
+   d. **개인정보 동의 UI가 사용자가 의도한 화면이 맞는지 확인한다** — 참고 이미지 없이
+      추론으로 진행했다(07-21). 다른 화면을 의도했다면 그쪽에도 같은 4대 고지사항 구조를
+      적용할지 논의.
+   e. **남은 브라우저 연속 동작을 직접 확인한다** — 07-22 Codex가 기본정보·2-1/2-2 안내·
+      강의형식 필터·12~21학점까지 Chrome에서 확인했다. 다음에는 과목 목록 로딩을 기다린 뒤
+      `필수 선택 → 선택 그룹 전환 → 결과 생성 → 공강 필터 → 조합 카드 버전/총학점`과 공유
+      버튼 라벨, `/friends` 겹쳐보기를 한 흐름으로 확인한다.
+   f. `docs/09_데모데이_발표_준비.md`를 사용자와 함께 검토해 실제 발표 대본/슬라이드로
+      다듬는다 — 제출 마감이 **2026-07-24(금) 18:00**로 확정됐다(발표자료+Live URL+시연
+      영상, 이메일 양쪽 제출 — [[demoday_submission_requirements]] 메모리 참조). §6 시연
+      스크립트 중 라이브 시연 vs 사전 녹화 구간을 정해야 한다. D-2.
+   g. 사용자에게 GA4 측정 ID 변경 사실을 윤서 조원에게 전달했는지, `GEMINI_API_KEY` Vercel
+      환경변수를 직접 지웠는지 확인한다(하네스가 차단해서 내가 못 지움).
+   h. 규나 조원이 `uiux-redesign-6` 이상 새 브랜치를 또 만들었는지 확인한다. 병합 시 반드시
       별도 워크트리에서 품질 게이트 + diff를 직접 읽고 검증한 뒤 진행할 것.
-   f. 사용자에게 `GEMINI_API_KEY` Vercel 환경변수를 직접 지웠는지 확인(하네스가 차단해서
-      내가 못 지움).
-2. 학사문서 분석에서 또 다른 garbling 패턴이 신고되면, `web/src/lib/academic-document.ts`의
+2. `plans/ai-jiggly-reef.md`(복수전공 학사문서 분석 오류 수정)가 아직 미착수 상태다.
+   착수한다면 이번 세션에서 확인한 대로 "요건 자동 계산 정확도"가 아니라 "검토 화면 표시
+   정확성" 목적임을 염두에 두고 진행할 것.
+3. Vercel 배포는 반드시 **저장소 루트**에서 `npx vercel deploy --prod --yes` 실행 —
+   `web/` 안에서 실행하면 별개 프로젝트("web")로 나가 실서비스 도메인에 반영되지 않는다
+   (`web/.vercel/`를 삭제해 재발 방지함, 07-21). 배포 후 항상
+   `npx vercel alias ls | grep timetable-with-upstage.vercel.app`로 최신 배포가 맞는지
+   확인할 것.
+4. 학사문서 분석에서 또 다른 garbling 패턴이 신고되면, `web/src/lib/academic-document.ts`의
    `resolveMultiMajorCourseDuplicates`/`sanitizeClassification`/`sanitizeMajorScope`/
    `stripTrailingDateNoise`/`extractCourseCodeNamePairs` 부근을 먼저 본다 — 이미 여러 실제
    케이스를 실측으로 잡은 곳이라 비슷한 패턴일 가능성이 높다.
-3. AI 필러 후보 수 축소(현재 8개 중 5개)는 계속 보류 중 — 10000개 한도 문제가 다시 보고되면
+5. AI 필러 후보 수 축소(현재 8개 중 5개)는 계속 보류 중 — 10000개 한도 문제가 다시 보고되면
    고려한다.
-4. GitHub PR #1(`YOUNSUHPARK-patch-1`) 닫혔는지, 윤서 조원이 GA4 맞춤 정의를 등록했는지
+6. GitHub PR #1(`YOUNSUHPARK-patch-1`) 닫혔는지, 윤서 조원이 GA4 맞춤 정의를 등록했는지
    확인한다(여러 세션째 미확인). 정현 조원이 `YJH-1023/h`에서 더 진행한 게 있는지 궁금하면
    `git remote add jeonghyeon https://github.com/YJH-1023/h.git && git fetch jeonghyeon` 후
    blob SHA 대조 방식을 재사용한다(지난 세션 대화 로그 참조).

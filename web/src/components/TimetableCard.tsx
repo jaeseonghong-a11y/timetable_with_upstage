@@ -17,6 +17,7 @@ import { mergeMeetingsForDisplay, parseSchedule, type Timetable, type Weekday } 
 import { encodeShareableTimetable } from "@/lib/timetable-share";
 import { useLocalStorageItem } from "@/lib/use-local-storage-item";
 
+import { EverytimeReviewButton } from "./EverytimeReviewButton";
 import styles from "./TimetablePlanner.module.css";
 
 export const DAYS: ReadonlyArray<{ id: Weekday; label: string }> = [
@@ -335,6 +336,20 @@ export function TimetableCard({
             {isShareOpen ? "공유 링크 닫기" : "1회용 링크로 공유"}
           </button>
           {saveImageError ? <span className={styles.saveImageError}>{saveImageError}</span> : null}
+        </div>
+        <div className={styles.timetableReviewLinks}>
+          <strong>강의평</strong>
+          <span>확장프로그램이 있으면 교수·분반까지 자동 연결합니다.</span>
+          <div>
+            {timetable.courses.map((course) => (
+              <EverytimeReviewButton
+                course={course}
+                key={course.id}
+                label={`${course.courseName ?? course.title} 강의평`}
+                compact
+              />
+            ))}
+          </div>
         </div>
         {isServerPanelOpen ? (
           <div className={styles.sharePanel}>

@@ -19,6 +19,10 @@ export interface CourseCandidate {
   id: string;
   title: string;
   schedule: string;
+  /** Official SKKU course number, retained so a companion extension can match a review safely. */
+  courseNumber?: string;
+  /** Raw course title without the display-only "· n분반" suffix. */
+  courseName?: string;
   credits?: number;
   section?: string;
   professor?: string;
@@ -62,6 +66,8 @@ export function parseCourseCandidate(value: unknown): CourseCandidate | null {
     id: value.id,
     title: value.title,
     schedule: value.schedule,
+    courseNumber: typeof value.courseNumber === "string" ? value.courseNumber : undefined,
+    courseName: typeof value.courseName === "string" ? value.courseName : undefined,
     credits: typeof value.credits === "number" ? value.credits : undefined,
     section: typeof value.section === "string" ? value.section : undefined,
     professor: typeof value.professor === "string" ? value.professor : undefined,

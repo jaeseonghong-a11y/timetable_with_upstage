@@ -53,6 +53,7 @@ import {
 } from "@/lib/timetable-scoring";
 
 import { DepartmentAddCombobox } from "./DepartmentAddCombobox";
+import { EverytimeReviewBatchButton, EverytimeReviewButton } from "./EverytimeReviewButton";
 import { DAYS, formatCredits, formatMinutes, TimetableCard, type TimetableExtra } from "./TimetableCard";
 import styles from "./TimetablePlanner.module.css";
 
@@ -1423,6 +1424,11 @@ export function TimetablePlanner({
             selectedSectionIds={selectedSections}
             onToggleSection={(sectionId) => toggleSection(group, sectionId)}
           />
+          <div className={styles.selectedReviewLinks}>
+            {group.candidates
+              .filter((candidate) => selectedSections.includes(candidate.id))
+              .map((candidate) => <EverytimeReviewButton course={candidate} key={candidate.id} compact />)}
+          </div>
         </div>
       </details>
     );
@@ -1868,6 +1874,13 @@ export function TimetablePlanner({
                   <strong className={styles.sectionTitle}>담은 과목 확인</strong>
                   <small>분반을 고르거나 과목을 뺄 수 있습니다.</small>
                 </div>
+                <EverytimeReviewBatchButton
+                  courses={selectedCourseGroups.flatMap((group) => {
+                    const selectedSections =
+                      enabledSectionIds[group.selectionId] ?? getInitialSectionIds(group.candidates);
+                    return group.candidates.filter((candidate) => selectedSections.includes(candidate.id));
+                  })}
+                />
               </div>
 
               <div className={styles.selectedSubjectList}>
@@ -2340,6 +2353,7 @@ function CourseSectionDetails({
     return (
       <div className={styles.singleCourseSection}>
         <CourseSectionMetadata candidate={group.candidates[0]!} />
+        <EverytimeReviewButton course={group.candidates[0]!} compact />
       </div>
     );
   }
@@ -2477,10 +2491,13 @@ function CourseSectionChoice({
   onToggle: () => void;
 }) {
   return (
-    <label className={`${styles.courseSectionChoice} ${checked ? styles.courseSectionChoiceSelected : ""}`}>
-      <input checked={checked} type="checkbox" onChange={onToggle} />
-      <CourseSectionMetadata candidate={candidate} />
-    </label>
+    <div className={`${styles.courseSectionChoice} ${checked ? styles.courseSectionChoiceSelected : ""}`}>
+      <label>
+        <input checked={checked} type="checkbox" onChange={onToggle} />
+        <CourseSectionMetadata candidate={candidate} />
+      </label>
+      <EverytimeReviewButton course={candidate} compact />
+    </div>
   );
 }
 

@@ -1,0 +1,59 @@
+.wrapper {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.button,
+.compactButton,
+.batchButton {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-card);
+  color: var(--accent-strong);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+}
+
+.button {
+  padding: 6px 9px;
+  font-size: 11px;
+}
+
+.compactButton {
+  padding: 4px 7px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.batchButton {
+  padding: 7px 10px;
+  font-size: 11px;
+}
+
+.button:hover,
+.compactButton:hover,
+.batchButton:hover {
+  background: var(--surface-note);
+}
+
+.button:disabled,
+.compactButton:disabled,
+.batchButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.status,
+.batchHint {
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.batchHint {
+  display: block;
+  flex-basis: 100%;
+}

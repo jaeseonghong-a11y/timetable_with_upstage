@@ -383,6 +383,10 @@
 
 .singleCourseSection {
   margin: -4px 0 8px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   padding: 0 9px;
   border-radius: 8px;
   background: var(--surface-page);
@@ -508,7 +512,6 @@
   padding: 7px 4px;
   border-top: 1px solid var(--border-subtle);
   border-radius: 7px;
-  cursor: pointer;
 }
 
 .courseSectionChoice:hover {
@@ -523,7 +526,16 @@
   background: var(--surface-note);
 }
 
-.courseSectionChoice > input {
+.courseSectionChoice > label {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: flex-start;
+  gap: 7px;
+  cursor: pointer;
+}
+
+.courseSectionChoice input {
   width: 14px;
   height: 14px;
   flex: none;
@@ -558,6 +570,12 @@
 .courseSectionRow span:last-child {
   grid-column: 1 / -1;
   color: var(--accent-strong);
+}
+
+.selectedReviewLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
 }
 
 .courseSearch input {
@@ -1385,6 +1403,35 @@
 .saveImageError {
   color: var(--text-error);
   font-size: 12px;
+}
+
+.timetableReviewLinks {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 8px;
+  margin: 0 14px 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-page);
+}
+
+.timetableReviewLinks > strong {
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.timetableReviewLinks > span {
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.timetableReviewLinks > div {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
 }
 
 .sharePanel {

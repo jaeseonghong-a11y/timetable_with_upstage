@@ -45,6 +45,12 @@ skku-timetable/
 │   ├── tsconfig.json
 │   └── ...
 │
+├── extension/             # 선택형 Chromium 보조 확장프로그램
+│   ├── manifest.json       # 허용 도메인·권한(MV3)
+│   ├── src/                # 웹앱 브리지·에타 검색 URL 매처
+│   ├── test/               # 매칭 규칙 node:test
+│   └── README.md           # 데모용 설치·사용법·안전선
+│
 └── .github/
     ├── workflows/         # CI gate (자동 테스트/린트)
     └── agent-logs/        # AI 작업 로그 (세션 인수인계용)
@@ -83,4 +89,5 @@ skku-timetable/
 | 강의계획서 파싱 품질 | `web/src/app/api/` (Upstage 호출부) |
 | 시간표 조합 로직 | `web/src/lib/` |
 | 화면·UI | `web/src/app/`, `web/src/components/` |
+| 에타 강의평 직접 연결 | `extension/` + `web/src/lib/everytime-review-bridge.ts` |
 | API 키·환경변수 | `.env.local` (gitignore), Vercel 환경변수 |
