@@ -104,8 +104,7 @@
   margin-bottom: 14px;
 }
 
-.controls legend:not(.srOnly):not(.sectionTitle),
-.startSelect span {
+.controls legend:not(.srOnly):not(.sectionTitle) {
   display: block;
   margin-bottom: 12px;
   color: var(--text-primary);
@@ -666,6 +665,177 @@
   line-height: 1.45;
 }
 
+/* STEP 5-1(과목 분리) — 필수/선택 그룹 편집 UI */
+.addChoiceGroupButton {
+  flex: none;
+  padding: 6px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-card);
+  color: var(--accent-strong);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.choiceGroupRules {
+  display: grid;
+  gap: 14px;
+}
+
+.destinationBlock {
+  display: grid;
+  gap: 8px;
+}
+
+.requiredRule,
+.choiceGroupRule {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  padding: 9px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-page);
+}
+
+.requiredRule {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.requiredRule > span,
+.requiredRule > strong {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.requiredRule > small {
+  grid-column: 1 / -1;
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.choiceGroupRuleHeader {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding-right: 48px;
+}
+
+.choiceGroupRuleHeader label {
+  min-width: 0;
+}
+
+.choiceGroupRuleHeader input {
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.choiceGroupRuleHeader > strong {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.cardinalityInputs {
+  display: grid;
+  gap: 6px;
+}
+
+.cardinalityLabel {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.cardinalityFields {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cardinalityFields > label {
+  flex: 1;
+  min-width: 0;
+}
+
+.cardinalityField {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cardinalityField > span {
+  flex: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cardinalityField input {
+  width: 100%;
+  min-width: 0;
+  padding: 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+}
+
+.removeChoiceGroup {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-card);
+  color: var(--text-error);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.subjectDestination {
+  display: grid;
+  justify-self: start;
+  gap: 4px;
+}
+
+.subjectDestination > span {
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.subjectDestination select {
+  padding: 6px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  background: var(--surface-page);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .checkScheduleConflicts {
   justify-self: start;
   padding: 7px 12px;
@@ -1002,16 +1172,6 @@
   margin: 8px 0 0;
   color: var(--text-error);
   font-size: 12px;
-}
-
-.startSelect select {
-  width: 100%;
-  padding: 11px 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  background: var(--surface-card);
-  color: var(--text-primary);
-  font: inherit;
 }
 
 .creditRangeInputs {
