@@ -201,6 +201,15 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
               <div className={styles.cardBody}>
                 <div className={`${styles.fieldGrid} ${styles.courseFieldGrid}`}>
                   <label className={styles.field}>
+                    <span>요건명</span>
+                    <input
+                      value={requirement.label}
+                      onChange={(event) =>
+                        updateRequirement(index, { ...requirement, label: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label className={styles.field}>
                     <span>범위</span>
                     <select
                       value={requirement.scope}

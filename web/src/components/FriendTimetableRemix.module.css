@@ -1,0 +1,243 @@
+.page {
+  min-height: 100vh;
+  padding: 36px 20px 64px;
+  background:
+    radial-gradient(circle at 85% 8%, rgb(255 82 160 / 24%), transparent 28rem),
+    radial-gradient(circle at 8% 24%, rgb(66 220 196 / 16%), transparent 30rem),
+    #111525;
+  color: #f5f7ff;
+}
+
+.hero,
+.panel,
+.results {
+  max-width: 920px;
+  margin: 0 auto 20px;
+}
+
+.hero {
+  padding: 18px 4px 24px;
+}
+
+.hero p,
+.panelHeading p,
+.resultHeading p {
+  margin: 0 0 7px;
+  color: #7ce5d2;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.09em;
+}
+
+.hero h1,
+.panelHeading h2,
+.resultHeading h2 {
+  margin: 0;
+  color: #fff;
+  letter-spacing: -0.04em;
+}
+
+.hero h1 {
+  font-size: clamp(32px, 6vw, 48px);
+}
+
+.hero span {
+  display: block;
+  margin-top: 11px;
+  color: #bcc6df;
+  font-size: 15px;
+}
+
+.panel,
+.results {
+  padding: 24px;
+  border: 1px solid rgb(162 178 223 / 24%);
+  border-radius: 20px;
+  background: rgb(24 30 52 / 88%);
+  box-shadow: 0 20px 55px rgb(0 0 0 / 24%);
+}
+
+.panelHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.panelHeading h2,
+.resultHeading h2 {
+  font-size: 21px;
+}
+
+.panelHeading a {
+  flex: none;
+  padding: 8px 11px;
+  border: 1px solid rgb(124 229 210 / 46%);
+  border-radius: 999px;
+  color: #7ce5d2;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.friendSelect {
+  display: grid;
+  gap: 7px;
+  max-width: 430px;
+  color: #cad3ed;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.friendSelect select {
+  min-height: 46px;
+  padding: 8px 12px;
+  border: 1px solid rgb(162 178 223 / 38%);
+  border-radius: 10px;
+  background: #0e1325;
+  color: #fff;
+  font: inherit;
+}
+
+.optionGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 17px;
+  padding: 0;
+  border: 0;
+}
+
+.optionGroup legend {
+  width: 100%;
+  margin-bottom: 7px;
+  color: #aeb9d7;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.optionGroup label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 7px 11px;
+  border: 1px solid rgb(162 178 223 / 34%);
+  border-radius: 999px;
+  background: rgb(10 14 30 / 70%);
+  color: #f1f4ff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.optionGroup input {
+  accent-color: #ff5fa6;
+}
+
+.disabledGroup {
+  opacity: 0.42;
+}
+
+.mutedHint,
+.ruleHint,
+.status {
+  margin: -7px 0 16px;
+  color: #aeb9d7;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.ruleHint {
+  margin: 12px 0 0;
+}
+
+.generateButton {
+  min-height: 48px;
+  padding: 10px 17px;
+  border: 0;
+  border-radius: 11px;
+  background: linear-gradient(125deg, #f04e99, #8d5cff);
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.generateButton:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.error {
+  max-width: 920px;
+  margin: 0 auto 20px;
+  color: #ffadb5;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.results > ol {
+  display: grid;
+  gap: 20px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* TimetableCard keeps its weekly grid deliberately wider than a phone. Let its own
+   viewport own that horizontal scroll instead of allowing the remix page grid item
+   to expand the document. */
+.results,
+.results > ol,
+.results > ol > li {
+  min-width: 0;
+}
+
+.scoreLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.scoreLine > span {
+  padding: 4px 7px;
+  border-radius: 6px;
+  background: #7ce5d2;
+  color: #10213a;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.scoreLine strong {
+  color: #fff;
+  font-size: 14px;
+}
+
+.scoreLine small {
+  color: #aeb9d7;
+  font-size: 12px;
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding: 26px 14px 48px;
+  }
+
+  .panel,
+  .results {
+    padding: 18px;
+    border-radius: 16px;
+  }
+
+  .panelHeading {
+    flex-direction: column;
+  }
+
+  .optionGroup label {
+    font-size: 13px;
+  }
+}

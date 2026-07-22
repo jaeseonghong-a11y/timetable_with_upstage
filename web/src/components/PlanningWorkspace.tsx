@@ -14,6 +14,7 @@ import {
 } from "@/lib/planning-profile";
 
 import { AcademicDocumentManager } from "./AcademicDocumentManager";
+import { setConfirmedGraduationRequirementSummaries } from "@/lib/graduation-requirements-bridge";
 import { StudentProfileForm } from "./StudentProfileForm";
 import { TimetablePlanner } from "./TimetablePlanner";
 import styles from "./PlanningWorkspace.module.css";
@@ -72,6 +73,14 @@ export function PlanningWorkspace() {
         ?.requirements ?? [],
     [confirmedProfiles.graduation_requirements, workingProfiles.graduation_requirements],
   );
+
+  // The remix page only needs this non-identifying summary to optionally weigh unmet areas. The
+  // bridge is module memory, not web storage: reloading clears it together with this wizard state.
+  useEffect(() => {
+    setConfirmedGraduationRequirementSummaries(
+      confirmedProfiles.graduation_requirements?.requirements,
+    );
+  }, [confirmedProfiles.graduation_requirements]);
 
   useEffect(() => initAbandonTracking(), []);
 

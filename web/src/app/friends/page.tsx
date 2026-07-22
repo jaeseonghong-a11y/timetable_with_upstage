@@ -297,6 +297,17 @@ export default function FriendsPage() {
         {deleteMineError ? <p className={styles.error}>{deleteMineError}</p> : null}
       </section>
 
+      {myView?.status === "ready" && myView.timetable &&
+      friends.some((friend) => friendViews[friend.code]?.status === "ready" && friendViews[friend.code]?.timetable) ? (
+        <section className={styles.myCodeSection}>
+          <h2>친구 시간표 리믹스</h2>
+          <p className={styles.emptyHint}>내 시간표와 친구 시간표를 섞어 재미있는 조합을 만들어 보세요.</p>
+          <Link className={styles.backButton} href="/friends/remix">
+            리믹스 화면으로 가기
+          </Link>
+        </section>
+      ) : null}
+
       <section className={styles.addFriendSection}>
         <h2>친구 시간표 추가</h2>
         <form className={styles.addFriendForm} onSubmit={(event) => void handleAddFriend(event)}>
