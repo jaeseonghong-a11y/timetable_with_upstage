@@ -306,6 +306,25 @@ async function requestAndParseWithRetry(
   }
 }
 
+/**
+ * The missing-code retry used to resend the entire source markdown a second time, which for a
+ * long multi-major transcript could push the combined Document Parse + up-to-3-Solar-call chain
+ * past Vercel's 300s function ceiling (live-confirmed 2026-07-23: "Task timed out after 300
+ * seconds" on /api/parse-academic-document) — the client then just sits on "분석 중" until that
+ * timeout finally surfaces an error. Course rows only ever live inside <table>...</table> blocks
+ * in Document Parse's markdown output (see parseHtmlTableRows above), so trimming the retry
+ * prompt to just those blocks cuts its size — and latency — substantially without dropping any
+ * row data. Some real GLS exports use pipe-markdown tables instead of embedded <table> tags, so
+ * when no <table> tag is present at all this returns the original markdown unchanged rather than
+ * guessing at what's safe to drop.
+ */
+export function extractTableSegmentsForRetry(markdown: string): string {
+  const tableBlocks = [...markdown.matchAll(/<table\b[^>]*>[\s\S]*?<\/table>/gi)].map(
+    (match) => match[0],
+  );
+  return tableBlocks.length > 0 ? tableBlocks.join("\n\n") : markdown;
+}
+
 async function supplementCompletedCoursesWithRetry(
   profile: AcademicProfile,
   markdown: string,
@@ -329,6 +348,10 @@ async function supplementCompletedCoursesWithRetry(
 
   let retryProfile: AcademicProfile;
   try {
+    const retryMarkdown = extractTableSegmentsForRetry(markdown).slice(
+      0,
+      MAX_SOLAR_MARKDOWN_CHARACTERS,
+    );
     const retryContent = await requestSolarCompletion(
       SYSTEM_PROMPT,
       `Retry the completed-course extraction because the first pass omitted ${missingCodes.length} of ${expectedCodes.length} distinct course codes present in the document.
@@ -338,7 +361,7 @@ Extract every completed course exactly once. SKKU course codes end in three or f
 ${OUTPUT_CONTRACT}
 
 <document>
-${markdown}
+${retryMarkdown}
 </document>`,
       apiKey,
       ACADEMIC_EXTRACTION_SCHEMA,

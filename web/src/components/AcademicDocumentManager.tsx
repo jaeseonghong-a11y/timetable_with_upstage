@@ -587,6 +587,11 @@ export function AcademicDocumentManager({
               ? ANALYSIS_LONG_WAIT_FLAVORS[kind][analysisFlavorIndex]
               : ANALYSIS_STAGES[kind][analysisStageIndex]}
           </span>
+          {/* 복수전공처럼 과목이 많은 문서는 실제로 몇 분 걸릴 수 있다 — 진행 중인데 멈춘 것으로
+              오해해 재시도/이탈하지 않도록 처음부터 넉넉한 기대치를 알려준다. */}
+          <small className={styles.analysisWaitHint}>
+            과목이 많거나 복수전공이면 최대 몇 분까지 걸릴 수 있어요. 창을 닫지 말고 기다려 주세요.
+          </small>
         </div>
       ) : null}
       {file && !hasConsented ? (

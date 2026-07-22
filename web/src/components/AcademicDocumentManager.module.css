@@ -407,6 +407,13 @@
   font-weight: 600;
 }
 
+.analysisWaitHint {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 400;
+  opacity: 0.85;
+}
+
 .analysisProgressBar {
   position: relative;
   height: 6px;

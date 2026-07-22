@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   AcademicExtractionError,
   cleanCompletedCourseExtraction,
+  extractTableSegmentsForRetry,
   parseAcademicExtraction,
   supplementCompletedCoursesFromMarkdown,
   supplementGraduationRequirementsFromMarkdown,
@@ -985,5 +986,31 @@ describe("cleanCompletedCourseExtraction", () => {
     expect(cleaned.reviewIssues).toEqual([
       expect.objectContaining({ code: "missing_completed_courses", message: expect.stringContaining("1개") }),
     ]);
+  });
+});
+
+describe("extractTableSegmentsForRetry", () => {
+  it("trims to just the <table> blocks so the missing-course retry sends a shorter prompt", () => {
+    const markdown = `# 성균관대학교 개인별 수강/취득 과목 리스트
+학번: 2020123456 성명: 홍길동 (개인정보는 실제로는 여기 있을 수 있는 자리표시일 뿐)
+
+<table><tr><td>BIZ2021</td><td>관리회계</td></tr></table>
+
+작성일: 2026-07-23 이 문서는 참고용입니다.
+
+<table><tr><td>COS3001</td><td>자료구조</td></tr></table>`;
+
+    const trimmed = extractTableSegmentsForRetry(markdown);
+
+    expect(trimmed).toContain("BIZ2021");
+    expect(trimmed).toContain("COS3001");
+    expect(trimmed).not.toContain("작성일");
+    expect(trimmed.length).toBeLessThan(markdown.length);
+  });
+
+  it("falls back to the full markdown when no <table> tag is present (pipe-markdown exports)", () => {
+    const markdown = `| 학수번호 | 과목명 |\n| --- | --- |\n| BIZ2021 | 관리회계 |`;
+
+    expect(extractTableSegmentsForRetry(markdown)).toBe(markdown);
   });
 });

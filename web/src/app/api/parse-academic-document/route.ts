@@ -12,6 +12,13 @@ import {
   UpstageApiError,
 } from "../../../lib/upstage";
 
+// Document Parse + up to 3 sequential Solar calls (base extraction, malformed-JSON retry, missing-
+// course retry) can legitimately take a few minutes for a large multi-major transcript. Declaring
+// this explicitly documents the intent — 300s is the observed ceiling for this deployment
+// (live-confirmed 2026-07-23 via a "Task timed out after 300 seconds" runtime error); raising it
+// further would require a Vercel plan/runtime that allows a higher Node.js function duration.
+export const maxDuration = 300;
+
 type ApiErrorCode =
   | "invalid_document"
   | "invalid_document_kind"
