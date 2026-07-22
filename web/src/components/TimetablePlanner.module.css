@@ -1060,6 +1060,57 @@
   color: var(--surface-card);
 }
 
+.freeDayPreference {
+  display: grid;
+  gap: 6px;
+  padding-left: 22px;
+}
+
+.freeDayPreference > small {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.anyDayChoice {
+  cursor: pointer;
+}
+
+.anyDayChoice input {
+  position: absolute;
+  opacity: 0;
+}
+
+.anyDayChoice span {
+  display: grid;
+  min-width: 64px;
+  height: 38px;
+  padding: 0 12px;
+  place-items: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.anyDayChoice input:checked + span {
+  border-color: var(--accent-strong);
+  background: var(--accent-strong);
+  color: var(--surface-card);
+}
+
+.anyDayChoiceDisabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.anyDayChoiceDisabled input:checked + span {
+  border-color: var(--border-subtle);
+  background: var(--surface-page);
+  color: var(--text-secondary);
+}
+
 .courseTypeFilter {
   display: grid;
   gap: 6px;

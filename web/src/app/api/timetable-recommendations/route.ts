@@ -564,17 +564,38 @@ function parseWeightConfig(value: unknown): RecommendationWeight["config"] {
     typeof value.lunchEndMinutes === "number" ? value.lunchEndMinutes : undefined;
   const format = value.format === "in_person" || value.format === "online" ? value.format : undefined;
   const packing = value.packing === "compact" || value.packing === "spread" ? value.packing : undefined;
+  const preferredFreeDays = parsePreferredFreeDays(value.preferredFreeDays);
   if (
     thresholdMinutes === undefined &&
     direction === undefined &&
     lunchStartMinutes === undefined &&
     lunchEndMinutes === undefined &&
     format === undefined &&
-    packing === undefined
+    packing === undefined &&
+    preferredFreeDays === undefined
   ) {
     return undefined;
   }
-  return { thresholdMinutes, direction, lunchStartMinutes, lunchEndMinutes, format, packing };
+  return {
+    thresholdMinutes,
+    direction,
+    lunchStartMinutes,
+    lunchEndMinutes,
+    format,
+    packing,
+    preferredFreeDays,
+  };
+}
+
+function parsePreferredFreeDays(value: unknown): Weekday[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const allowed = new Set<Weekday>(["mon", "tue", "wed", "thu", "fri"]);
+  const days = value.filter((entry): entry is Weekday =>
+    typeof entry === "string" && allowed.has(entry as Weekday),
+  );
+  return days;
 }
 
 /** 필수(고정) 과목 제목 목록 — 추천 이유를 이 과목들이 아닌 '추가된' 과목에 집중시키는 데 쓴다. */

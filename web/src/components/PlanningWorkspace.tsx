@@ -37,9 +37,14 @@ export function PlanningWorkspace() {
   const [aiSubstep, setAiSubstep] = useState<AiSubstep>("setup");
   const [hasEnteredDocuments, setHasEnteredDocuments] = useState(false);
   const [aiRecommendRequestId, setAiRecommendRequestId] = useState(0);
-  const [aiRecommendAction, setAiRecommendAction] = useState({
+  const [aiRecommendAction, setAiRecommendAction] = useState<{
+    canRun: boolean;
+    isRunning: boolean;
+    emptyReason: { title: string; detail: string } | null;
+  }>({
     canRun: false,
     isRunning: false,
+    emptyReason: null,
   });
   const [studentProfile, setStudentProfile] = useState(INITIAL_STUDENT_PROFILE);
   const [appliedProfile, setAppliedProfile] = useState<StudentPlanningProfile | null>(null);
@@ -215,6 +220,7 @@ export function PlanningWorkspace() {
     (step === 1 && !appliedProfile) ||
     (step === 2 &&
       (documentAnalysisState.isAnalyzing || !currentDocumentConfirmed)) ||
+    (step === 3 && !aiRecommendAction.canRun) ||
     (step === 5 &&
       aiSubstep === "setup" &&
       (!aiRecommendAction.canRun || aiRecommendAction.isRunning));
@@ -437,7 +443,12 @@ export function PlanningWorkspace() {
           ) : null}
           {step === 3 ? (
             // 유효 시간표 확인(4)을 건너뛰고 AI 추천(5)으로 바로 이동하는 지름길.
-            <button type="button" onClick={() => goToStep(5)}>
+            // 유효 시간표가 0개면 눌러도 소용없으니 막고, 이유는 버튼 아래에 STEP 4와 동일하게 적는다.
+            <button
+              disabled={!aiRecommendAction.canRun}
+              type="button"
+              onClick={() => goToStep(5)}
+            >
               유효 시간표 건너뛰고 AI 추천
             </button>
           ) : null}
@@ -459,7 +470,13 @@ export function PlanningWorkspace() {
                 : "문서를 분석하고 검토한 뒤 확정해야 다음으로 갈 수 있습니다. 원하지 않으면 건너뛰세요."}
           </p>
         ) : null}
-        {step === 3 ? (
+        {step === 3 && !aiRecommendAction.canRun && aiRecommendAction.emptyReason ? (
+          <p className={styles.navDiagnosis} role="alert">
+            <strong>{aiRecommendAction.emptyReason.title}</strong>
+            {aiRecommendAction.emptyReason.detail}
+          </p>
+        ) : null}
+        {step === 3 && (aiRecommendAction.canRun || !aiRecommendAction.emptyReason) ? (
           <p className={styles.navHint}>과목을 담은 뒤 다음에서 유효 시간표를 확인합니다.</p>
         ) : null}
         {step === 4 ? (
@@ -472,7 +489,9 @@ export function PlanningWorkspace() {
           <p className={styles.navHint}>
             {aiRecommendAction.isRunning
               ? "AI가 분석 중입니다... 완료되면 결과 화면으로 이동합니다."
-              : "조건을 고른 뒤 AI 추천 받기를 누르면 결과 화면으로 바로 이동합니다."}
+              : !aiRecommendAction.canRun
+                ? "유효 시간표가 없어 AI 추천을 받을 수 없습니다. 과목·조건을 조정해 주세요."
+                : "조건을 고른 뒤 AI 추천 받기를 누르면 결과 화면으로 바로 이동합니다."}
           </p>
         ) : null}
       </div>

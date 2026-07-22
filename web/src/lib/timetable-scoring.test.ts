@@ -66,6 +66,23 @@ describe("timetable-scoring", () => {
     expect(first?.candidateId).toBe(getTimetableCandidateId(spacious));
   });
 
+  it("prefers specific free days when preferredFreeDays is set", () => {
+    const wednesdayFree = timetable(
+      [course("A1")],
+      [meeting("mon", 600, 660), meeting("tue", 600, 660), meeting("thu", 600, 660)],
+    );
+    const fridayFree = timetable(
+      [course("B1")],
+      [meeting("mon", 600, 660), meeting("tue", 600, 660), meeting("wed", 600, 660)],
+    );
+
+    const [first] = scoreTimetables(
+      [wednesdayFree, fridayFree],
+      [weight("free_days", { config: { preferredFreeDays: ["wed"] } })],
+    );
+    expect(first?.candidateId).toBe(getTimetableCandidateId(wednesdayFree));
+  });
+
   it("penalizes 9am starts under avoid_9am", () => {
     const early = timetable([course("A1")], [meeting("mon", 540, 615)]);
     const later = timetable([course("B1")], [meeting("mon", 600, 675)]);

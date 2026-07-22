@@ -278,6 +278,25 @@
   font-size: 13px;
 }
 
+.navDiagnosis {
+  width: 100%;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border-warning);
+  border-radius: 12px;
+  background: var(--surface-warning-subtle);
+  color: var(--text-warning);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.navDiagnosis strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
 @media (max-width: 640px) {
   .progress {
     padding: 20px;

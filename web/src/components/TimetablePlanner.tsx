@@ -79,6 +79,7 @@ interface Props {
   onAiRecommendActionStateChange?: (state: {
     canRun: boolean;
     isRunning: boolean;
+    emptyReason: { title: string; detail: string } | null;
   }) => void;
 }
 
@@ -1070,12 +1071,15 @@ export function TimetablePlanner({
     unavailableDays,
   ]);
 
+  // 유효 시간표 중 하나라도 그 요일이 공강이면 선택지로 둔다.
+  // (예전엔 "일부만 공강"인 요일만 보여줘서, 모든 조합이 같은 요일 공강이면 필터 자체가 안 떴다.)
   const dayOffOptions = useMemo(() => {
-    const total = result.entries.length;
-    return DAYS.filter(({ id }) => {
-      const freeCount = result.entries.filter(({ timetable }) => isDayFree(timetable, id)).length;
-      return freeCount > 0 && freeCount < total;
-    });
+    if (result.entries.length === 0) {
+      return [];
+    }
+    return DAYS.filter(({ id }) =>
+      result.entries.some(({ timetable }) => isDayFree(timetable, id)),
+    );
   }, [result.entries]);
 
   const filteredEntries = useMemo(() => {
@@ -1102,6 +1106,30 @@ export function TimetablePlanner({
   const [recommendationFlavorIndex, setRecommendationFlavorIndex] = useState(-1);
   const [recommendationError, setRecommendationError] = useState("");
   const [aiExplanationFailed, setAiExplanationFailed] = useState(false);
+
+  // STEP 4에서 사라진 공강 가능 요일은 STEP 5 선호에서도 빼 둔다.
+  useEffect(() => {
+    const allowed = new Set(dayOffOptions.map(({ id }) => id));
+    setRecommendationWeights((weights) => {
+      let changed = false;
+      const next = weights.map((weight) => {
+        if (weight.id !== "free_days") {
+          return weight;
+        }
+        const preferred = weight.config?.preferredFreeDays ?? [];
+        const filtered = preferred.filter((day) => allowed.has(day));
+        if (filtered.length === preferred.length) {
+          return weight;
+        }
+        changed = true;
+        return {
+          ...weight,
+          config: { ...weight.config, preferredFreeDays: filtered },
+        };
+      });
+      return changed ? next : weights;
+    });
+  }, [dayOffOptions]);
 
   useEffect(() => {
     if (!isRecommending || recommendationStage !== 1) {
@@ -1150,16 +1178,43 @@ export function TimetablePlanner({
     onRecommendationsAvailabilityChange?.(Boolean(recommendations && recommendations.length > 0));
   }, [onRecommendationsAvailabilityChange, recommendations]);
 
-  const canRunAiRecommend =
+  const hasSelectionForAi =
     manualSelectionPlanSubjects.requiredSubjects.length > 0 ||
     manualSelectionPlanSubjects.choiceBags.length > 0;
+  const canRunAiRecommend =
+    !result.error && result.entries.length > 0 && hasSelectionForAi;
+  const aiEmptyReason = useMemo(() => {
+    if (canRunAiRecommend) {
+      return null;
+    }
+    if (result.error) {
+      return { title: "시간표를 만들 수 없어요", detail: result.error };
+    }
+    if (!hasSelectionForAi) {
+      return {
+        title: "과목을 먼저 담아 주세요",
+        detail: "이전 단계에서 필수 과목이나 선택 그룹 후보를 추가해 주세요.",
+      };
+    }
+    if (result.entries.length === 0) {
+      return describeEmptyTimetableDiagnosis(emptyTimetableDiagnosis);
+    }
+    return null;
+  }, [
+    canRunAiRecommend,
+    emptyTimetableDiagnosis,
+    hasSelectionForAi,
+    result.entries.length,
+    result.error,
+  ]);
 
   useEffect(() => {
     onAiRecommendActionStateChange?.({
       canRun: canRunAiRecommend,
       isRunning: isRecommending,
+      emptyReason: aiEmptyReason,
     });
-  }, [canRunAiRecommend, isRecommending, onAiRecommendActionStateChange]);
+  }, [aiEmptyReason, canRunAiRecommend, isRecommending, onAiRecommendActionStateChange]);
 
   const lastAiRecommendRequestId = useRef(0);
 
@@ -1234,6 +1289,27 @@ export function TimetablePlanner({
           : weight,
       ),
     );
+  }
+
+  function setFreeDaysConfig(
+    partial: Partial<NonNullable<RecommendationWeight["config"]>>,
+  ): void {
+    setRecommendationWeights((weights) =>
+      weights.map((weight) =>
+        weight.id === "free_days"
+          ? { ...weight, config: { ...weight.config, ...partial } }
+          : weight,
+      ),
+    );
+  }
+
+  function togglePreferredFreeDay(day: Weekday): void {
+    const freeDaysWeight = recommendationWeights.find((weight) => weight.id === "free_days");
+    const current = freeDaysWeight?.config?.preferredFreeDays ?? [];
+    const next = current.includes(day)
+      ? current.filter((entry) => entry !== day)
+      : [...current, day];
+    setFreeDaysConfig({ preferredFreeDays: next });
   }
 
   /**
@@ -1349,6 +1425,12 @@ export function TimetablePlanner({
       manualSelectionPlanSubjects.choiceBags.length > 0;
     if (!hasAnySelection) {
       setRecommendationError("이전 단계에서 필수 과목이나 선택 그룹 후보를 먼저 추가해 주세요.");
+      setIsRecommending(false);
+      return;
+    }
+    if (result.error || result.entries.length === 0) {
+      setRecommendationError("유효 시간표가 없어 AI 추천을 만들 수 없습니다. 과목·조건을 조정해 주세요.");
+      setIsRecommending(false);
       return;
     }
     track("ai_recommend_click");
@@ -2257,7 +2339,7 @@ export function TimetablePlanner({
             <span>순위 없음 · {minimumCredits || "?"}~{maximumCredits || "?"}학점</span>
           </div>
 
-          {dayOffOptions.length > 0 ? (
+          {result.entries.length > 0 && dayOffOptions.length > 0 ? (
             <div className={styles.dayOffFilter}>
               <span>공강일로 결과 좁히기</span>
               <div className={styles.dayChoices}>
@@ -2274,7 +2356,7 @@ export function TimetablePlanner({
                           )
                         }
                       />
-                      <span>{label} 공강</span>
+                      <span>{label}</span>
                     </label>
                   );
                 })}
@@ -2387,6 +2469,42 @@ export function TimetablePlanner({
                       </label>
                     ) : null}
                   </div>
+                  {weight.enabled && weight.id === "free_days" ? (
+                    <div className={styles.freeDayPreference}>
+                      <div className={styles.dayChoices}>
+                        {dayOffOptions.length === 0 ? (
+                          <label className={`${styles.anyDayChoice} ${styles.anyDayChoiceDisabled}`}>
+                            <input checked disabled type="checkbox" />
+                            <span>불가능</span>
+                          </label>
+                        ) : (
+                          <>
+                            <label className={styles.anyDayChoice}>
+                              <input
+                                checked={(weight.config?.preferredFreeDays ?? []).length === 0}
+                                type="checkbox"
+                                onChange={() => setFreeDaysConfig({ preferredFreeDays: [] })}
+                              />
+                              <span>상관없음</span>
+                            </label>
+                            {dayOffOptions.map(({ id, label }) => {
+                              const checked = (weight.config?.preferredFreeDays ?? []).includes(id);
+                              return (
+                                <label className={styles.dayChoice} key={id}>
+                                  <input
+                                    checked={checked}
+                                    type="checkbox"
+                                    onChange={() => togglePreferredFreeDay(id)}
+                                  />
+                                  <span>{label}</span>
+                                </label>
+                              );
+                            })}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
                   {weight.enabled && weight.id === "lunch_break" ? (
                     <span className={styles.backToBackConfig}>
                       <input
@@ -3120,8 +3238,8 @@ function describeEmptyTimetableDiagnosis(
   switch (diagnosis.reason) {
     case "credit_range_unreachable":
       return {
-        title: "원하는 학점 범위를 조정해 주세요",
-        detail: "담은 과목의 학점 합이 지금 설정한 학점 범위를 벗어나요.",
+        title: "총 학점을 12~21학점 사이로 조정해 주세요",
+        detail: "",
       };
     case "no_available_sections":
       return {

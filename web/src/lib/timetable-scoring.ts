@@ -27,6 +27,11 @@ export interface RecommendationWeight {
     format?: "in_person" | "online";
     /** day_packing 전용: 하루에 몰아듣기(compact) / 여러날 나눠듣기(spread). 기본 compact. */
     packing?: "compact" | "spread";
+    /**
+     * free_days 전용: 선호 공강 요일. 비어 있으면 상관없음(공강 일수만 최대화).
+     * 요일이 있으면 그 요일이 공강인 개수를 점수로 쓴다.
+     */
+    preferredFreeDays?: Weekday[];
   };
 }
 
@@ -61,7 +66,7 @@ const IMPORTANCE_MULTIPLIER: Record<WeightImportance, number> = {
 };
 
 export const DEFAULT_RECOMMENDATION_WEIGHTS: RecommendationWeight[] = [
-  { id: "free_days", enabled: true, importance: 3 },
+  { id: "free_days", enabled: true, importance: 3, config: { preferredFreeDays: [] } },
   {
     id: "back_to_back",
     enabled: false,
@@ -149,7 +154,7 @@ export function scoreTimetables(
 function computeRawValue(timetable: Timetable, weight: RecommendationWeight): number {
   switch (weight.id) {
     case "free_days":
-      return countFreeDays(timetable);
+      return freeDaysScore(timetable, weight.config);
     case "back_to_back":
       return backToBackScore(timetable, weight.config);
     case "lunch_break":
@@ -186,6 +191,18 @@ function activeDays(timetable: Timetable): ReadonlySet<Weekday> {
 function countFreeDays(timetable: Timetable): number {
   const days = activeDays(timetable);
   return WEEKDAYS.filter((day) => !days.has(day)).length;
+}
+
+function freeDaysScore(
+  timetable: Timetable,
+  config: RecommendationWeight["config"],
+): number {
+  const preferred = config?.preferredFreeDays ?? [];
+  if (preferred.length === 0) {
+    return countFreeDays(timetable);
+  }
+  const days = activeDays(timetable);
+  return preferred.filter((day) => !days.has(day)).length;
 }
 
 const WEEKDAY_KOREAN_LABELS: Record<Weekday, string> = {
