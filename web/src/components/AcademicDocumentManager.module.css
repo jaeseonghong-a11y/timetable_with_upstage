@@ -34,6 +34,37 @@
   line-height: 1.2;
 }
 
+.skipAvailability {
+  display: inline-block;
+  margin-left: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  vertical-align: middle;
+}
+
+.skipButton {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.skipButton:hover,
+.skipButton:focus-visible {
+  border-color: var(--accent-strong);
+  color: var(--accent-strong);
+  outline: none;
+}
+
 .upstageBadge {
   justify-self: start;
   margin: 0;
@@ -61,6 +92,8 @@
 }
 
 .kindLead p {
+  display: grid;
+  gap: 2px;
   margin: 0;
   color: var(--text-secondary);
   font-size: 13px;
@@ -117,13 +150,78 @@
   color: var(--accent-strong);
 }
 
+.documentInfoList {
+  display: grid;
+  gap: 8px;
+}
+
+.documentInfoPanel {
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: 11px;
+  background: var(--surface-note);
+}
+
+.documentInfoToggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 54px;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.documentInfoToggle[aria-expanded="true"] {
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-card);
+}
+
+.documentInfoToggle > span:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.documentInfoToggle strong {
+  font-size: 13px;
+}
+
+.documentInfoToggle small {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.documentInfoChevron {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--surface-card);
+  color: var(--accent-strong);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.documentInfoContent {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
 .privacyNotice {
   display: grid;
   gap: 10px;
-  padding: 12px 14px;
-  border: 1px solid var(--border-warning);
-  border-radius: 12px;
-  background: var(--surface-warning-subtle);
+  padding: 0;
 }
 
 .privacyNotice p {
@@ -135,29 +233,6 @@
 
 .privacyNotice p strong {
   color: var(--text-primary);
-}
-
-.privacyNoticeHeading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.privacyNoticeHeading strong {
-  color: var(--text-primary);
-  font-size: 13px;
-}
-
-.privacyNoticeToggle {
-  padding: 3px 9px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 999px;
-  background: var(--surface-card);
-  color: var(--accent-strong);
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
 }
 
 .privacyNoticeDetails {
@@ -339,10 +414,6 @@
 
 .attachGuide {
   margin: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  background: var(--surface-note);
   color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.6;
@@ -354,6 +425,36 @@
 
 .attachGuide a {
   color: #2563eb;
+}
+
+.exampleDescription {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.pdfPreview {
+  overflow: hidden;
+  height: min(280px, 48vw);
+  min-height: 190px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-page);
+}
+
+.pdfPreview iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.pdfPreviewLink {
+  justify-self: start;
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .uploadRow {
@@ -405,6 +506,53 @@
   opacity: 0.55;
 }
 
+.selectedFileList {
+  display: grid;
+  gap: 6px;
+  margin: -4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.selectedFileList li {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  background: var(--surface-page);
+}
+
+.selectedFileList span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selectedFileList button {
+  flex: none;
+  padding: 4px 7px;
+  border: 0;
+  background: transparent;
+  color: var(--text-error);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.selectedFileList button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .limit {
   margin-top: -14px;
   font-size: 13px;
@@ -426,6 +574,12 @@
   font-size: 12px;
   font-weight: 400;
   opacity: 0.85;
+}
+
+.analysisFileCounter {
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .analysisProgressBar {
@@ -1095,6 +1249,26 @@
 }
 
 @media (max-width: 600px) {
+  .heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .documentInfoToggle {
+    min-height: 52px;
+    padding: 9px 10px;
+  }
+
+  .documentInfoContent {
+    padding: 10px;
+  }
+
+  .pdfPreview {
+    height: 220px;
+    min-height: 0;
+  }
+
   .kindTabs,
   .fieldGrid,
   .ruleEditor {

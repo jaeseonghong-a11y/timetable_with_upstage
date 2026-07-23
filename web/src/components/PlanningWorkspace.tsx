@@ -7,6 +7,7 @@ import { initAbandonTracking, track } from "@/lib/analytics";
 import {
   getExcludedCourseNumbers,
   getCourseQueryLabel,
+  getStudentProfileError,
   INITIAL_STUDENT_PROFILE,
   toAcademicProfileDetails,
   toSkkuCourseQuery,
@@ -128,15 +129,48 @@ export function PlanningWorkspace() {
     }
   }
 
+  function applyStudentProfile(): boolean {
+    if (getStudentProfileError(studentProfile)) {
+      return false;
+    }
+
+    const profileChanged =
+      !appliedProfile ||
+      appliedProfile.departmentCode !== studentProfile.departmentCode ||
+      appliedProfile.admissionYear !== studentProfile.admissionYear ||
+      appliedProfile.currentGrade !== studentProfile.currentGrade ||
+      appliedProfile.primaryCampus !== studentProfile.primaryCampus ||
+      appliedProfile.courseYear !== studentProfile.courseYear ||
+      appliedProfile.courseTerm !== studentProfile.courseTerm ||
+      !sameDepartmentCodes(
+        appliedProfile.additionalDepartmentCodes,
+        studentProfile.additionalDepartmentCodes,
+      );
+    if (!profileChanged) {
+      return true;
+    }
+
+    setAppliedProfile({ ...studentProfile });
+    setRoadmapProgramCodes([
+      studentProfile.departmentCode,
+      ...(studentProfile.additionalDepartmentCodes ?? []),
+    ]);
+    // Start the major-course request while the user reviews their documents, so STEP 3 opens
+    // with the list already loading or ready. This is now part of the single STEP 1 "다음" flow.
+    setHasEnteredPlanner(true);
+    track("profile_applied");
+    return true;
+  }
+
   function goToStep(nextStep: StepId): void {
-    if (nextStep !== 1 && !appliedProfile) {
+    if (nextStep !== 1 && !applyStudentProfile()) {
       return;
     }
     enterStep(nextStep);
   }
 
   function goToDocSubstep(target: DocSubstep): void {
-    if (!appliedProfile) {
+    if (!applyStudentProfile()) {
       return;
     }
     setDocSubstep(target);
@@ -152,6 +186,9 @@ export function PlanningWorkspace() {
   }
 
   function goNext(): void {
+    if (step === 1 && !applyStudentProfile()) {
+      return;
+    }
     if (step === 2 && docSubstep === "course_history") {
       setDocSubstep("graduation_requirements");
       return;
@@ -217,7 +254,7 @@ export function PlanningWorkspace() {
   const connectorProgress = (visualSlotIndex / (VISUAL_SLOT_COUNT - 1)) * 100;
   const currentDocumentConfirmed = Boolean(confirmedProfiles[docSubstep]);
   const nextBlocked =
-    (step === 1 && !appliedProfile) ||
+    (step === 1 && Boolean(getStudentProfileError(studentProfile))) ||
     (step === 2 &&
       (documentAnalysisState.isAnalyzing || !currentDocumentConfirmed)) ||
     (step === 3 && !aiRecommendAction.canRun) ||
@@ -379,21 +416,7 @@ export function PlanningWorkspace() {
       <div className={styles.stepPanel}>
         {step === 1 ? (
           <StudentProfileForm
-            appliedProfile={appliedProfile}
             profile={studentProfile}
-            onApply={(profile) => {
-              setAppliedProfile({ ...profile });
-              setRoadmapProgramCodes([
-                profile.departmentCode,
-                ...(profile.additionalDepartmentCodes ?? []),
-              ]);
-              // Mount TimetablePlanner (hidden) right away so its major-course fetch starts in
-              // the background while the student is still on step 2, instead of only starting
-              // once they open step 3 — the two-campus fetch takes long enough that waiting for
-              // step 3 to even begin loading made 과목 담기 feel stuck on open.
-              setHasEnteredPlanner(true);
-              track("profile_applied");
-            }}
             onChange={setStudentProfile}
           />
         ) : null}
@@ -406,6 +429,7 @@ export function PlanningWorkspace() {
               onAnalysisStateChange={setDocumentAnalysisState}
               onWorkingProfileChange={updateWorkingProfile}
               onConfirmedProfileChange={updateConfirmedProfile}
+              onSkip={skipCurrentDocument}
             />
           </div>
         ) : null}
@@ -438,7 +462,7 @@ export function PlanningWorkspace() {
         <div className={styles.navActions}>
           {step === 2 ? (
             <button type="button" onClick={skipCurrentDocument}>
-              건너뛰기
+              이번 문서 건너뛰기
             </button>
           ) : null}
           {step === 3 ? (
@@ -458,9 +482,6 @@ export function PlanningWorkspace() {
             </button>
           ) : null}
         </div>
-        {step === 1 && !appliedProfile ? (
-          <p className={styles.navHint}>기본정보를 적용해야 다음 단계로 갈 수 있습니다.</p>
-        ) : null}
         {step === 2 ? (
           <p className={styles.navHint}>
             {documentAnalysisState.isAnalyzing
@@ -511,4 +532,11 @@ function updateProfileMap(
     delete next[kind];
   }
   return next;
+}
+
+function sameDepartmentCodes(left: readonly string[] | undefined, right: readonly string[] | undefined): boolean {
+  const normalizedLeft = left ?? [];
+  const normalizedRight = right ?? [];
+  return normalizedLeft.length === normalizedRight.length &&
+    normalizedLeft.every((code, index) => code === normalizedRight[index]);
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   getClipboardImageFile,
+  getClipboardImageFiles,
   MAX_ACADEMIC_DOCUMENT_BYTES,
   validateAcademicDocumentFile,
 } from "./academic-document-file";
@@ -39,5 +40,15 @@ describe("academic document file input", () => {
     expect(
       getClipboardImageFile([{ kind: "string", type: "text/plain", getAsFile: () => null }]),
     ).toBeNull();
+  });
+
+  it("keeps every image from one clipboard event for multi-screenshot attachment", () => {
+    const firstImage = new File(["first"], "first.png", { type: "image/png" });
+    const secondImage = new File(["second"], "second.jpg", { type: "image/jpeg" });
+
+    expect(getClipboardImageFiles([
+      { kind: "file", type: "image/png", getAsFile: () => firstImage },
+      { kind: "file", type: "image/jpeg", getAsFile: () => secondImage },
+    ])).toEqual([firstImage, secondImage]);
   });
 });

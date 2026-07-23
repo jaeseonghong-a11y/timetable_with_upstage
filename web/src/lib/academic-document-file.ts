@@ -24,16 +24,27 @@ export function validateAcademicDocumentFile(file: File): string | null {
 export function getClipboardImageFile(
   items: ArrayLike<ClipboardFileItem> | null | undefined,
 ): File | null {
+  return getClipboardImageFiles(items)[0] ?? null;
+}
+
+/** Returns every image present in one clipboard event, preserving its original item order. */
+export function getClipboardImageFiles(
+  items: ArrayLike<ClipboardFileItem> | null | undefined,
+): File[] {
   if (!items) {
-    return null;
+    return [];
   }
+  const files: File[] = [];
   for (let index = 0; index < items.length; index += 1) {
     const item = items[index];
     if (item?.kind === "file" && item.type.startsWith("image/")) {
-      return item.getAsFile();
+      const file = item.getAsFile();
+      if (file) {
+        files.push(file);
+      }
     }
   }
-  return null;
+  return files;
 }
 
 function isSupportedAcademicDocument(file: File): boolean {

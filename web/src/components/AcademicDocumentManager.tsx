@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { ReactNode } from "react";
 
 import type { AcademicDocumentKind, AcademicProfile } from "@/lib/academic-profile";
 import {
-  getClipboardImageFile,
+  getClipboardImageFiles,
   validateAcademicDocumentFile,
 } from "@/lib/academic-document-file";
 import {
@@ -16,8 +17,8 @@ import {
   markAcademicProfileDraft,
   parseAcademicProfileResponse,
 } from "@/lib/academic-profile-client";
+import { mergeGraduationRequirementProfiles } from "@/lib/academic-profile-merge";
 import { track } from "@/lib/analytics";
-import { MAX_DOCUMENT_SIZE_LABEL } from "@/lib/document-limits";
 
 import { AcademicCourseEditor } from "./AcademicCourseEditor";
 import { AcademicRequirementEditor } from "./AcademicRequirementEditor";
@@ -25,34 +26,100 @@ import styles from "./AcademicDocumentManager.module.css";
 
 const KIND_DETAILS: Record<
   AcademicDocumentKind,
-  { label: string; heading: string; description: string; attachGuide: string }
+  {
+    label: string;
+    heading: string;
+    description: readonly string[];
+    attachGuide: string;
+    guidePdf: string;
+    examplePdf: string;
+  }
 > = {
   course_history: {
     label: "수강/취득과목",
     heading: "수강/취득 과목 첨부하기",
-    description:
-      "문서 분석을 통해 기수강 과목을 한눈에 확인하세요. 기수강 과목은 앞으로 담을 과목 후보에서 제외됩니다. 재수강이 필요한 과목은 검색 후 '재수강'을 체크하면 다시 후보에 포함됩니다.",
+    description: [
+      "문서 분석을 통해 기수강 과목을 한눈에 확인하세요.",
+      "기수강 과목은 앞으로 담을 과목 후보와 AI 추천에서 제외됩니다.",
+      "재수강 예정인 과목은 분석 후 수동으로 변경 가능해요.",
+    ],
     attachGuide:
       "성균관대학교 GLS → 학적/개인영역 → 졸업자가진단 → 졸업요건충족현황조회 → 수강/취득 과목 출력 → PDF 저장 → 업로드",
+    guidePdf: "/step2-guides/course-history-guide.pdf",
+    examplePdf: "/step2-guides/course-history-example.pdf",
   },
   graduation_requirements: {
     label: "졸업요건충족현황",
     heading: "졸업요건 충족현황 첨부하기",
-    description: "문서 분석으로 남은 졸업요건을 확인하세요.",
+    description: [
+      "문서 분석으로 남은 졸업요건을 확인하세요.",
+      "AI가 남은 졸업요건을 기준으로 추천합니다.",
+    ],
     attachGuide:
       "성균관대학교 GLS → 학적/개인영역 → 졸업자가진단 → 졸업요건충족현황조회 → 영역별 학점취득/수강현황 + 이수구분별 학점취득/수강현황 부분이 모두 보이도록 스크린샷 → 붙여넣기, 혹은 저장 후 업로드",
+    guidePdf: "/step2-guides/graduation-requirements-guide.pdf",
+    examplePdf: "/step2-guides/graduation-requirements-example.pdf",
   },
 };
 
 type ProfilesByKind = Partial<Record<AcademicDocumentKind, AcademicProfile>>;
 type AcknowledgementsByKind = Partial<Record<AcademicDocumentKind, string[]>>;
 type FileInputMethod = "picker" | "clipboard";
+interface SelectedAcademicDocument {
+  file: File;
+  inputMethod: FileInputMethod;
+}
+
+type DocumentInfoPanelKind = "privacy" | "guide" | "example";
+
+interface DocumentInfoPanelProps {
+  id: string;
+  title: string;
+  summary: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}
+
+function DocumentInfoPanel({
+  id,
+  title,
+  summary,
+  isOpen,
+  onToggle,
+  children,
+}: DocumentInfoPanelProps) {
+  return (
+    <section className={styles.documentInfoPanel}>
+      <button
+        aria-controls={id}
+        aria-expanded={isOpen}
+        className={styles.documentInfoToggle}
+        type="button"
+        onClick={onToggle}
+      >
+        <span>
+          <strong>{title}</strong>
+          <small>{summary}</small>
+        </span>
+        <span aria-hidden="true" className={styles.documentInfoChevron}>
+          {isOpen ? "−" : "+"}
+        </span>
+      </button>
+      {isOpen ? (
+        <div className={styles.documentInfoContent} id={id}>
+          {children}
+        </div>
+      ) : null}
+    </section>
+  );
+}
 
 /**
- * Purely cosmetic stage labels shown while analyzeDocument()'s single fetch is in flight — the
- * server does not stream real progress, so this is a timed guess at what's likely happening, not
- * a measured percentage. Stops advancing at the last label rather than looping, so a slow request
- * never looks like it silently restarted.
+ * Purely cosmetic stage labels shown while analyzeDocument()'s request sequence is in flight —
+ * the server does not stream real progress, so this is a timed guess at what's likely happening,
+ * not a measured percentage. Stops advancing at the last label rather than looping, so a slow
+ * request never looks like it silently restarted.
  *
  * 수강/취득과목과 졸업요건충족현황은 실제 서버 처리 과정이 다르다(전자는 과목별 표 파싱 +
  * 누락 과목 재시도, 후자는 영역별 충족 판정 + 복합 학점 표기 보존) — 문서 종류에 맞는 문구를
@@ -117,6 +184,8 @@ interface Props {
     isAnalyzing: boolean;
     hasAnalyzedDocument: boolean;
   }) => void;
+  /** Shows the same Step-2 skip action near the document heading for a clearly optional flow. */
+  onSkip?: () => void;
 }
 
 export function AcademicDocumentManager({
@@ -125,20 +194,18 @@ export function AcademicDocumentManager({
   onWorkingProfileChange,
   onConfirmedProfileChange,
   onAnalysisStateChange,
+  onSkip,
 }: Props = {}) {
   const [internalKind, setInternalKind] = useState<AcademicDocumentKind>("course_history");
-  // 문서 종류(kind)별로 따로 기억한다 — "다시 분석하기"가 재업로드 없이 그대로 재분석할 수
-  // 있어야 하는데, 단일 file 상태였다면 2-1↔2-2를 오가며 kind가 바뀔 때마다 파일이 초기화돼
-  // 이미 분석해 둔 문서로 돌아와도 다시 올려야 했다.
-  const [filesByKind, setFilesByKind] = useState<Partial<Record<AcademicDocumentKind, File>>>({});
-  const [fileInputMethodsByKind, setFileInputMethodsByKind] = useState<
-    Partial<Record<AcademicDocumentKind, FileInputMethod>>
+  // 문서 종류(kind)별로 따로 기억한다. 졸업요건 표는 한 화면에 모두 담기 어려워 여러 장의
+  // 스크린샷을 순서대로 합쳐야 하므로, 선택 파일과 입력 경로도 배열로 보존한다.
+  const [filesByKind, setFilesByKind] = useState<
+    Partial<Record<AcademicDocumentKind, SelectedAcademicDocument[]>>
   >({});
   const [hasConsented, setHasConsented] = useState(false);
-  // Starts expanded so the full notice (수집 목적/항목/보유기간/거부권리) is read at least once
-  // before agreeing; collapses to a one-line summary once checked so it doesn't keep taking up
-  // space on every later visit, but stays independently toggleable so it's never unreadable again.
-  const [isPrivacyNoticeExpanded, setIsPrivacyNoticeExpanded] = useState(true);
+  const [openDocumentInfoPanel, setOpenDocumentInfoPanel] = useState<DocumentInfoPanelKind | null>(
+    null,
+  );
   const [profiles, setProfiles] = useState<ProfilesByKind>({});
   const [acknowledgements, setAcknowledgements] = useState<AcknowledgementsByKind>({});
   const [collapsedResults, setCollapsedResults] = useState<Partial<Record<AcademicDocumentKind, boolean>>>({});
@@ -146,16 +213,18 @@ export function AcademicDocumentManager({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStageIndex, setAnalysisStageIndex] = useState(0);
   const [analysisFlavorIndex, setAnalysisFlavorIndex] = useState(-1);
+  const [analysisFileIndex, setAnalysisFileIndex] = useState(0);
 
   const kind = activeKind ?? internalKind;
   const kindControlled = activeKind !== undefined;
-  const file = filesByKind[kind];
-  const fileInputMethod = fileInputMethodsByKind[kind];
+  const selectedFiles = filesByKind[kind] ?? [];
+  const supportsMultipleFiles = kind === "graduation_requirements";
   const [previousActiveKind, setPreviousActiveKind] = useState(activeKind);
   if (previousActiveKind !== activeKind) {
     setPreviousActiveKind(activeKind);
     if (activeKind !== undefined) {
       setError("");
+      setOpenDocumentInfoPanel(null);
     }
   }
 
@@ -187,28 +256,48 @@ export function AcademicDocumentManager({
     }
     setInternalKind(nextKind);
     setError("");
+    setOpenDocumentInfoPanel(null);
   }
 
-  const selectFile = useCallback((
-    nextFile: File | undefined,
+  function toggleDocumentInfoPanel(nextPanel: DocumentInfoPanelKind): void {
+    setOpenDocumentInfoPanel((currentPanel) =>
+      currentPanel === nextPanel ? null : nextPanel,
+    );
+  }
+
+  const selectFiles = useCallback((
+    nextFiles: readonly File[],
     inputMethod: FileInputMethod = "picker",
   ): void => {
     setError("");
-    if (!nextFile) {
-      setFilesByKind((current) => ({ ...current, [kind]: undefined }));
-      setFileInputMethodsByKind((current) => ({ ...current, [kind]: undefined }));
+    if (nextFiles.length === 0) {
       return;
     }
-    const validationError = validateAcademicDocumentFile(nextFile);
+    const validationError = nextFiles
+      .map(validateAcademicDocumentFile)
+      .find((message): message is string => message !== null);
     if (validationError) {
-      setFilesByKind((current) => ({ ...current, [kind]: undefined }));
-      setFileInputMethodsByKind((current) => ({ ...current, [kind]: undefined }));
       setError(validationError);
       return;
     }
-    setFilesByKind((current) => ({ ...current, [kind]: nextFile }));
-    setFileInputMethodsByKind((current) => ({ ...current, [kind]: inputMethod }));
-  }, [kind]);
+    setFilesByKind((current) => {
+      const existingFiles = supportsMultipleFiles ? current[kind] ?? [] : [];
+      const additions = nextFiles
+        .filter((nextFile) => !existingFiles.some(({ file }) => isSameFile(file, nextFile)))
+        .map((file) => ({ file, inputMethod }));
+      return {
+        ...current,
+        [kind]: [...existingFiles, ...additions],
+      };
+    });
+  }, [kind, supportsMultipleFiles]);
+
+  function removeSelectedFile(index: number): void {
+    setFilesByKind((current) => ({
+      ...current,
+      [kind]: (current[kind] ?? []).filter((_, currentIndex) => currentIndex !== index),
+    }));
+  }
 
   useEffect(() => {
     if (kind !== "graduation_requirements") {
@@ -218,16 +307,16 @@ export function AcademicDocumentManager({
       if (event.defaultPrevented || isTextEditingTarget(event.target)) {
         return;
       }
-      const pastedImage = getClipboardImageFile(event.clipboardData?.items);
-      if (!pastedImage) {
+      const pastedImages = getClipboardImageFiles(event.clipboardData?.items);
+      if (pastedImages.length === 0) {
         return;
       }
       event.preventDefault();
-      selectFile(pastedImage, "clipboard");
+      selectFiles(pastedImages, "clipboard");
     }
     window.addEventListener("paste", pasteClipboardImage);
     return () => window.removeEventListener("paste", pasteClipboardImage);
-  }, [kind, selectFile]);
+  }, [kind, selectFiles]);
 
   useEffect(() => {
     if (!isAnalyzing) {
@@ -259,11 +348,12 @@ export function AcademicDocumentManager({
   }, [isAnalyzing, onAnalysisStateChange, profiles]);
 
   async function analyzeDocument(): Promise<void> {
-    if (!file || !hasConsented) {
+    if (selectedFiles.length === 0 || !hasConsented) {
       return;
     }
     setAnalysisStageIndex(0);
     setAnalysisFlavorIndex(-1);
+    setAnalysisFileIndex(1);
     setIsAnalyzing(true);
     setError("");
     track("document_upload_start", { doc_type: kind });
@@ -278,31 +368,38 @@ export function AcademicDocumentManager({
       });
     };
     try {
-      const formData = new FormData();
-      formData.set("kind", kind);
-      formData.set("document", file);
-      const response = await fetch("/api/parse-academic-document", {
-        method: "POST",
-        body: formData,
-      });
-      const payload: unknown = await response.json();
-      if (!response.ok) {
-        trackFailure(getAcademicDocumentApiErrorCode(payload));
-        throw new Error(getAcademicDocumentApiError(payload));
+      const parsedProfiles: AcademicProfile[] = [];
+      for (const [index, { file }] of selectedFiles.entries()) {
+        setAnalysisFileIndex(index + 1);
+        const formData = new FormData();
+        formData.set("kind", kind);
+        formData.set("document", file);
+        const response = await fetch("/api/parse-academic-document", {
+          method: "POST",
+          body: formData,
+        });
+        const payload: unknown = await response.json();
+        if (!response.ok) {
+          trackFailure(getAcademicDocumentApiErrorCode(payload));
+          throw new Error(`${index + 1}번째 파일: ${getAcademicDocumentApiError(payload)}`);
+        }
+        const parsedProfile = parseAcademicProfileResponse(payload);
+        if (!parsedProfile.sourceDocuments.some((document) => document.kind === kind)) {
+          trackFailure("kind_mismatch");
+          throw new Error(`${index + 1}번째 파일의 문서 종류가 다릅니다. 다시 확인해 주세요.`);
+        }
+        parsedProfiles.push(parsedProfile);
       }
-      const nextProfile = parseAcademicProfileResponse(payload);
-      if (!nextProfile.sourceDocuments.some((document) => document.kind === kind)) {
-        trackFailure("kind_mismatch");
-        throw new Error("선택한 문서 종류와 분석 결과가 다릅니다. 다시 시도해 주세요.");
-      }
+      const nextProfile = kind === "graduation_requirements" && parsedProfiles.length > 1
+        ? mergeGraduationRequirementProfiles(parsedProfiles)
+        : parsedProfiles[0]!;
       setProfiles((current) => ({ ...current, [kind]: nextProfile }));
       onWorkingProfileChange?.(kind, nextProfile);
       onConfirmedProfileChange?.(kind, undefined);
       setAcknowledgements((current) => ({ ...current, [kind]: [] }));
       setCollapsedResults((current) => ({ ...current, [kind]: false }));
-      // Deliberately keep `file`/`fileInputMethod` set (not cleared) after a successful analysis:
-      // this is what lets "다시 분석하기" re-run the exact same file without forcing a re-upload.
-      // Picking a different file still works the same as always via the file input's own onChange.
+      // Keep the browser-memory-only selection after success, so "다시 분석하기" can rerun the
+      // exact same file set without a re-upload. The API never persists originals.
       track("document_parse_success", {
         doc_type: kind,
         duration_ms: Math.round(performance.now() - startedAt),
@@ -318,6 +415,7 @@ export function AcademicDocumentManager({
       );
     } finally {
       setIsAnalyzing(false);
+      setAnalysisFileIndex(0);
     }
   }
 
@@ -423,30 +521,35 @@ export function AcademicDocumentManager({
     <section className={styles.panel} aria-labelledby="academic-document-heading">
       <div className={styles.intro}>
         <div className={styles.heading}>
-          <h2 id="academic-document-heading">STEP 2 · 내 기록 적용하기</h2>
+          <h2 id="academic-document-heading">
+            STEP 2 · 내 기록 적용하기 <span className={styles.skipAvailability}>(Skip 가능)</span>
+          </h2>
+          {onSkip ? (
+            <button className={styles.skipButton} type="button" onClick={onSkip}>
+              이번 문서 건너뛰기
+            </button>
+          ) : null}
         </div>
         <p className={styles.upstageBadge}>with Upstage Document Parse + Solar</p>
       </div>
 
       <div className={styles.kindLead}>
         <h3>{detail.heading}</h3>
-        <p>{detail.description}</p>
+        <p>
+          {detail.description.map((sentence) => (
+            <span key={sentence}>{sentence}</span>
+          ))}
+        </p>
       </div>
 
-      <div className={styles.privacyNotice}>
-        <div className={styles.privacyNoticeHeading}>
-          <strong>[개인정보 수집 및 이용 동의]</strong>
-          {hasConsented ? (
-            <button
-              className={styles.privacyNoticeToggle}
-              type="button"
-              onClick={() => setIsPrivacyNoticeExpanded((expanded) => !expanded)}
-            >
-              {isPrivacyNoticeExpanded ? "간략히 보기" : "자세히 보기"}
-            </button>
-          ) : null}
-        </div>
-        {isPrivacyNoticeExpanded ? (
+      <DocumentInfoPanel
+        id="academic-document-privacy-notice"
+        isOpen={openDocumentInfoPanel === "privacy"}
+        summary={hasConsented ? "동의 완료" : "내용 확인 후 동의"}
+        title="개인정보 수집 및 이용 동의"
+        onToggle={() => toggleDocumentInfoPanel("privacy")}
+      >
+        <div className={styles.privacyNotice}>
           <dl className={styles.privacyNoticeDetails}>
             <div>
               <dt>수집 및 이용 목적</dt>
@@ -483,25 +586,16 @@ export function AcademicDocumentManager({
               </dd>
             </div>
           </dl>
-        ) : (
-          <p className={styles.privacyNoticeSummary}>
-            동의 완료 — 업로드한 파일을 분석을 위해 외부 API(Upstage)로 전송하며, 원본과 개인
-            식별 정보는 저장하지 않습니다.
-          </p>
-        )}
-        <label>
-          <input
-            checked={hasConsented}
-            type="checkbox"
-            onChange={(event) => {
-              const checked = event.target.checked;
-              setHasConsented(checked);
-              setIsPrivacyNoticeExpanded(!checked);
-            }}
-          />
-          <span>위 내용을 확인했으며, 개인정보 수집 및 이용에 동의합니다.</span>
-        </label>
-      </div>
+          <label>
+            <input
+              checked={hasConsented}
+              type="checkbox"
+              onChange={(event) => setHasConsented(event.target.checked)}
+            />
+            <span>위 내용을 확인했으며, 개인정보 수집 및 이용에 동의합니다.</span>
+          </label>
+        </div>
+      </DocumentInfoPanel>
 
       {kindControlled ? null : (
         <div className={styles.kindTabs} role="tablist" aria-label="학사문서 종류">
@@ -565,49 +659,114 @@ export function AcademicDocumentManager({
         </div>
       ) : null}
 
-      <p className={styles.attachGuide}>
-        <strong>어디서 받나요?</strong> {detail.attachGuide}
-        <br />
-        성균관대학교 GLS 링크:{" "}
-        <a
-          href="https://kingoinfo.skku.edu/gaia/nxui/index.html"
-          rel="noreferrer"
-          target="_blank"
+      <div className={styles.documentInfoList}>
+        <DocumentInfoPanel
+          id={`academic-document-guide-${kind}`}
+          isOpen={openDocumentInfoPanel === "guide"}
+          summary="GLS 발급 경로와 안내 보기"
+          title="어디서 받나요?"
+          onToggle={() => toggleDocumentInfoPanel("guide")}
         >
-          https://kingoinfo.skku.edu/gaia/nxui/index.html
-        </a>
-      </p>
+          <p className={styles.attachGuide}>
+            {detail.attachGuide}
+            <br />
+            성균관대학교 GLS 링크:{" "}
+            <a
+              href="https://kingoinfo.skku.edu/gaia/nxui/index.html"
+              rel="noreferrer"
+              target="_blank"
+            >
+              GLS 열기
+            </a>
+          </p>
+          <div className={styles.pdfPreview}>
+            <iframe
+              loading="lazy"
+              src={`${detail.guidePdf}#view=FitH&toolbar=0&navpanes=0`}
+              title={`${detail.label} 발급 안내 PDF 미리보기`}
+            />
+          </div>
+          <a
+            className={styles.pdfPreviewLink}
+            href={detail.guidePdf}
+            rel="noreferrer"
+            target="_blank"
+          >
+            안내 PDF 크게 보기
+          </a>
+        </DocumentInfoPanel>
+
+        <DocumentInfoPanel
+          id={`academic-document-example-${kind}`}
+          isOpen={openDocumentInfoPanel === "example"}
+          summary="업로드할 파일 모양 미리 보기"
+          title="예시 이미지 보기"
+          onToggle={() => toggleDocumentInfoPanel("example")}
+        >
+          <p className={styles.exampleDescription}>
+            아래처럼 필요한 표가 모두 보이는 PDF 또는 캡처 이미지를 첨부해 주세요.
+          </p>
+          <div className={styles.pdfPreview}>
+            <iframe
+              loading="lazy"
+              src={`${detail.examplePdf}#view=FitH&toolbar=0&navpanes=0`}
+              title={`${detail.label} 예시 PDF 미리보기`}
+            />
+          </div>
+          <a
+            className={styles.pdfPreviewLink}
+            href={detail.examplePdf}
+            rel="noreferrer"
+            target="_blank"
+          >
+            예시 PDF 크게 보기
+          </a>
+        </DocumentInfoPanel>
+      </div>
 
       <div className={styles.uploadRow}>
         <label className={styles.filePicker}>
           <span>
-            {file
-              ? fileInputMethod === "clipboard"
-                ? "캡처 이미지 붙여넣음"
-                : "파일 선택됨"
-              : `${detail.label} PDF/이미지 선택`}
+            {selectedFiles.length > 0
+              ? `${selectedFiles.length}개 파일 첨부됨`
+              : `${detail.label} 첨부하기`}
           </span>
           <input
             accept="application/pdf,image/png,image/jpeg,.pdf,.png,.jpg,.jpeg"
+            multiple={supportsMultipleFiles}
             type="file"
             onChange={(event) => {
-              selectFile(event.target.files?.[0], "picker");
+              selectFiles(Array.from(event.target.files ?? []), "picker");
               event.target.value = "";
             }}
           />
         </label>
         <button
-          disabled={!file || isAnalyzing || !hasConsented}
+          disabled={selectedFiles.length === 0 || isAnalyzing || !hasConsented}
           type="button"
           onClick={() => void analyzeDocument()}
         >
           {isAnalyzing ? "Parse + Solar 분석 중…" : profile ? "다시 분석하기" : "문서 분석하기"}
         </button>
       </div>
-      {kind === "graduation_requirements" && !profile ? (
-        <button className={styles.manualEntryButton} type="button" onClick={startManualEntry}>
-          서류 없이 직접 입력하기
-        </button>
+      {selectedFiles.length > 0 ? (
+        <ul className={styles.selectedFileList} aria-label="첨부한 파일">
+          {selectedFiles.map(({ file, inputMethod }, index) => (
+            <li key={`${file.name}-${file.size}-${file.lastModified}-${index}`}>
+              <span>
+                {inputMethod === "clipboard" ? `붙여넣은 캡처 ${index + 1}` : file.name}
+              </span>
+              <button
+                aria-label={`${inputMethod === "clipboard" ? `붙여넣은 캡처 ${index + 1}` : file.name} 삭제`}
+                disabled={isAnalyzing}
+                type="button"
+                onClick={() => removeSelectedFile(index)}
+              >
+                삭제
+              </button>
+            </li>
+          ))}
+        </ul>
       ) : null}
       {isAnalyzing ? (
         <div className={styles.analysisProgress} role="status" aria-live="polite">
@@ -617,6 +776,11 @@ export function AcademicDocumentManager({
               ? ANALYSIS_LONG_WAIT_FLAVORS[kind][analysisFlavorIndex]
               : ANALYSIS_STAGES[kind][analysisStageIndex]}
           </span>
+          {selectedFiles.length > 1 ? (
+            <small className={styles.analysisFileCounter}>
+              {analysisFileIndex || 1} / {selectedFiles.length}번째 파일을 분석하고 있어요.
+            </small>
+          ) : null}
           {/* 복수전공처럼 과목이 많은 문서는 실제로 몇 분 걸릴 수 있다 — 진행 중인데 멈춘 것으로
               오해해 재시도/이탈하지 않도록 처음부터 넉넉한 기대치를 알려준다. */}
           <small className={styles.analysisWaitHint}>
@@ -624,7 +788,7 @@ export function AcademicDocumentManager({
           </small>
         </div>
       ) : null}
-      {file && !hasConsented ? (
+      {selectedFiles.length > 0 && !hasConsented ? (
         <p className={styles.consentHint}>
           외부 전송 동의에 체크해야 분석을 시작할 수 있습니다.
         </p>
@@ -632,12 +796,14 @@ export function AcademicDocumentManager({
       {kind === "graduation_requirements" ? (
         <button className={styles.pasteZone} type="button">
           <span>캡처를 복사한 뒤 여기에서 <kbd>Ctrl</kbd> + <kbd>V</kbd></span>
-          <small>졸업요건 캡처는 파일로 저장하지 않고 바로 붙여넣을 수 있습니다.</small>
+          <small>여러 장이면 한 장씩 계속 붙여넣으세요. 첨부 목록에 누적한 뒤 한 번에 분석합니다.</small>
         </button>
       ) : null}
-      <p className={styles.limit}>
-        PDF/PNG/JPG 1개 · 최대 {MAX_DOCUMENT_SIZE_LABEL} · 성공 후 원본 파일 상태 해제
-      </p>
+      {kind === "graduation_requirements" && !profile ? (
+        <button className={styles.manualEntryButton} type="button" onClick={startManualEntry}>
+          서류 없이 직접 입력하기
+        </button>
+      ) : null}
 
       {error ? <p className={styles.error} role="alert">{error}</p> : null}
 
@@ -718,4 +884,11 @@ function isTextEditingTarget(target: EventTarget | null): boolean {
     target instanceof HTMLElement &&
     (target.isContentEditable || target.closest("input, textarea, select, [contenteditable='true']") !== null)
   );
+}
+
+function isSameFile(left: File, right: File): boolean {
+  return left.name === right.name &&
+    left.size === right.size &&
+    left.lastModified === right.lastModified &&
+    left.type === right.type;
 }

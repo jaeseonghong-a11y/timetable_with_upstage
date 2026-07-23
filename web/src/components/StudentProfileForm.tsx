@@ -11,8 +11,6 @@ import {
 
 import { trackFieldComplete, trackFieldFocus } from "@/lib/analytics";
 import {
-  getCourseQueryLabel,
-  getStudentProfileError,
   type StudentPlanningProfile,
 } from "@/lib/planning-profile";
 import {
@@ -35,9 +33,7 @@ import styles from "./StudentProfileForm.module.css";
 
 interface Props {
   profile: StudentPlanningProfile;
-  appliedProfile: StudentPlanningProfile | null;
   onChange: (profile: StudentPlanningProfile) => void;
-  onApply: (profile: StudentPlanningProfile) => void;
 }
 
 const TERMS: ReadonlyArray<{ value: SkkuTerm; label: string }> = [
@@ -57,7 +53,7 @@ const CAMPUS_OPTIONS: ReadonlyArray<ProfileSelectOption> = [
   { value: "natural_sciences", label: "자연과학캠퍼스" },
 ];
 
-export function StudentProfileForm({ profile, appliedProfile, onChange, onApply }: Props) {
+export function StudentProfileForm({ profile, onChange }: Props) {
   const departmentInputRef = useRef<HTMLInputElement>(null);
   const [departmentSearch, setDepartmentSearch] = useState(
     () => findSkkuDepartment(profile.departmentCode)?.name ?? "",
@@ -65,7 +61,6 @@ export function StudentProfileForm({ profile, appliedProfile, onChange, onApply 
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [isDepartmentListOpen, setIsDepartmentListOpen] = useState(false);
   const [activeDepartmentCode, setActiveDepartmentCode] = useState<string | null>(null);
-  const [error, setError] = useState("");
   const visibleDepartments = useMemo(
     () => filterSkkuDepartments(departmentFilter),
     [departmentFilter],
@@ -75,16 +70,11 @@ export function StudentProfileForm({ profile, appliedProfile, onChange, onApply 
     [visibleDepartments],
   );
   const selectedDepartment = findSkkuDepartment(profile.departmentCode);
-
-  function applyProfile(): void {
-    const nextError = getStudentProfileError(profile);
-    if (nextError) {
-      setError(nextError);
-      return;
-    }
-    setError("");
-    onApply(profile);
-  }
+  const departmentMetadata = selectedDepartment
+    ? `${selectedDepartment.college} · ${selectedDepartment.name} · ${selectedDepartment.code}`
+    : profile.departmentCode
+      ? `학과 코드 ${profile.departmentCode}`
+      : null;
 
   function changeDepartment(value: string): void {
     setDepartmentSearch(value);
@@ -179,13 +169,13 @@ export function StudentProfileForm({ profile, appliedProfile, onChange, onApply 
     <section className={styles.panel} aria-labelledby="student-profile-heading">
       <div className={styles.heading}>
         <h2 id="student-profile-heading">STEP 1 · 기본 정보 입력</h2>
-        {appliedProfile ? (
-          <span className={styles.appliedBadge}>{getCourseQueryLabel(appliedProfile)} 적용됨</span>
-        ) : null}
       </div>
 
       <div className={styles.grid}>
-        <div className={`${styles.field} ${styles.departmentField}`}>
+        <div
+          className={`${styles.field} ${styles.departmentField}`}
+          data-complete={Boolean(profile.departmentCode)}
+        >
           <label className={styles.fieldLabel} htmlFor="student-department-search">
             소속 학과·전공·트랙
           </label>
@@ -288,13 +278,9 @@ export function StudentProfileForm({ profile, appliedProfile, onChange, onApply 
               </div>
             ) : null}
           </div>
-          <small className={styles.departmentHint}>
-            {selectedDepartment
-              ? `${selectedDepartment.college} · ${selectedDepartment.name} · ${selectedDepartment.code}`
-              : profile.departmentCode
-                ? `입력 코드 ${profile.departmentCode}`
-              : "검색 결과에서 소속을 선택하세요. 목록에 없으면 6자리 코드를 입력할 수 있습니다."}
-          </small>
+          {departmentMetadata ? (
+            <small className={styles.departmentHint}>{departmentMetadata}</small>
+          ) : null}
           <div className={styles.additionalMajors}>
             <span>복수전공·연계전공·트랙 추가</span>
             {(profile.additionalDepartmentCodes ?? []).length ? (
@@ -323,7 +309,7 @@ export function StudentProfileForm({ profile, appliedProfile, onChange, onApply 
             <DepartmentAddCombobox
               excludeCodes={[profile.departmentCode, ...(profile.additionalDepartmentCodes ?? [])]}
               id="student-additional-department-search"
-              placeholder="추가할 전공·연계전공·트랙명 또는 코드 검색"
+              placeholder="추가 전공·트랙 검색"
               onSelect={(department) =>
                 onChange({
                   ...profile,
@@ -346,11 +332,7 @@ export function StudentProfileForm({ profile, appliedProfile, onChange, onApply 
           placeholder="연도 입력"
           value={profile.admissionYear}
           onChange={(admissionYear) => onChange({ ...profile, admissionYear })}
-        >
-          <small className={styles.admissionYearHint}>
-            2018~2026년은 목록에서 고르거나 다른 연도를 바로 입력하세요.
-          </small>
-        </YearCombobox>
+        />
 
         <ProfileSelect
           id="student-current-grade"
@@ -399,11 +381,6 @@ export function StudentProfileForm({ profile, appliedProfile, onChange, onApply 
         />
       </div>
 
-      <div className={styles.actions}>
-        <p>이름과 전체 학번은 받지 않습니다. 선택한 학과 범위만 성대 공개 API에서 조회합니다.</p>
-        <button type="button" onClick={applyProfile}>확정</button>
-      </div>
-      {error ? <p className={styles.error} role="alert">{error}</p> : null}
     </section>
   );
 }
@@ -484,7 +461,7 @@ function ProfileSelect({ id, label, value, options, onChange }: ProfileSelectPro
   }
 
   return (
-    <div className={styles.field}>
+    <div className={styles.field} data-complete={Boolean(value)}>
       <label className={styles.fieldLabel} id={`${id}-label`} htmlFor={id}>{label}</label>
       <div
         className={styles.profilePicker}
@@ -554,7 +531,6 @@ interface YearComboboxProps {
   max: number;
   placeholder: string;
   options: ReadonlyArray<YearOption>;
-  children?: React.ReactNode;
   onChange: (value: number | null) => void;
 }
 
@@ -566,7 +542,6 @@ function YearCombobox({
   max,
   placeholder,
   options,
-  children,
   onChange,
 }: YearComboboxProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -632,7 +607,10 @@ function YearCombobox({
   }
 
   return (
-    <div className={styles.field}>
+    <div
+      className={styles.field}
+      data-complete={value !== null && Number.isInteger(value) && value >= min && value <= max}
+    >
       <label className={styles.fieldLabel} htmlFor={id}>{label}</label>
       <div
         className={styles.profilePicker}
@@ -717,7 +695,6 @@ function YearCombobox({
           </div>
         ) : null}
       </div>
-      {children}
       <span id={`${id}-range`} className={styles.srOnly}>
         {min}년부터 {max}년까지 입력 가능
       </span>

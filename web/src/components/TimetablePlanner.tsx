@@ -890,6 +890,13 @@ export function TimetablePlanner({
       })),
     [extraProgramCodes, majorCourseGroupsBySource, roadmapProgramCodes],
   );
+  const selectedMajorProgramLabel = useMemo(() => {
+    if (selectedMajorProgramCode === "all") {
+      return "전체 전공";
+    }
+    return majorProgramTabs.find((tab) => tab.code === selectedMajorProgramCode)?.label ??
+      selectedMajorProgramCode;
+  }, [majorProgramTabs, selectedMajorProgramCode]);
   const visibleMajorCourseGroups = useMemo(
     () =>
       selectedMajorProgramCode === "all"
@@ -1727,71 +1734,71 @@ export function TimetablePlanner({
             </label>
             {courseSource === "major" ? (
               <div className={styles.majorFilters}>
-            {majorProgramTabs.length > 1 ? (
-              <div className={styles.electiveAreaFilter}>
-                <span>전공</span>
-                <div className={styles.areaChoices} aria-label="전공 선택">
-                  <button
-                    aria-pressed={selectedMajorProgramCode === "all"}
-                    className={selectedMajorProgramCode === "all" ? styles.activeArea : undefined}
-                    type="button"
-                    onClick={() => {
-                      setSelectedMajorProgramCode("all");
-                      setCourseSearch("");
-                    }}
-                  >
-                    <span>전체</span>
-                    <small>{majorCourseGroupsBySource.length}</small>
-                  </button>
-                  {majorProgramTabs.map((tab) =>
-                    tab.isExtra ? (
-                      <span className={styles.areaChoiceExtra} key={tab.code}>
-                        <button
-                          aria-pressed={selectedMajorProgramCode === tab.code}
-                          className={selectedMajorProgramCode === tab.code ? styles.activeArea : undefined}
-                          type="button"
-                          onClick={() => {
-                            setSelectedMajorProgramCode(tab.code);
-                            setCourseSearch("");
-                          }}
-                        >
-                          <span>{tab.label}</span>
-                          <small>{tab.count}</small>
-                        </button>
-                        <button
-                          aria-label={`${tab.label} 목록에서 제거`}
-                          className={styles.removeExtraTab}
-                          type="button"
-                          onClick={() => removeExtraDepartment(tab.code)}
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ) : (
+                <div className={styles.electiveAreaFilter}>
+                  <span>선택한 전공</span>
+                  <p className={styles.selectedMajorProgram}>{selectedMajorProgramLabel}</p>
+                  {majorProgramTabs.length > 1 ? (
+                    <div className={styles.areaChoices} aria-label="전공 선택">
                       <button
-                        aria-pressed={selectedMajorProgramCode === tab.code}
-                        className={selectedMajorProgramCode === tab.code ? styles.activeArea : undefined}
-                        key={tab.code}
+                        aria-pressed={selectedMajorProgramCode === "all"}
+                        className={selectedMajorProgramCode === "all" ? styles.activeArea : undefined}
                         type="button"
                         onClick={() => {
-                          setSelectedMajorProgramCode(tab.code);
+                          setSelectedMajorProgramCode("all");
                           setCourseSearch("");
                         }}
                       >
-                        <span>{tab.label}</span>
-                        <small>{tab.count}</small>
+                        <span>전체</span>
+                        <small>{majorCourseGroupsBySource.length}</small>
                       </button>
-                    ),
-                  )}
+                      {majorProgramTabs.map((tab) =>
+                        tab.isExtra ? (
+                          <span className={styles.areaChoiceExtra} key={tab.code}>
+                            <button
+                              aria-pressed={selectedMajorProgramCode === tab.code}
+                              className={selectedMajorProgramCode === tab.code ? styles.activeArea : undefined}
+                              type="button"
+                              onClick={() => {
+                                setSelectedMajorProgramCode(tab.code);
+                                setCourseSearch("");
+                              }}
+                            >
+                              <span>{tab.label}</span>
+                              <small>{tab.count}</small>
+                            </button>
+                            <button
+                              aria-label={`${tab.label} 목록에서 제거`}
+                              className={styles.removeExtraTab}
+                              type="button"
+                              onClick={() => removeExtraDepartment(tab.code)}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ) : (
+                          <button
+                            aria-pressed={selectedMajorProgramCode === tab.code}
+                            className={selectedMajorProgramCode === tab.code ? styles.activeArea : undefined}
+                            key={tab.code}
+                            type="button"
+                            onClick={() => {
+                              setSelectedMajorProgramCode(tab.code);
+                              setCourseSearch("");
+                            }}
+                          >
+                            <span>{tab.label}</span>
+                            <small>{tab.count}</small>
+                          </button>
+                        ),
+                      )}
+                    </div>
+                  ) : null}
                 </div>
-              </div>
-            ) : null}
               <div className={styles.electiveAreaFilter}>
-                <span>다른 전공 과목 찾기</span>
                 <DepartmentAddCombobox
                   excludeCodes={[...roadmapProgramCodes, ...extraProgramCodes]}
                   id="planner-extra-department-search"
-                  placeholder="전공·연계전공·트랙명 또는 코드 검색"
+                  placeholder="다른 전공·연계전공·트랙명 또는 코드 검색"
                   onSelect={(department) => void loadExtraDepartment(department)}
                 />
                 {loadingExtraDepartmentCodes.length > 0 ? (
