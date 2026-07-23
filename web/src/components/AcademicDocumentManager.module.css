@@ -15,7 +15,7 @@
 .intro {
   display: grid;
   gap: 12px;
-  max-width: 760px;
+  max-width: none;
 }
 
 .heading {
@@ -169,7 +169,7 @@
   flex: 1 1 auto;
   min-width: 0;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
   min-height: 54px;
   padding: 10px 12px;
@@ -185,7 +185,26 @@
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  padding: 8px 12px 8px 0;
+  padding: 8px 8px 8px 0;
+}
+
+.documentInfoHeader[data-has-action="true"] .documentInfoToggle {
+  display: none;
+}
+
+.documentInfoHeader[data-has-action="true"] .documentInfoAction {
+  padding-left: 12px;
+}
+
+.documentInfoExpandButton {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 48px;
+  padding: 0 12px 0 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
 }
 
 .documentInfoToggle > span:first-child {
@@ -464,8 +483,8 @@
 }
 
 .uploadRow {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
 }
 
@@ -483,7 +502,6 @@
 
 .filePicker {
   display: flex;
-  flex: 1 1 320px;
   min-width: 0;
   align-items: center;
   color: var(--text-secondary);
@@ -512,6 +530,17 @@
   opacity: 0.55;
 }
 
+.analysisButton {
+  grid-column: 2;
+  min-width: 148px;
+}
+
+.uploadRowWithPaste .analysisButton {
+  grid-row: 1 / span 2;
+  align-self: stretch;
+  min-height: 0;
+}
+
 .selectedFileList {
   display: grid;
   gap: 6px;
@@ -532,7 +561,8 @@
   background: var(--surface-page);
 }
 
-.selectedFileList span {
+.selectedFileList > li > span {
+  flex: 1 1 220px;
   min-width: 0;
   overflow: hidden;
   color: var(--text-secondary);
@@ -542,7 +572,7 @@
   white-space: nowrap;
 }
 
-.selectedFileList button {
+.selectedFileList > li > button {
   flex: none;
   padding: 4px 7px;
   border: 0;
@@ -554,9 +584,22 @@
   cursor: pointer;
 }
 
-.selectedFileList button:disabled {
+.selectedFileList > li > button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+.selectedFileList .documentStatusActions {
+  min-width: 0;
+  gap: 6px;
+}
+
+.selectedFileList .documentStatusActions > span,
+.selectedFileList .resultToggleButton {
+  min-height: 30px;
+  padding: 5px 8px;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .limit {
@@ -626,14 +669,16 @@
   }
 }
 
-.pasteZone {
-  display: grid;
-  gap: 7px;
-  width: 100%;
-  padding: 16px;
+.uploadRow .pasteZone {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px !important;
   border: 1px dashed var(--accent-strong);
-  border-radius: 12px;
-  background: var(--surface-note);
+  border-radius: 10px;
+  background: var(--surface-card) !important;
   color: var(--accent-strong);
   font: inherit;
   text-align: left;
@@ -646,6 +691,8 @@
 
 .pasteZone small {
   color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
   line-height: 1.5;
 }
 
@@ -1271,11 +1318,11 @@
   }
 
   .documentInfoHeader {
-    flex-direction: column;
+    flex-direction: row;
   }
 
   .documentInfoAction {
-    padding: 0 10px 10px;
+    padding: 8px 8px 8px 0;
   }
 
   .privacyConsent {
@@ -1351,5 +1398,16 @@
   .confirmRow button,
   .secondaryButton {
     width: 100%;
+  }
+
+  .uploadRow {
+    grid-template-columns: 1fr;
+  }
+
+  .analysisButton,
+  .uploadRowWithPaste .analysisButton {
+    grid-column: auto;
+    grid-row: auto;
+    min-height: 46px;
   }
 }

@@ -54,6 +54,30 @@
   font-size: 15px;
 }
 
+.homeLink,
+.requirementLink {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 12px;
+  border: 1px solid #3b8964;
+  border-radius: 9px;
+  color: #b7ebcd;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.homeLink {
+  margin-top: 16px;
+  background: #0b1912;
+}
+
+.homeLink:hover,
+.requirementLink:hover {
+  background: #163626;
+}
+
 .panel,
 .results {
   padding: 24px;
@@ -156,6 +180,18 @@
 
 .ruleHint {
   margin: 12px 0 0;
+}
+
+.requirementNotice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: -7px 0 16px;
+}
+
+.requirementNotice .mutedHint {
+  margin: 0;
 }
 
 .generateButton {

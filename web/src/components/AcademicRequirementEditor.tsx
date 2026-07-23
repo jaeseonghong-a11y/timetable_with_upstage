@@ -41,10 +41,9 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
   const [customLabelDraft, setCustomLabelDraft] = useState("");
   const [remainingCreditsDraft, setRemainingCreditsDraft] = useState("");
   const [addRequirementError, setAddRequirementError] = useState("");
-  const addedRequirementLabels = new Set(profile.requirements.map((requirement) => requirement.label));
-  const availableRequirementTemplates = GRADUATION_REQUIREMENT_TEMPLATES.filter(
-    (template) => !addedRequirementLabels.has(template.label),
-  );
+  // 기존에 추출된 요건과 같은 이름도 사용자가 다시 선택해 수정·보완할 수 있어야 한다.
+  // 중복을 미리 숨기면 실제 GLS 표의 15개 영역 중 일부만 보이는 것처럼 보여 수동 입력이 막힌다.
+  const availableRequirementTemplates = GRADUATION_REQUIREMENT_TEMPLATES;
 
   function isUnmetRequirement(requirement: Requirement): boolean {
     return requirement.status === "unmet";
@@ -173,11 +172,11 @@ export function AcademicRequirementEditor({ profile, onChange }: Props) {
           {needsReviewCount > 0 ? (
             <span className={styles.needsReviewBadge}>확인 필요 {needsReviewCount}</span>
           ) : null}
-          <button type="button" onClick={() => setIsListCollapsed(true)}>
-            전체 접기
-          </button>
-          <button type="button" onClick={() => setIsListCollapsed(false)}>
-            전체 펼치기
+          <button
+            type="button"
+            onClick={() => setIsListCollapsed((current) => !current)}
+          >
+            {isListCollapsed ? "전체 펼치기" : "전체 접기"}
           </button>
           <button
             className={styles.secondaryButton}

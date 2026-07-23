@@ -20,6 +20,22 @@
   letter-spacing: -0.02em;
 }
 
+.sectionHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sectionHeading h2 {
+  margin-bottom: 12px;
+}
+
+.sectionHeading .remixButton {
+  margin-bottom: 12px;
+  white-space: nowrap;
+}
+
 .mergeHint {
   margin: 0 0 12px;
   color: var(--text-secondary);

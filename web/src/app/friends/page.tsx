@@ -29,6 +29,7 @@ interface FriendView {
   status: "loading" | "error" | "ready";
   ownerLabel?: string;
   timetable?: Timetable;
+  requiredCourseIds?: string[] | null;
   error?: string;
 }
 
@@ -109,7 +110,12 @@ export default function FriendsPage() {
       if (!view) {
         return { status: "error", error: "응답 형식이 올바르지 않습니다." };
       }
-      return { status: "ready", ownerLabel: view.ownerLabel, timetable: view.timetable };
+      return {
+        status: "ready",
+        ownerLabel: view.ownerLabel,
+        timetable: view.timetable,
+        requiredCourseIds: view.requiredCourseIds,
+      };
     } catch {
       return { status: "error", error: "불러오지 못했습니다. 잠시 후 다시 시도해 주세요." };
     }
@@ -233,6 +239,15 @@ export default function FriendsPage() {
     }
   }
 
+  const canStartRemix = Boolean(
+    myView?.status === "ready" &&
+      myView.timetable &&
+      friends.some(
+        (friend) =>
+          friendViews[friend.code]?.status === "ready" && friendViews[friend.code]?.timetable,
+      ),
+  );
+
   return (
     <main className={pageStyles.page}>
       <PageReturnLink href="/" label="시간표 만들기로 돌아가기" />
@@ -243,7 +258,14 @@ export default function FriendsPage() {
       </section>
 
       <section className={styles.myCodeSection}>
-        <h2>내 코드</h2>
+        <div className={styles.sectionHeading}>
+          <h2>내 코드</h2>
+          {canStartRemix ? (
+            <Link className={styles.remixButton} href="/friends/remix">
+              리믹스 하러가기
+            </Link>
+          ) : null}
+        </div>
         {myCode ? (
           <>
             <div className={styles.myCodeCard}>
@@ -284,6 +306,11 @@ export default function FriendsPage() {
                     extras={[]}
                     heading={storedMyLabel || "내 시간표"}
                     index={0}
+                    requiredCourseIds={
+                      myView.requiredCourseIds === null
+                        ? undefined
+                        : new Set(myView.requiredCourseIds ?? [])
+                    }
                     timetable={myView.timetable}
                   />
                 </ol>
@@ -299,8 +326,7 @@ export default function FriendsPage() {
         {deleteMineError ? <p className={styles.error}>{deleteMineError}</p> : null}
       </section>
 
-      {myView?.status === "ready" && myView.timetable &&
-      friends.some((friend) => friendViews[friend.code]?.status === "ready" && friendViews[friend.code]?.timetable) ? (
+      {canStartRemix ? (
         <section className={styles.myCodeSection}>
           <h2>친구 시간표 리믹스</h2>
           <p className={styles.emptyHint}>내 시간표와 친구 시간표를 섞어 재미있는 조합을 만들어 보세요.</p>
@@ -416,11 +442,11 @@ function readApiError(payload: unknown): string {
 
 function readFriendTimetableResponse(
   payload: unknown,
-): { ownerLabel: string; timetable: Timetable } | null {
+): { ownerLabel: string; timetable: Timetable; requiredCourseIds: string[] | null } | null {
   if (typeof payload !== "object" || payload === null) {
     return null;
   }
-  const record = payload as { ownerLabel?: unknown; timetable?: unknown };
+  const record = payload as { ownerLabel?: unknown; timetable?: unknown; requiredCourseIds?: unknown };
   if (typeof record.ownerLabel !== "string" || typeof record.timetable !== "object" || record.timetable === null) {
     return null;
   }
@@ -428,8 +454,20 @@ function readFriendTimetableResponse(
   if (!Array.isArray(timetable.courses)) {
     return null;
   }
+  if (
+    record.requiredCourseIds !== undefined &&
+    record.requiredCourseIds !== null &&
+    (!Array.isArray(record.requiredCourseIds) ||
+      record.requiredCourseIds.some((courseId) => typeof courseId !== "string"))
+  ) {
+    return null;
+  }
+  const requiredCourseIds = Array.isArray(record.requiredCourseIds)
+    ? record.requiredCourseIds.filter((courseId): courseId is string => typeof courseId === "string")
+    : null;
   return {
     ownerLabel: record.ownerLabel,
     timetable: { courses: timetable.courses as Timetable["courses"], meetings: [], fixedEvents: [] },
+    requiredCourseIds,
   };
 }

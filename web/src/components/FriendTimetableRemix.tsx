@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -156,6 +157,9 @@ export function FriendTimetableRemix() {
         <p>FRIEND REMIX LAB</p>
         <h1>친구 시간표 기반 리믹스</h1>
         <span>같이 들을 핑계, 혹은 완벽하게 피할 이유.</span>
+        <Link className={styles.homeLink} href="/">
+          기본정보 입력으로
+        </Link>
       </section>
 
       <section className={styles.panel}>
@@ -236,7 +240,12 @@ export function FriendTimetableRemix() {
           </label>
         </fieldset>
         {!strengthAvailable ? (
-          <p className={styles.mutedHint}>졸업요건 문서를 등록하면 강도를 조절할 수 있어요.</p>
+          <div className={styles.requirementNotice}>
+            <p className={styles.mutedHint}>졸업요건 문서를 등록하면 강도를 조절할 수 있어요.</p>
+            <Link className={styles.requirementLink} href="/?step=graduation-requirements">
+              졸업요건충족현황 입력하러 가기
+            </Link>
+          </div>
         ) : (
           <p className={styles.mutedHint}>확정한 졸업요건 기준 미충족 영역 {unmetRequirementLabels.length}개를 반영합니다.</p>
         )}

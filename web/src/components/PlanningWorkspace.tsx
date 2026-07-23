@@ -32,11 +32,17 @@ type StepId = (typeof STEPS)[number]["id"];
 type DocSubstep = "course_history" | "graduation_requirements";
 type AiSubstep = "setup" | "results";
 
-export function PlanningWorkspace() {
-  const [step, setStep] = useState<StepId>(1);
-  const [docSubstep, setDocSubstep] = useState<DocSubstep>("course_history");
+export function PlanningWorkspace({
+  initialDocumentSubstep,
+}: {
+  initialDocumentSubstep?: DocSubstep;
+}) {
+  const [step, setStep] = useState<StepId>(initialDocumentSubstep ? 2 : 1);
+  const [docSubstep, setDocSubstep] = useState<DocSubstep>(
+    initialDocumentSubstep ?? "course_history",
+  );
   const [aiSubstep, setAiSubstep] = useState<AiSubstep>("setup");
-  const [hasEnteredDocuments, setHasEnteredDocuments] = useState(false);
+  const [hasEnteredDocuments, setHasEnteredDocuments] = useState(Boolean(initialDocumentSubstep));
   const [aiRecommendRequestId, setAiRecommendRequestId] = useState(0);
   const [aiRecommendAction, setAiRecommendAction] = useState<{
     canRun: boolean;

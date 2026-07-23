@@ -4,7 +4,16 @@ import { OnboardingGuide } from "@/components/OnboardingGuide";
 import { PlanningWorkspace } from "@/components/PlanningWorkspace";
 import styles from "./page.module.css";
 
-export default function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ step?: string | string[] | undefined }>;
+}) {
+  const { step } = await searchParams;
+  const initialDocumentSubstep = step === "graduation-requirements"
+    ? "graduation_requirements"
+    : undefined;
+
   return (
     <main className={styles.page}>
       <OnboardingGuide />
@@ -16,7 +25,7 @@ export default function Home() {
           </Link>
         </div>
       </section>
-      <PlanningWorkspace />
+      <PlanningWorkspace initialDocumentSubstep={initialDocumentSubstep} />
       <footer className={styles.footer}>
         <p>
           오류 제보·문의: <a href="mailto:jaeseong.hong@gmail.com">jaeseong.hong@gmail.com</a>

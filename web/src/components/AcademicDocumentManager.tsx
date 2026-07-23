@@ -104,7 +104,11 @@ function DocumentInfoPanel({
 }: DocumentInfoPanelProps) {
   return (
     <section className={styles.documentInfoPanel}>
-      <div className={styles.documentInfoHeader} data-open={isOpen}>
+      <div
+        className={styles.documentInfoHeader}
+        data-has-action={Boolean(action)}
+        data-open={isOpen}
+      >
         <button
           aria-controls={id}
           aria-expanded={isOpen}
@@ -116,11 +120,20 @@ function DocumentInfoPanel({
             <strong>{title}</strong>
             <small>{summary}</small>
           </span>
+        </button>
+        {action ? <div className={styles.documentInfoAction}>{action}</div> : null}
+        <button
+          aria-controls={id}
+          aria-expanded={isOpen}
+          aria-label={`${title} ${isOpen ? "접기" : "펼치기"}`}
+          className={styles.documentInfoExpandButton}
+          type="button"
+          onClick={onToggle}
+        >
           <span aria-hidden="true" className={styles.documentInfoChevron}>
             {isOpen ? "−" : "+"}
           </span>
         </button>
-        {action ? <div className={styles.documentInfoAction}>{action}</div> : null}
       </div>
       {isOpen ? (
         <div className={styles.documentInfoContent} id={id}>
@@ -684,28 +697,6 @@ export function AcademicDocumentManager({
         </div>
       ) : null}
 
-      {profile ? (
-        <div className={styles.documentIntro}>
-          <div className={styles.documentStatusActions}>
-            <span className={isConfirmed ? styles.confirmedBadge : styles.draftBadge}>
-              {isConfirmed ? "확정된 데이터" : "확인 중인 초안"}
-            </span>
-            <button
-              className={styles.resultToggleButton}
-              type="button"
-              onClick={() =>
-                setCollapsedResults((current) => ({
-                  ...current,
-                  [kind]: !isResultCollapsed,
-                }))
-              }
-            >
-              {isResultCollapsed ? "내용 펼치기" : "내용 접기"}
-            </button>
-          </div>
-        </div>
-      ) : null}
-
       <div className={styles.documentInfoList}>
         <DocumentInfoPanel
           id={`academic-document-guide-${kind}`}
@@ -771,7 +762,11 @@ export function AcademicDocumentManager({
         </DocumentInfoPanel>
       </div>
 
-      <div className={styles.uploadRow}>
+      <div
+        className={`${styles.uploadRow} ${
+          kind === "graduation_requirements" ? styles.uploadRowWithPaste : ""
+        }`}
+      >
         <label className={styles.filePicker}>
           <span>
             {selectedFiles.length > 0
@@ -788,7 +783,14 @@ export function AcademicDocumentManager({
             }}
           />
         </label>
+        {kind === "graduation_requirements" ? (
+          <button className={styles.pasteZone} type="button">
+            <span>캡처 붙여넣기 <kbd>Ctrl</kbd> + <kbd>V</kbd></span>
+            <small>여러 장 첨부 가능</small>
+          </button>
+        ) : null}
         <button
+          className={styles.analysisButton}
           disabled={selectedFiles.length === 0 || isAnalyzing || !hasConsented}
           type="button"
           onClick={() => void analyzeDocument()}
@@ -803,6 +805,25 @@ export function AcademicDocumentManager({
               <span>
                 {inputMethod === "clipboard" ? `붙여넣은 캡처 ${index + 1}` : file.name}
               </span>
+              {profile && index === 0 ? (
+                <div className={styles.documentStatusActions}>
+                  <span className={isConfirmed ? styles.confirmedBadge : styles.draftBadge}>
+                    {isConfirmed ? "확정된 데이터" : "확인 중인 초안"}
+                  </span>
+                  <button
+                    className={styles.resultToggleButton}
+                    type="button"
+                    onClick={() =>
+                      setCollapsedResults((current) => ({
+                        ...current,
+                        [kind]: !isResultCollapsed,
+                      }))
+                    }
+                  >
+                    {isResultCollapsed ? "내용 펼치기" : "내용 접기"}
+                  </button>
+                </div>
+              ) : null}
               <button
                 aria-label={`${inputMethod === "clipboard" ? `붙여넣은 캡처 ${index + 1}` : file.name} 삭제`}
                 disabled={isAnalyzing}
@@ -839,12 +860,6 @@ export function AcademicDocumentManager({
         <p className={styles.consentHint}>
           외부 전송 동의에 체크해야 분석을 시작할 수 있습니다.
         </p>
-      ) : null}
-      {kind === "graduation_requirements" ? (
-        <button className={styles.pasteZone} type="button">
-          <span>캡처를 복사한 뒤 여기에서 <kbd>Ctrl</kbd> + <kbd>V</kbd></span>
-          <small>여러 장이면 한 장씩 계속 붙여넣으세요. 첨부 목록에 누적한 뒤 한 번에 분석합니다.</small>
-        </button>
       ) : null}
       {kind === "graduation_requirements" && !profile ? (
         <button className={styles.manualEntryButton} type="button" onClick={startManualEntry}>

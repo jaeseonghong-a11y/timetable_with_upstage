@@ -154,7 +154,7 @@ interface ChoiceGroupConfig {
 type CourseDestination = "required" | string;
 
 const INITIAL_CHOICE_GROUPS: ChoiceGroupConfig[] = [
-  { id: "choice-1", title: "선택 그룹 1", minSubjects: 1, maxSubjects: 1 },
+  { id: "choice-1", title: "선택 묶음 1", minSubjects: 1, maxSubjects: 1 },
 ];
 
 const CAMPUS_OPTIONS: ReadonlyArray<{
@@ -289,7 +289,7 @@ export function TimetablePlanner({
   const electivePreviewLaneCursor = useRef(0);
   const electivePreviewGeneration = useRef(0);
   const electivePrefetchAttempted = useRef(new Set<string>());
-  // 선택 그룹을 새로 추가할 때마다 번호를 늘려가며 고유 id를 만든다.
+  // 선택 묶음을 새로 추가할 때마다 번호를 늘려가며 고유 id를 만든다.
   const nextChoiceGroupId = useRef(2);
 
   useEffect(() => {
@@ -540,7 +540,7 @@ export function TimetablePlanner({
     nextChoiceGroupId.current += 1;
     const group = {
       id: `choice-${number}`,
-      title: `선택 그룹 ${number}`,
+      title: `선택 묶음 ${number}`,
       minSubjects: 1,
       maxSubjects: 1,
     };
@@ -992,7 +992,7 @@ export function TimetablePlanner({
     [manualSelectionPlanSubjects.requiredSubjects],
   );
 
-  // 필수 과목 학점 + 선택 그룹별 최소/최대 선택 개수로 담긴 학점의 하한·상한을 자동 계산한다.
+  // 필수 과목 학점 + 선택 묶음별 최소/최대 선택 개수로 담긴 학점의 하한·상한을 자동 계산한다.
   const packedCreditRange = useMemo(
     () => estimateCreditRangeFromPlan(manualSelectionPlanSubjects),
     [manualSelectionPlanSubjects],
@@ -1204,7 +1204,7 @@ export function TimetablePlanner({
     if (!hasSelectionForAi) {
       return {
         title: "과목을 먼저 담아 주세요",
-        detail: "이전 단계에서 필수 과목이나 선택 그룹 후보를 추가해 주세요.",
+        detail: "이전 단계에서 필수 과목이나 선택 묶음 후보를 추가해 주세요.",
       };
     }
     if (result.entries.length === 0) {
@@ -1435,7 +1435,7 @@ export function TimetablePlanner({
       manualSelectionPlanSubjects.requiredSubjects.length > 0 ||
       manualSelectionPlanSubjects.choiceBags.length > 0;
     if (!hasAnySelection) {
-      setRecommendationError("이전 단계에서 필수 과목이나 선택 그룹 후보를 먼저 추가해 주세요.");
+      setRecommendationError("이전 단계에서 필수 과목이나 선택 묶음 후보를 먼저 추가해 주세요.");
       setIsRecommending(false);
       return;
     }
@@ -1722,7 +1722,7 @@ export function TimetablePlanner({
         <p className={styles.collectionError} role="alert">{electiveError}</p>
       ) : null}
 
-      <div className={styles.aiOnlyGrid}>
+      <div className={`${styles.aiOnlyGrid} ${showSelect ? styles.courseSelectionGrid : ""}`}>
         {showSelect ? (
         <aside className={styles.controls}>
           <fieldset>
@@ -1754,24 +1754,51 @@ export function TimetablePlanner({
                 교양 과목
               </button>
             </div>
-            <label className={styles.assignmentTarget}>
-              <span>새로 선택한 과목을 담을 곳</span>
-              <select
-                value={activeDestination}
-                onChange={(event) => setActiveDestination(event.target.value)}
-              >
-                <option value="required">필수 과목 (모든 조합에 포함)</option>
-                {choiceGroups.map((choiceGroup) => (
-                  <option key={choiceGroup.id} value={choiceGroup.id}>
-                    {choiceGroup.title} ({choiceGroup.minSubjects}~{choiceGroup.maxSubjects}과목 선택)
-                  </option>
+            <section className={styles.destinationPicker} aria-label="새로 선택한 과목을 담을 곳">
+              <div>
+                <span>새로 선택한 과목을 담을 곳</span>
+                <small>필수는 모든 시간표에, 선택 묶음은 가능한 조합으로 들어갑니다.</small>
+              </div>
+              <div className={styles.destinationTabs}>
+                <button
+                  aria-pressed={activeDestination === "required"}
+                  className={activeDestination === "required" ? styles.activeDestinationTab : undefined}
+                  type="button"
+                  onClick={() => setActiveDestination("required")}
+                >
+                  <span>필수</span>
+                  <small>
+                    {selectedCourseGroups.filter(
+                      ({ selectionId }) =>
+                        !courseOwners[selectionId] || courseOwners[selectionId] === "required",
+                    ).length}개
+                  </small>
+                </button>
+                {choiceGroups.map((choiceGroup, index) => (
+                  <button
+                    aria-pressed={activeDestination === choiceGroup.id}
+                    className={activeDestination === choiceGroup.id ? styles.activeDestinationTab : undefined}
+                    key={choiceGroup.id}
+                    type="button"
+                    onClick={() => setActiveDestination(choiceGroup.id)}
+                  >
+                    <span>{getChoiceGroupButtonLabel(choiceGroup, index)}</span>
+                    <small>
+                      {selectedCourseGroups.filter(
+                        ({ selectionId }) => courseOwners[selectionId] === choiceGroup.id,
+                      ).length}개
+                    </small>
+                  </button>
                 ))}
-              </select>
-              <small>
-                위에서 고른 위치로 과목이 담깁니다. 선택 그룹 추가·수정은 아래 담은 과목 확인에서
-                할 수 있습니다.
-              </small>
-            </label>
+                <button
+                  className={styles.addDestinationTab}
+                  type="button"
+                  onClick={addChoiceGroup}
+                >
+                  + 그룹 추가
+                </button>
+              </div>
+            </section>
             {courseSource === "major" ? (
               <div className={styles.majorFilters}>
                 <div className={styles.electiveAreaFilter}>
@@ -2117,197 +2144,6 @@ export function TimetablePlanner({
               {!query ? <p className={styles.courseEmpty}>먼저 기본정보를 입력해 주세요.</p> : null}
             </div>
 
-            <section className={styles.selectionPlanEditor} aria-label="담은 과목 확인">
-              <div className={styles.selectionPlanHeading}>
-                <div>
-                  <strong className={styles.sectionTitle}>담은 과목 확인</strong>
-                  <small>분반 선택, 선택 그룹 추가 및 수정, 그룹 이동을 할 수 있습니다.</small>
-                </div>
-                <button className={styles.addChoiceGroupButton} onClick={addChoiceGroup} type="button">
-                  + 선택 그룹 추가
-                </button>
-              </div>
-
-              <div className={styles.choiceGroupRules}>
-                <div className={styles.destinationBlock}>
-                  <div className={styles.requiredRule}>
-                    <span>필수 과목</span>
-                    <strong>
-                      {
-                        selectedCourseGroups.filter(
-                          ({ selectionId }) =>
-                            !courseOwners[selectionId] || courseOwners[selectionId] === "required",
-                        ).length
-                      }
-                      개
-                    </strong>
-                    <small>모든 시간표에 들어갑니다.</small>
-                  </div>
-                  <div className={styles.selectedSubjectList}>
-                    {selectedCourseGroups
-                      .filter(
-                        ({ selectionId }) =>
-                          !courseOwners[selectionId] || courseOwners[selectionId] === "required",
-                      )
-                      .map((group) => renderSelectedSubjectCard(group))}
-                    {selectedCourseGroups.filter(
-                      ({ selectionId }) =>
-                        !courseOwners[selectionId] || courseOwners[selectionId] === "required",
-                    ).length === 0 ? (
-                      <p className={styles.groupEmpty}>아직 담은 과목이 없습니다.</p>
-                    ) : null}
-                  </div>
-                </div>
-
-                {choiceGroups.map((choiceGroup) => {
-                  const groupSubjects = selectedCourseGroups.filter(
-                    ({ selectionId }) => courseOwners[selectionId] === choiceGroup.id,
-                  );
-                  return (
-                    <div className={styles.destinationBlock} key={choiceGroup.id}>
-                      <div className={styles.choiceGroupRule}>
-                        <div className={styles.choiceGroupRuleHeader}>
-                          <label>
-                            <span className={styles.srOnly}>선택 그룹 이름</span>
-                            <input
-                              onChange={(event) =>
-                                updateChoiceGroup(choiceGroup.id, { title: event.target.value })
-                              }
-                              type="text"
-                              value={choiceGroup.title}
-                            />
-                          </label>
-                          <strong>{groupSubjects.length}개</strong>
-                        </div>
-                        <div className={styles.cardinalityInputs}>
-                          <p className={styles.cardinalityLabel}>
-                            이 그룹에서 시간표에 넣을 과목 수 (예: 1개~2개면, 선택 그룹에 담긴
-                            과목 중 1개 또는 2개가 시간표에 포함됩니다)
-                          </p>
-                          <div className={styles.cardinalityFields}>
-                            <label>
-                              <span className={styles.srOnly}>최소 과목 수</span>
-                              <span className={styles.cardinalityField}>
-                                <input
-                                  max="20"
-                                  min="0"
-                                  onChange={(event) =>
-                                    updateChoiceGroup(choiceGroup.id, {
-                                      minSubjects: Number(event.target.value),
-                                    })
-                                  }
-                                  type="number"
-                                  value={choiceGroup.minSubjects}
-                                />
-                                <span aria-hidden="true">개</span>
-                              </span>
-                            </label>
-                            <span aria-hidden="true">~</span>
-                            <label>
-                              <span className={styles.srOnly}>최대 과목 수</span>
-                              <span className={styles.cardinalityField}>
-                                <input
-                                  max="20"
-                                  min="0"
-                                  onChange={(event) =>
-                                    updateChoiceGroup(choiceGroup.id, {
-                                      maxSubjects: Number(event.target.value),
-                                    })
-                                  }
-                                  type="number"
-                                  value={choiceGroup.maxSubjects}
-                                />
-                                <span aria-hidden="true">개</span>
-                              </span>
-                            </label>
-                          </div>
-                        </div>
-                        <button
-                          aria-label={`${choiceGroup.title} 삭제`}
-                          className={styles.removeChoiceGroup}
-                          onClick={() => removeChoiceGroup(choiceGroup.id)}
-                          type="button"
-                        >
-                          삭제
-                        </button>
-                      </div>
-                      <div className={styles.selectedSubjectList}>
-                        {groupSubjects.map((group) => renderSelectedSubjectCard(group))}
-                        {groupSubjects.length === 0 ? (
-                          <p className={styles.groupEmpty}>아직 담은 과목이 없습니다.</p>
-                        ) : null}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <button
-                className={styles.checkScheduleConflicts}
-                type="button"
-                onClick={() =>
-                  setScheduleConflicts(findScheduleConflicts(selectedCourseGroups, enabledSectionIds))
-                }
-              >
-                시간 겹치는 과목 확인하기
-              </button>
-
-              {scheduleConflicts !== null ? (
-                <div className={styles.scheduleConflictResult} role="status">
-                  {scheduleConflicts.length > 0 ? (
-                    <ul>
-                      {scheduleConflicts.map((conflict) => (
-                        <li key={`${conflict.firstLabel}__${conflict.secondLabel}`}>
-                          {conflict.firstLabel}과 {conflict.secondLabel}은 시간이 겹칩니다. 시간표
-                          추천 시 두 분반은 함께 포함되지 않습니다.
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p>시간이 겹치는 과목이 없습니다.</p>
-                  )}
-                </div>
-              ) : null}
-
-              <fieldset>
-                <legend>현재 담긴 과목의 총 학점</legend>
-                <div className={styles.creditRangeInputs}>
-                  <label>
-                    <span>최소</span>
-                    <input
-                      inputMode="numeric"
-                      min="0"
-                      readOnly
-                      step="1"
-                      type="number"
-                      value={packedCreditRange?.minCredits ?? 0}
-                    />
-                  </label>
-                  <span aria-hidden="true">~</span>
-                  <label>
-                    <span>최대</span>
-                    <input
-                      inputMode="numeric"
-                      min="0"
-                      readOnly
-                      step="1"
-                      type="number"
-                      value={packedCreditRange?.maxCredits ?? 0}
-                    />
-                  </label>
-                </div>
-                {!packedCreditRange ? (
-                  <small>담은 과목이 없어 아직 계산할 수 없습니다.</small>
-                ) : null}
-                {packedCreditRangeOutOfBounds ? (
-                  <p className={styles.packedCreditRangeWarning}>
-                    총 학점은 12~21학점 사이로 구성해주세요. 이 범위를 벗어나면 시간표가
-                    만들어지지 않습니다.
-                  </p>
-                ) : null}
-              </fieldset>
-
-            </section>
           </fieldset>
 
           <fieldset>
@@ -2362,6 +2198,198 @@ export function TimetablePlanner({
         </aside>
         ) : null}
 
+        {showSelect ? (
+          <section className={styles.selectionPlanEditor} aria-label="담은 과목 확인">
+            <div className={styles.selectionPlanHeading}>
+              <div>
+                <strong className={styles.sectionTitle}>담은 과목</strong>
+                <small>필수·선택 묶음별 과목과 분반을 바로 확인하고 수정하세요.</small>
+              </div>
+              <button className={styles.addChoiceGroupButton} onClick={addChoiceGroup} type="button">
+                + 그룹 추가
+              </button>
+            </div>
+
+            <div className={styles.choiceGroupRules}>
+              <div className={styles.destinationBlock}>
+                <div className={styles.requiredRule}>
+                  <span>필수</span>
+                  <strong>
+                    {
+                      selectedCourseGroups.filter(
+                        ({ selectionId }) =>
+                          !courseOwners[selectionId] || courseOwners[selectionId] === "required",
+                      ).length
+                    }개
+                  </strong>
+                  <small>모든 시간표에 들어갑니다.</small>
+                </div>
+                <div className={styles.selectedSubjectList}>
+                  {selectedCourseGroups
+                    .filter(
+                      ({ selectionId }) =>
+                        !courseOwners[selectionId] || courseOwners[selectionId] === "required",
+                    )
+                    .map((group) => renderSelectedSubjectCard(group))}
+                  {selectedCourseGroups.filter(
+                    ({ selectionId }) =>
+                      !courseOwners[selectionId] || courseOwners[selectionId] === "required",
+                  ).length === 0 ? (
+                    <p className={styles.groupEmpty}>아직 담은 과목이 없습니다.</p>
+                  ) : null}
+                </div>
+              </div>
+
+              {choiceGroups.map((choiceGroup) => {
+                const groupSubjects = selectedCourseGroups.filter(
+                  ({ selectionId }) => courseOwners[selectionId] === choiceGroup.id,
+                );
+                return (
+                  <div className={styles.destinationBlock} key={choiceGroup.id}>
+                    <div className={styles.choiceGroupRule}>
+                      <div className={styles.choiceGroupRuleHeader}>
+                        <label>
+                          <span className={styles.srOnly}>선택 묶음 이름</span>
+                          <input
+                            onChange={(event) =>
+                              updateChoiceGroup(choiceGroup.id, { title: event.target.value })
+                            }
+                            type="text"
+                            value={choiceGroup.title}
+                          />
+                        </label>
+                        <strong>{groupSubjects.length}개</strong>
+                      </div>
+                      <div className={styles.cardinalityInputs}>
+                        <p className={styles.cardinalityLabel}>
+                          이 묶음에서 시간표에 넣을 과목 수 (예: 1~2개면, 담긴 과목 중 1개 또는
+                          2개가 시간표에 포함됩니다)
+                        </p>
+                        <div className={styles.cardinalityFields}>
+                          <label>
+                            <span className={styles.srOnly}>최소 과목 수</span>
+                            <span className={styles.cardinalityField}>
+                              <input
+                                max="20"
+                                min="0"
+                                onChange={(event) =>
+                                  updateChoiceGroup(choiceGroup.id, {
+                                    minSubjects: Number(event.target.value),
+                                  })
+                                }
+                                type="number"
+                                value={choiceGroup.minSubjects}
+                              />
+                              <span aria-hidden="true">개</span>
+                            </span>
+                          </label>
+                          <span aria-hidden="true">~</span>
+                          <label>
+                            <span className={styles.srOnly}>최대 과목 수</span>
+                            <span className={styles.cardinalityField}>
+                              <input
+                                max="20"
+                                min="0"
+                                onChange={(event) =>
+                                  updateChoiceGroup(choiceGroup.id, {
+                                    maxSubjects: Number(event.target.value),
+                                  })
+                                }
+                                type="number"
+                                value={choiceGroup.maxSubjects}
+                              />
+                              <span aria-hidden="true">개</span>
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+                      <button
+                        aria-label={`${choiceGroup.title} 삭제`}
+                        className={styles.removeChoiceGroup}
+                        onClick={() => removeChoiceGroup(choiceGroup.id)}
+                        type="button"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                    <div className={styles.selectedSubjectList}>
+                      {groupSubjects.map((group) => renderSelectedSubjectCard(group))}
+                      {groupSubjects.length === 0 ? (
+                        <p className={styles.groupEmpty}>아직 담은 과목이 없습니다.</p>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <button
+              className={styles.checkScheduleConflicts}
+              type="button"
+              onClick={() =>
+                setScheduleConflicts(findScheduleConflicts(selectedCourseGroups, enabledSectionIds))
+              }
+            >
+              시간 겹치는 과목 확인하기
+            </button>
+
+            {scheduleConflicts !== null ? (
+              <div className={styles.scheduleConflictResult} role="status">
+                {scheduleConflicts.length > 0 ? (
+                  <ul>
+                    {scheduleConflicts.map((conflict) => (
+                      <li key={`${conflict.firstLabel}__${conflict.secondLabel}`}>
+                        {conflict.firstLabel}과 {conflict.secondLabel}은 시간이 겹칩니다. 시간표
+                        추천 시 두 분반은 함께 포함되지 않습니다.
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>시간이 겹치는 과목이 없습니다.</p>
+                )}
+              </div>
+            ) : null}
+
+            <fieldset>
+              <legend>현재 담긴 과목의 총 학점</legend>
+              <div className={styles.creditRangeInputs}>
+                <label>
+                  <span>최소</span>
+                  <input
+                    inputMode="numeric"
+                    min="0"
+                    readOnly
+                    step="1"
+                    type="number"
+                    value={packedCreditRange?.minCredits ?? 0}
+                  />
+                </label>
+                <span aria-hidden="true">~</span>
+                <label>
+                  <span>최대</span>
+                  <input
+                    inputMode="numeric"
+                    min="0"
+                    readOnly
+                    step="1"
+                    type="number"
+                    value={packedCreditRange?.maxCredits ?? 0}
+                  />
+                </label>
+              </div>
+              {!packedCreditRange ? (
+                <small>담은 과목이 없어 아직 계산할 수 없습니다.</small>
+              ) : null}
+              {packedCreditRangeOutOfBounds ? (
+                <p className={styles.packedCreditRangeWarning}>
+                  총 학점은 12~21학점 사이로 구성해주세요. 이 범위를 벗어나면 시간표가
+                  만들어지지 않습니다.
+                </p>
+              ) : null}
+            </fieldset>
+          </section>
+        ) : null}
+
         <div className={styles.results} aria-live="polite">
           {showResults ? (
             <>
@@ -2403,7 +2431,7 @@ export function TimetablePlanner({
 
           {result.error ? <p className={styles.error}>{result.error}</p> : null}
           {!result.error && effectiveSelectedGroupIds.length === 0 ? (
-            <p className={styles.empty}>이전 단계에서 필수 과목이나 선택 그룹 후보를 추가해 주세요.</p>
+            <p className={styles.empty}>이전 단계에서 필수 과목이나 선택 묶음 후보를 추가해 주세요.</p>
           ) : null}
           {!result.error && effectiveSelectedGroupIds.length > 0 && result.entries.length === 0 ? (() => {
             const diagnosisText = describeEmptyTimetableDiagnosis(emptyTimetableDiagnosis);
@@ -3206,6 +3234,11 @@ function getDestinationLabel(
     return "필수";
   }
   return choiceGroups.find(({ id }) => id === destination)?.title ?? "필수";
+}
+
+function getChoiceGroupButtonLabel(choiceGroup: ChoiceGroupConfig, index: number): string {
+  const defaultTitle = `선택 묶음 ${index + 1}`;
+  return choiceGroup.title.trim() === defaultTitle ? `선택 ${index + 1}` : choiceGroup.title;
 }
 
 function scopeElectiveGroup(
