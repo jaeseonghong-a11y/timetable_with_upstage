@@ -283,6 +283,20 @@ export function StudentProfileForm({ profile, onChange }: Props) {
           ) : null}
           <div className={styles.additionalMajors}>
             <span>복수전공·연계전공·트랙 추가</span>
+            <DepartmentAddCombobox
+              excludeCodes={[profile.departmentCode, ...(profile.additionalDepartmentCodes ?? [])]}
+              id="student-additional-department-search"
+              placeholder="선택 또는 입력"
+              onSelect={(department) =>
+                onChange({
+                  ...profile,
+                  additionalDepartmentCodes: [
+                    ...(profile.additionalDepartmentCodes ?? []),
+                    department.code,
+                  ],
+                })
+              }
+            />
             {(profile.additionalDepartmentCodes ?? []).length ? (
               <div className={styles.majorChips}>
                 {(profile.additionalDepartmentCodes ?? []).map((code) => (
@@ -306,20 +320,6 @@ export function StudentProfileForm({ profile, onChange }: Props) {
                 ))}
               </div>
             ) : null}
-            <DepartmentAddCombobox
-              excludeCodes={[profile.departmentCode, ...(profile.additionalDepartmentCodes ?? [])]}
-              id="student-additional-department-search"
-              placeholder="추가 전공·트랙 검색"
-              onSelect={(department) =>
-                onChange({
-                  ...profile,
-                  additionalDepartmentCodes: [
-                    ...(profile.additionalDepartmentCodes ?? []),
-                    department.code,
-                  ],
-                })
-              }
-            />
           </div>
         </div>
 

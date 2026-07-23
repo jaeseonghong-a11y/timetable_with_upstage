@@ -6,6 +6,10 @@ import type { Requirement } from "@/lib/academic-profile";
 import { areaMatchesUnmetLabels, selectAiFillerSubjects } from "@/lib/ai-filler-selection";
 import { markSessionCompleted, track } from "@/lib/analytics";
 import {
+  buildCoursePlanQueryKey,
+  type StoredCoursePlan,
+} from "@/lib/browser-planning-storage";
+import {
   courseGroupsFromCollection,
   dedupeCandidatesBySchedule,
   shouldShowSectionDetails,
@@ -68,6 +72,10 @@ interface Props {
   excludedCourseNumbers: readonly string[];
   requirements: readonly Requirement[];
   roadmapProgramCodes: string[];
+  /** Browser-only saved selections for this department/year/term. */
+  savedCoursePlan?: StoredCoursePlan | null;
+  /** Writes only to the user's browser; never sent to the service. */
+  onCoursePlanChange?: (plan: StoredCoursePlan) => void;
   /** UI-only: which planner pane to show in the step wizard. */
   view?: "select" | "results" | "ai-setup" | "ai-results";
   /** Increment from the wizard nav to trigger AI recommendation (replaces in-panel button). */
@@ -233,6 +241,8 @@ export function TimetablePlanner({
   excludedCourseNumbers,
   requirements,
   roadmapProgramCodes,
+  savedCoursePlan,
+  onCoursePlanChange,
   view = "select",
   aiRecommendRequestId = 0,
   onRecommendationsAvailabilityChange,
@@ -281,6 +291,7 @@ export function TimetablePlanner({
   const [collectionError, setCollectionError] = useState("");
   const [electiveError, setElectiveError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isCoursePlanReady, setIsCoursePlanReady] = useState(false);
   const [isElectiveLoading, setIsElectiveLoading] = useState(false);
   const [loadingCourseNumbers, setLoadingCourseNumbers] = useState<string[]>([]);
   const [previewLoadingIds, setPreviewLoadingIds] = useState<string[]>([]);
@@ -291,6 +302,13 @@ export function TimetablePlanner({
   const electivePrefetchAttempted = useRef(new Set<string>());
   // 선택 묶음을 새로 추가할 때마다 번호를 늘려가며 고유 id를 만든다.
   const nextChoiceGroupId = useRef(2);
+  const savedPlanForQuery = useMemo(
+    () =>
+      query && savedCoursePlan?.queryKey === buildCoursePlanQueryKey(query)
+        ? savedCoursePlan
+        : null,
+    [query, savedCoursePlan],
+  );
 
   useEffect(() => {
     if (!query) {
@@ -304,10 +322,13 @@ export function TimetablePlanner({
     const controller = new AbortController();
     async function loadCourses(): Promise<void> {
       setIsLoading(true);
+      setIsCoursePlanReady(false);
       setCollectionError("");
       setElectiveError("");
       setMajorCourseGroups([]);
-      setElectiveCourseGroups([]);
+      setElectiveCourseGroups(
+        savedPlanForQuery?.selectedGroups.filter(({ source }) => source === "elective") ?? [],
+      );
       setElectivePreviewGroups({});
       setElectiveCatalogs({});
       setElectiveCampus(activeQuery.campus);
@@ -316,13 +337,24 @@ export function TimetablePlanner({
       // 원전공(기본 정보 입력에서 고른 주전공, roadmapProgramCodes의 첫 번째 코드)을 기본 선택
       // 상태로 시작한다 — "전체"부터 보여주면 복수전공 과목까지 한꺼번에 섞여서 헷갈리기 쉽다.
       setSelectedMajorProgramCode(roadmapProgramCodes[0] ?? activeQuery.departmentCode);
-      setExtraProgramCodes([]);
+      setExtraProgramCodes(savedPlanForQuery?.extraProgramCodes ?? []);
       setExtraDepartmentError("");
-      setSelectedGroupIds([]);
-      setChoiceGroups(INITIAL_CHOICE_GROUPS);
-      setActiveDestination("required");
-      setCourseOwners({});
-      setEnabledSectionIds({});
+      setSelectedGroupIds(savedPlanForQuery?.selectedGroups.map(({ selectionId }) => selectionId) ?? []);
+      const restoredChoiceGroups = savedPlanForQuery?.choiceGroups.length
+        ? savedPlanForQuery.choiceGroups
+        : INITIAL_CHOICE_GROUPS;
+      setChoiceGroups(restoredChoiceGroups);
+      nextChoiceGroupId.current = getNextChoiceGroupNumber(restoredChoiceGroups);
+      setActiveDestination(
+        savedPlanForQuery &&
+          (savedPlanForQuery.activeDestination === "required" ||
+            restoredChoiceGroups.some(({ id }) => id === savedPlanForQuery.activeDestination))
+          ? savedPlanForQuery.activeDestination
+          : "required",
+      );
+      setCourseOwners(savedPlanForQuery?.courseOwners ?? {});
+      setEnabledSectionIds(savedPlanForQuery?.enabledSectionIds ?? {});
+      setFixedEvents(savedPlanForQuery?.fixedEvents ?? []);
       setPreviewLoadingIds([]);
       setDisabledCourseTypes(new Set());
       setDayOffFilters([]);
@@ -378,12 +410,13 @@ export function TimetablePlanner({
       } finally {
         if (!controller.signal.aborted) {
           setIsLoading(false);
+          setIsCoursePlanReady(true);
         }
       }
     }
     void loadCourses();
     return () => controller.abort();
-  }, [query, roadmapProgramCodes]);
+  }, [query, roadmapProgramCodes, savedPlanForQuery]);
 
   /**
    * Adds one more department's courses to the Step-3 catalog without resetting anything else the
@@ -793,15 +826,27 @@ export function TimetablePlanner({
     [excludedCourseNumbers],
   );
   const courseGroups = useMemo(
-    (): PlannerCourseGroup[] => [
-      ...majorCourseGroups.map((group) => ({
-        ...group,
-        selectionId: `major:${group.id}`,
-        source: "major" as const,
-      })),
-      ...electiveCourseGroups,
-    ],
-    [electiveCourseGroups, majorCourseGroups],
+    (): PlannerCourseGroup[] => {
+      const currentGroups: PlannerCourseGroup[] = [
+        ...majorCourseGroups.map((group) => ({
+          ...group,
+          selectionId: `major:${group.id}`,
+          source: "major" as const,
+        })),
+        ...electiveCourseGroups,
+      ];
+      // The live course catalog wins when it is available. Saved groups only fill a temporary
+      // gap while the catalog loads (or if a transient request fails), so a saved plan never
+      // makes the same subject appear twice.
+      const bySelectionId = new Map(currentGroups.map((group) => [group.selectionId, group]));
+      for (const group of savedPlanForQuery?.selectedGroups ?? []) {
+        if (!bySelectionId.has(group.selectionId)) {
+          bySelectionId.set(group.selectionId, group);
+        }
+      }
+      return [...bySelectionId.values()];
+    },
+    [electiveCourseGroups, majorCourseGroups, savedPlanForQuery],
   );
   const availableCourseGroups = useMemo(
     () => courseGroups.filter((group) => !excludedCourseSet.has(group.id.trim().toUpperCase())),
@@ -943,6 +988,35 @@ export function TimetablePlanner({
       ),
     [availableCourseGroups, effectiveSelectedGroupIds],
   );
+
+  useEffect(() => {
+    if (!query || !isCoursePlanReady || !onCoursePlanChange) {
+      return;
+    }
+    onCoursePlanChange({
+      version: 1,
+      queryKey: buildCoursePlanQueryKey(query),
+      selectedGroups: selectedCourseGroups,
+      choiceGroups,
+      activeDestination,
+      courseOwners,
+      enabledSectionIds,
+      fixedEvents,
+      extraProgramCodes,
+    });
+  }, [
+    activeDestination,
+    choiceGroups,
+    courseOwners,
+    enabledSectionIds,
+    extraProgramCodes,
+    fixedEvents,
+    isCoursePlanReady,
+    onCoursePlanChange,
+    query,
+    selectedCourseGroups,
+  ]);
+
   const sectionIdToGroup = useMemo(() => {
     const map = new Map<string, PlannerCourseGroup>();
     for (const group of selectedCourseGroups) {
@@ -1724,40 +1798,41 @@ export function TimetablePlanner({
 
       <div className={`${styles.aiOnlyGrid} ${showSelect ? styles.courseSelectionGrid : ""}`}>
         {showSelect ? (
+          <aside className={styles.selectionStepRail} aria-label="과목 담기 순서">
+            <p>STEP 3 순서</p>
+            <ol>
+              <li>
+                <span>1</span>
+                <div>
+                  <strong>담을 곳 선택</strong>
+                  <small>필수 또는 조합 선택을 고르세요.</small>
+                </div>
+              </li>
+              <li>
+                <span>2</span>
+                <div>
+                  <strong>과목·분반 고르기</strong>
+                  <small>전공·교양과 강의 형식으로 찾으세요.</small>
+                </div>
+              </li>
+              <li>
+                <span>3</span>
+                <div>
+                  <strong>담은 과목 확인</strong>
+                  <small>오른쪽에서 묶음과 분반을 조정하세요.</small>
+                </div>
+              </li>
+            </ol>
+          </aside>
+        ) : null}
+        {showSelect ? (
         <aside className={styles.controls}>
           <fieldset>
             <legend className={styles.sectionTitle}>과목 담기</legend>
-            <div className={styles.sourceTabs} role="tablist" aria-label="과목 분류">
-              <button
-                aria-selected={courseSource === "major"}
-                className={courseSource === "major" ? styles.activeSourceTab : undefined}
-                role="tab"
-                type="button"
-                onClick={() => {
-                  setCourseSource("major");
-                  setCourseSearch("");
-                }}
-              >
-                전공 과목
-              </button>
-              <button
-                aria-selected={courseSource === "elective"}
-                className={courseSource === "elective" ? styles.activeSourceTab : undefined}
-                role="tab"
-                type="button"
-                onClick={() => {
-                  setCourseSource("elective");
-                  setCourseSearch("");
-                  void loadAllElectives(electiveCampus);
-                }}
-              >
-                교양 과목
-              </button>
-            </div>
             <section className={styles.destinationPicker} aria-label="새로 선택한 과목을 담을 곳">
-              <div>
-                <span>새로 선택한 과목을 담을 곳</span>
-                <small>필수는 모든 시간표에, 선택 묶음은 가능한 조합으로 들어갑니다.</small>
+              <div className={styles.destinationPickerHeading}>
+                <span>과목을 담을 곳</span>
+                <small>필수 또는 선택 묶음을 고르세요.</small>
               </div>
               <div className={styles.destinationTabs}>
                 <button
@@ -1799,6 +1874,33 @@ export function TimetablePlanner({
                 </button>
               </div>
             </section>
+            <div className={styles.sourceTabs} role="tablist" aria-label="과목 분류">
+              <button
+                aria-selected={courseSource === "major"}
+                className={courseSource === "major" ? styles.activeSourceTab : undefined}
+                role="tab"
+                type="button"
+                onClick={() => {
+                  setCourseSource("major");
+                  setCourseSearch("");
+                }}
+              >
+                전공 과목
+              </button>
+              <button
+                aria-selected={courseSource === "elective"}
+                className={courseSource === "elective" ? styles.activeSourceTab : undefined}
+                role="tab"
+                type="button"
+                onClick={() => {
+                  setCourseSource("elective");
+                  setCourseSearch("");
+                  void loadAllElectives(electiveCampus);
+                }}
+              >
+                교양 과목
+              </button>
+            </div>
             {courseSource === "major" ? (
               <div className={styles.majorFilters}>
                 <div className={styles.electiveAreaFilter}>
@@ -2211,41 +2313,61 @@ export function TimetablePlanner({
             </div>
 
             <div className={styles.choiceGroupRules}>
-              <div className={styles.destinationBlock}>
-                <div className={styles.requiredRule}>
-                  <span>필수</span>
-                  <strong>
+              <section className={`${styles.subjectSection} ${styles.requiredSubjectSection}`}>
+                <div className={styles.subjectSectionHeading}>
+                  <div>
+                    <strong>필수 과목</strong>
+                    <small>모든 시간표에 반드시 들어갑니다.</small>
+                  </div>
+                  <span>
                     {
                       selectedCourseGroups.filter(
                         ({ selectionId }) =>
                           !courseOwners[selectionId] || courseOwners[selectionId] === "required",
                       ).length
                     }개
-                  </strong>
-                  <small>모든 시간표에 들어갑니다.</small>
+                  </span>
                 </div>
-                <div className={styles.selectedSubjectList}>
-                  {selectedCourseGroups
-                    .filter(
+                <div className={styles.destinationBlock}>
+                  <div className={styles.requiredRule}>
+                    <span>고정 선택</span>
+                    <small>이곳에 담은 과목은 조합마다 바뀌지 않습니다.</small>
+                  </div>
+                  <div className={styles.selectedSubjectList}>
+                    {selectedCourseGroups
+                      .filter(
+                        ({ selectionId }) =>
+                          !courseOwners[selectionId] || courseOwners[selectionId] === "required",
+                      )
+                      .map((group) => renderSelectedSubjectCard(group))}
+                    {selectedCourseGroups.filter(
                       ({ selectionId }) =>
                         !courseOwners[selectionId] || courseOwners[selectionId] === "required",
-                    )
-                    .map((group) => renderSelectedSubjectCard(group))}
-                  {selectedCourseGroups.filter(
-                    ({ selectionId }) =>
-                      !courseOwners[selectionId] || courseOwners[selectionId] === "required",
-                  ).length === 0 ? (
-                    <p className={styles.groupEmpty}>아직 담은 과목이 없습니다.</p>
-                  ) : null}
+                    ).length === 0 ? (
+                      <p className={styles.groupEmpty}>아직 담은 필수 과목이 없습니다.</p>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
+              </section>
 
-              {choiceGroups.map((choiceGroup) => {
-                const groupSubjects = selectedCourseGroups.filter(
-                  ({ selectionId }) => courseOwners[selectionId] === choiceGroup.id,
-                );
-                return (
-                  <div className={styles.destinationBlock} key={choiceGroup.id}>
+              <section className={`${styles.subjectSection} ${styles.choiceSubjectSection}`}>
+                <div className={styles.subjectSectionHeading}>
+                  <div>
+                    <strong>선택 과목</strong>
+                    <small>선택 묶음마다 설정한 수만 시간표에 들어갑니다.</small>
+                  </div>
+                  <span>
+                    {selectedCourseGroups.filter(({ selectionId }) =>
+                      choiceGroups.some((choiceGroup) => courseOwners[selectionId] === choiceGroup.id),
+                    ).length}개
+                  </span>
+                </div>
+                {choiceGroups.map((choiceGroup) => {
+                  const groupSubjects = selectedCourseGroups.filter(
+                    ({ selectionId }) => courseOwners[selectionId] === choiceGroup.id,
+                  );
+                  return (
+                    <div className={styles.destinationBlock} key={choiceGroup.id}>
                     <div className={styles.choiceGroupRule}>
                       <div className={styles.choiceGroupRuleHeader}>
                         <label>
@@ -2318,9 +2440,10 @@ export function TimetablePlanner({
                         <p className={styles.groupEmpty}>아직 담은 과목이 없습니다.</p>
                       ) : null}
                     </div>
-                  </div>
-                );
-              })}
+                    </div>
+                  );
+                })}
+              </section>
             </div>
 
             <button
@@ -3239,6 +3362,13 @@ function getDestinationLabel(
 function getChoiceGroupButtonLabel(choiceGroup: ChoiceGroupConfig, index: number): string {
   const defaultTitle = `선택 묶음 ${index + 1}`;
   return choiceGroup.title.trim() === defaultTitle ? `선택 ${index + 1}` : choiceGroup.title;
+}
+
+function getNextChoiceGroupNumber(groups: readonly ChoiceGroupConfig[]): number {
+  return groups.reduce((nextNumber, { id }) => {
+    const match = /^choice-(\d+)$/.exec(id);
+    return match ? Math.max(nextNumber, Number(match[1]) + 1) : nextNumber;
+  }, 2);
 }
 
 function scopeElectiveGroup(

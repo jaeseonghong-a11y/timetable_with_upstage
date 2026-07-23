@@ -21,6 +21,19 @@
   margin: 0 auto 20px;
 }
 
+.returnLinks {
+  display: grid;
+  gap: 8px;
+  max-width: 920px;
+  margin: 0 auto 18px;
+}
+
+.returnLinks nav {
+  position: static;
+  max-width: none;
+  margin: 0;
+}
+
 .hero {
   padding: 18px 4px 24px;
 }
@@ -54,7 +67,6 @@
   font-size: 15px;
 }
 
-.homeLink,
 .requirementLink {
   display: inline-flex;
   min-height: 38px;
@@ -68,12 +80,6 @@
   font-weight: 850;
 }
 
-.homeLink {
-  margin-top: 16px;
-  background: #0b1912;
-}
-
-.homeLink:hover,
 .requirementLink:hover {
   background: #163626;
 }

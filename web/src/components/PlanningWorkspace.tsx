@@ -1,9 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { AcademicDocumentKind, AcademicProfile, Requirement } from "@/lib/academic-profile";
 import { initAbandonTracking, track } from "@/lib/analytics";
+import {
+  COURSE_PLAN_STORAGE_KEY,
+  STUDENT_PROFILE_STORAGE_KEY,
+  readStoredCoursePlan,
+  readStoredStudentProfile,
+  writeStoredCoursePlan,
+  writeStoredStudentProfile,
+} from "@/lib/browser-planning-storage";
 import {
   getExcludedCourseNumbers,
   getCourseQueryLabel,
@@ -16,6 +24,7 @@ import {
 
 import { AcademicDocumentManager } from "./AcademicDocumentManager";
 import { setConfirmedGraduationRequirementSummaries } from "@/lib/graduation-requirements-bridge";
+import { useLocalStorageItem } from "@/lib/use-local-storage-item";
 import { StudentProfileForm } from "./StudentProfileForm";
 import { TimetablePlanner } from "./TimetablePlanner";
 import styles from "./PlanningWorkspace.module.css";
@@ -67,6 +76,25 @@ export function PlanningWorkspace({
     isAnalyzing: false,
     hasAnalyzedDocument: false,
   });
+  const savedStudentProfileRaw = useLocalStorageItem(STUDENT_PROFILE_STORAGE_KEY);
+  const savedCoursePlanRaw = useLocalStorageItem(COURSE_PLAN_STORAGE_KEY);
+  const savedStudentProfile = useMemo(
+    () => readStoredStudentProfile(savedStudentProfileRaw),
+    [savedStudentProfileRaw],
+  );
+  const savedCoursePlan = useMemo(
+    () => readStoredCoursePlan(savedCoursePlanRaw),
+    [savedCoursePlanRaw],
+  );
+  const didRestoreStudentProfile = useRef(false);
+
+  useEffect(() => {
+    if (!savedStudentProfile || didRestoreStudentProfile.current) {
+      return;
+    }
+    didRestoreStudentProfile.current = true;
+    setStudentProfile(savedStudentProfile);
+  }, [savedStudentProfile]);
 
   const courseQuery = useMemo(
     () => (appliedProfile ? toSkkuCourseQuery(appliedProfile) : null),
@@ -134,6 +162,15 @@ export function PlanningWorkspace({
       setAiSubstep("setup");
     }
   }
+
+  const updateStudentProfile = useCallback((nextProfile: StudentPlanningProfile): void => {
+    setStudentProfile(nextProfile);
+    writeStoredStudentProfile(window.localStorage, nextProfile);
+  }, []);
+
+  const persistCoursePlan = useCallback((plan: Parameters<typeof writeStoredCoursePlan>[1]): void => {
+    writeStoredCoursePlan(window.localStorage, plan);
+  }, []);
 
   function applyStudentProfile(): boolean {
     if (getStudentProfileError(studentProfile)) {
@@ -423,7 +460,7 @@ export function PlanningWorkspace({
         {step === 1 ? (
           <StudentProfileForm
             profile={studentProfile}
-            onChange={setStudentProfile}
+            onChange={updateStudentProfile}
           />
         ) : null}
 
@@ -449,8 +486,10 @@ export function PlanningWorkspace({
               queryLabel={appliedProfile ? getCourseQueryLabel(appliedProfile) : ""}
               requirements={requirements}
               roadmapProgramCodes={roadmapProgramCodes}
+              savedCoursePlan={savedCoursePlan}
               view={plannerView}
               onAiRecommendActionStateChange={setAiRecommendAction}
+              onCoursePlanChange={persistCoursePlan}
               onRecommendationsReady={() => setAiSubstep("results")}
             />
           </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 
 import type { AcademicDocumentKind, AcademicProfile } from "@/lib/academic-profile";
@@ -19,6 +19,12 @@ import {
 } from "@/lib/academic-profile-client";
 import { mergeGraduationRequirementProfiles } from "@/lib/academic-profile-merge";
 import { track } from "@/lib/analytics";
+import {
+  ACADEMIC_ANALYSIS_STORAGE_KEY,
+  readStoredAcademicAnalysis,
+  writeStoredAcademicAnalysis,
+} from "@/lib/browser-planning-storage";
+import { useLocalStorageItem } from "@/lib/use-local-storage-item";
 
 import { AcademicCourseEditor } from "./AcademicCourseEditor";
 import { AcademicRequirementEditor } from "./AcademicRequirementEditor";
@@ -118,7 +124,7 @@ function DocumentInfoPanel({
         >
           <span>
             <strong>{title}</strong>
-            <small>{summary}</small>
+            {summary ? <small>{summary}</small> : null}
           </span>
         </button>
         {action ? <div className={styles.documentInfoAction}>{action}</div> : null}
@@ -275,6 +281,13 @@ export function AcademicDocumentManager({
   const [analysisStageIndex, setAnalysisStageIndex] = useState(0);
   const [analysisFlavorIndex, setAnalysisFlavorIndex] = useState(-1);
   const [analysisFileIndex, setAnalysisFileIndex] = useState(0);
+  const storedAcademicAnalysisRaw = useLocalStorageItem(ACADEMIC_ANALYSIS_STORAGE_KEY);
+  const storedAcademicAnalysis = useMemo(
+    () => readStoredAcademicAnalysis(storedAcademicAnalysisRaw),
+    [storedAcademicAnalysisRaw],
+  );
+  const restoredStoredAnalysis = useRef(false);
+  const [keepAnalysisInBrowser, setKeepAnalysisInBrowser] = useState(false);
 
   const kind = activeKind ?? internalKind;
   const kindControlled = activeKind !== undefined;
@@ -311,6 +324,35 @@ export function AcademicDocumentManager({
     0,
   );
 
+  useEffect(() => {
+    if (!storedAcademicAnalysis || restoredStoredAnalysis.current) {
+      return;
+    }
+    restoredStoredAnalysis.current = true;
+    setProfiles(storedAcademicAnalysis.profiles);
+    setAcknowledgements({});
+    setCollapsedResults({});
+    setKeepAnalysisInBrowser(true);
+    for (const documentKind of Object.keys(storedAcademicAnalysis.profiles) as AcademicDocumentKind[]) {
+      const restoredProfile = storedAcademicAnalysis.profiles[documentKind];
+      if (!restoredProfile) {
+        continue;
+      }
+      onWorkingProfileChange?.(documentKind, restoredProfile);
+      onConfirmedProfileChange?.(
+        documentKind,
+        isAcademicProfileConfirmed(restoredProfile) ? restoredProfile : undefined,
+      );
+    }
+  }, [onConfirmedProfileChange, onWorkingProfileChange, storedAcademicAnalysis]);
+
+  useEffect(() => {
+    if (!keepAnalysisInBrowser) {
+      return;
+    }
+    writeStoredAcademicAnalysis(window.localStorage, profiles);
+  }, [keepAnalysisInBrowser, profiles]);
+
   function changeKind(nextKind: AcademicDocumentKind): void {
     if (kindControlled) {
       return;
@@ -318,6 +360,26 @@ export function AcademicDocumentManager({
     setInternalKind(nextKind);
     setError("");
     setOpenDocumentInfoPanel(null);
+  }
+
+  function toggleAnalysisStorage(shouldKeep: boolean): void {
+    setKeepAnalysisInBrowser(shouldKeep);
+    if (!shouldKeep) {
+      window.localStorage.removeItem(ACADEMIC_ANALYSIS_STORAGE_KEY);
+    }
+  }
+
+  function clearStoredAnalysis(): void {
+    window.localStorage.removeItem(ACADEMIC_ANALYSIS_STORAGE_KEY);
+    setKeepAnalysisInBrowser(false);
+    setProfiles({});
+    setAcknowledgements({});
+    setCollapsedResults({});
+    setError("");
+    for (const documentKind of Object.keys(KIND_DETAILS) as AcademicDocumentKind[]) {
+      onWorkingProfileChange?.(documentKind, undefined);
+      onConfirmedProfileChange?.(documentKind, undefined);
+    }
   }
 
   function toggleDocumentInfoPanel(nextPanel: DocumentInfoPanelKind): void {
@@ -600,10 +662,27 @@ export function AcademicDocumentManager({
         </p>
       </div>
 
+      <div className={styles.browserStorageControl}>
+        <label>
+          <input
+            checked={keepAnalysisInBrowser}
+            type="checkbox"
+            onChange={(event) => toggleAnalysisStorage(event.target.checked)}
+          />
+          <span>이 브라우저에 분석 결과 보관하기</span>
+        </label>
+        <p>원본 파일은 보관하지 않으며, 저장한 결과는 이 브라우저에서만 볼 수 있어요.</p>
+        {keepAnalysisInBrowser ? (
+          <button type="button" onClick={clearStoredAnalysis}>
+            보관한 분석 결과 삭제
+          </button>
+        ) : null}
+      </div>
+
       <DocumentInfoPanel
         id="academic-document-privacy-notice"
         isOpen={openDocumentInfoPanel === "privacy"}
-        summary={hasConsented ? "동의 완료" : "내용 확인 후 동의"}
+        summary=""
         title="개인정보 수집 및 이용 동의"
         onToggle={() => toggleDocumentInfoPanel("privacy")}
         action={
@@ -613,7 +692,7 @@ export function AcademicDocumentManager({
               type="checkbox"
               onChange={(event) => setHasConsented(event.target.checked)}
             />
-            <span>개인정보 수집 및 이용에 동의합니다.</span>
+            <span>동의합니다.</span>
           </label>
         }
       >
@@ -639,10 +718,10 @@ export function AcademicDocumentManager({
             <div>
               <dt>보유 및 이용 기간</dt>
               <dd>
-                분석 결과는 서버에 저장되지 않고 이 브라우저 화면에만 남으며, 새로고침하면
-                사라집니다. 업로드한 파일이 외부 API(Upstage)에서 처리되는 동안의 보관은 Upstage의
-                개인정보처리방침을 따르며, 저희는 분석 완료 후 원본 파일을 별도로 보관하지
-                않습니다.
+                분석 결과는 서버에 저장되지 않으며, 기본적으로 새로고침하면 사라집니다. 사용자가
+                &quot;이 브라우저에 분석 결과 보관하기&quot;를 선택한 경우에만 구조화된 결과를 이 기기에
+                저장하고, 원본 파일은 저장하지 않습니다. 업로드한 파일이 외부 API(Upstage)에서
+                처리되는 동안의 보관은 Upstage의 개인정보처리방침을 따릅니다.
               </dd>
             </div>
             <div>

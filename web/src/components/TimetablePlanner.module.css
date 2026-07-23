@@ -74,7 +74,7 @@
 }
 
 .courseSelectionGrid {
-  grid-template-columns: minmax(0, 1fr) minmax(340px, 0.78fr);
+  grid-template-columns: minmax(164px, 0.34fr) minmax(0, 1fr) minmax(340px, 0.78fr);
   align-items: start;
 }
 
@@ -84,6 +84,70 @@
 
 .courseSelectionGrid > .results {
   display: none;
+}
+
+.selectionStepRail {
+  position: sticky;
+  top: 72px;
+  display: grid;
+  gap: 14px;
+  margin: 28px 0 28px 28px;
+  padding: 16px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  background: var(--surface-note);
+}
+
+.selectionStepRail > p {
+  margin: 0;
+  color: var(--accent-strong);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.selectionStepRail ol {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.selectionStepRail li {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.selectionStepRail li > span {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--accent-strong);
+  color: var(--surface-card);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.selectionStepRail li > div {
+  display: grid;
+  gap: 3px;
+}
+
+.selectionStepRail strong {
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.selectionStepRail small {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 .controls {
@@ -148,34 +212,36 @@
 
 .destinationPicker {
   display: grid;
-  gap: 10px;
-  margin-bottom: 4px;
-  padding: 14px;
-  border: 1px solid var(--accent-strong);
-  border-radius: 13px;
-  background: var(--surface-note);
+  grid-template-columns: minmax(120px, 0.55fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px 14px;
+  margin: 2px 0 14px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
-.destinationPicker > div:first-child {
+.destinationPickerHeading {
   display: grid;
   gap: 3px;
 }
 
-.destinationPicker > div:first-child > span {
+.destinationPickerHeading > span {
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 900;
 }
 
-.destinationPicker > div:first-child > small {
+.destinationPickerHeading > small {
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 10px;
   line-height: 1.45;
 }
 
 .destinationTabs {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 7px;
 }
 
@@ -800,7 +866,71 @@
 
 .choiceGroupRules {
   display: grid;
-  gap: 14px;
+  gap: 18px;
+}
+
+.subjectSection {
+  display: grid;
+  gap: 10px;
+}
+
+.choiceSubjectSection {
+  padding-top: 16px;
+  border-top: 2px solid var(--border-subtle);
+}
+
+.subjectSectionHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 9px;
+}
+
+.subjectSectionHeading > div {
+  display: grid;
+  gap: 2px;
+}
+
+.subjectSectionHeading strong {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.subjectSectionHeading small {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.subjectSectionHeading > span {
+  flex: none;
+  padding: 4px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.requiredSubjectSection .subjectSectionHeading {
+  border: 1px solid rgb(17 112 92 / 24%);
+  background: var(--surface-note);
+}
+
+.requiredSubjectSection .subjectSectionHeading > span {
+  background: var(--accent-strong);
+  color: var(--surface-card);
+}
+
+.choiceSubjectSection .subjectSectionHeading {
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-page);
+}
+
+.choiceSubjectSection .subjectSectionHeading > span {
+  background: var(--surface-card);
+  color: var(--accent-strong);
 }
 
 .destinationBlock {
@@ -820,12 +950,12 @@
 }
 
 .requiredRule {
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr;
   align-items: center;
+  border-left: 4px solid var(--accent-strong);
 }
 
-.requiredRule > span,
-.requiredRule > strong {
+.requiredRule > span {
   color: var(--text-primary);
   font-size: 12px;
   font-weight: 800;
@@ -1431,6 +1561,10 @@
   display: grid;
   gap: 12px;
   list-style: none;
+}
+
+.choiceSubjectSection .choiceGroupRule {
+  border-left: 4px solid #8da7a0;
 }
 
 /* Valid schedules are comparison material, so use the available desktop width instead of
@@ -2323,6 +2457,21 @@
     grid-template-columns: 1fr;
   }
 
+  .selectionStepRail {
+    position: static;
+    margin: 22px 22px 0;
+  }
+
+  .selectionStepRail ol {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .selectionStepRail li {
+    grid-template-columns: 22px minmax(0, 1fr);
+    gap: 6px;
+  }
+
   .courseSelectionGrid .selectionPlanEditor {
     position: static;
     max-height: none;
@@ -2340,6 +2489,14 @@
 }
 
 @media (max-width: 520px) {
+  .destinationPicker {
+    grid-template-columns: 1fr;
+  }
+
+  .selectionStepRail ol {
+    grid-template-columns: 1fr;
+  }
+
   .notice {
     flex-direction: column;
     align-items: flex-start;

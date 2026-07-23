@@ -152,14 +152,14 @@ export function FriendTimetableRemix() {
 
   return (
     <main className={styles.page}>
-      <PageReturnLink href="/friends" label="친구 시간표로 돌아가기" tone="dark" width="compact" />
+      <div className={styles.returnLinks}>
+        <PageReturnLink href="/friends" label="친구 시간표로 돌아가기" tone="dark" width="compact" />
+        <PageReturnLink href="/" label="메인 화면으로 돌아가기" tone="dark" width="compact" />
+      </div>
       <section className={styles.hero}>
         <p>FRIEND REMIX LAB</p>
         <h1>친구 시간표 기반 리믹스</h1>
         <span>같이 들을 핑계, 혹은 완벽하게 피할 이유.</span>
-        <Link className={styles.homeLink} href="/">
-          기본정보 입력으로
-        </Link>
       </section>
 
       <section className={styles.panel}>
