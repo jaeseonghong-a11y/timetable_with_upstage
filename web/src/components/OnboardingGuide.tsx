@@ -66,7 +66,7 @@ const STEPS: readonly OnboardingStep[] = [
   },
   {
     title: "2-2. 졸업요건충족현황 확인 (선택)",
-    body: "졸업요건 캡처를 붙여넣으면 남은 요건만 자동으로 정리해요. 미충족 교양 영역은 이후 과목 추천에도 반영돼요.",
+    body: "졸업요건 캡처를 올리면 남은 요건만 자동으로 정리해요. 서류가 없다면 요건을 직접 골라 잔여학점만 입력할 수도 있어요. 미충족 영역은 이후 과목 추천에도 반영돼요.",
     diagram: (
       <svg viewBox="0 0 160 100" aria-hidden="true">
         <rect x="14" y="18" width="46" height="60" rx="6" className={styles.diagramCard} />
@@ -169,8 +169,8 @@ const STEPS: readonly OnboardingStep[] = [
     ),
   },
   {
-    title: "+ 친구와 시간표 겹쳐보기",
-    body: "완성한 시간표를 코드로 저장해 친구와 공유하고, 여러 명 시간표를 겹쳐서 다같이 비는 시간을 찾아보세요. 로그인은 필요 없어요.",
+    title: "+ 친구와 시간표 공유·리믹스",
+    body: "완성한 시간표를 저장하면 8자리 코드가 생겨요. 이 코드를 친구에게 한 번만 알려주면, 이후 시간표를 다시 저장해도 같은 코드로 자동 최신화돼요. 친구 코드를 추가해 겹쳐보거나, 친구 시간표를 참고해 새 시간표를 만들 수도 있어요. 로그인은 필요 없어요.",
     diagram: (
       <svg viewBox="0 0 160 100" aria-hidden="true">
         <rect x="14" y="16" width="60" height="60" rx="8" transform="rotate(-6 44 46)" className={styles.diagramBlock2} />
