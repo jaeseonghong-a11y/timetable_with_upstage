@@ -73,8 +73,22 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
+/* STEP 3의 순서 안내는 작업 카드 밖의 전용 열에 둔다. 흰색 카드 안은 과목 탐색과
+   담은 과목 편집에만 쓰므로, 좁은 중앙 열에서 안내 패널·필터·과목 목록이 경쟁하지 않는다. */
+.plannerShell {
+  display: grid;
+  grid-template-columns: 164px minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+}
+
+.plannerShell > .planner {
+  max-width: none;
+  margin: 0;
+}
+
 .courseSelectionGrid {
-  grid-template-columns: minmax(164px, 0.34fr) minmax(0, 1fr) minmax(340px, 0.78fr);
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 0.78fr);
   align-items: start;
 }
 
@@ -91,7 +105,7 @@
   top: 72px;
   display: grid;
   gap: 14px;
-  margin: 28px 0 28px 28px;
+  margin: 0;
   padding: 16px 14px;
   border: 1px solid var(--border-subtle);
   border-radius: 14px;
@@ -2487,13 +2501,18 @@
     grid-template-columns: 1fr;
   }
 
+  .plannerShell {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
   .courseSelectionGrid {
     grid-template-columns: 1fr;
   }
 
   .selectionStepRail {
     position: static;
-    margin: 22px 22px 0;
+    margin: 0;
   }
 
   .selectionStepRail ol {

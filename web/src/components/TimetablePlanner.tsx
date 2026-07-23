@@ -1732,6 +1732,35 @@ export function TimetablePlanner({
   }
 
   return (
+    <div className={showSelect ? styles.plannerShell : undefined}>
+      {showSelect ? (
+        <aside className={styles.selectionStepRail} aria-label="과목 담기 순서">
+          <p>STEP 3 순서</p>
+          <ol>
+            <li>
+              <span>1</span>
+              <div>
+                <strong>담을 곳 선택</strong>
+                <small>필수 또는 조합 선택을 고르세요.</small>
+              </div>
+            </li>
+            <li>
+              <span>2</span>
+              <div>
+                <strong>과목·분반 고르기</strong>
+                <small>전공·교양과 강의 형식으로 찾으세요.</small>
+              </div>
+            </li>
+            <li>
+              <span>3</span>
+              <div>
+                <strong>담은 과목 확인</strong>
+                <small>오른쪽에서 묶음과 분반을 조정하세요.</small>
+              </div>
+            </li>
+          </ol>
+        </aside>
+      ) : null}
     <section className={styles.planner} aria-label="시간표 조합">
       {showSelect ? (
         <div className={styles.stepIntro}>
@@ -1797,34 +1826,6 @@ export function TimetablePlanner({
       ) : null}
 
       <div className={`${styles.aiOnlyGrid} ${showSelect ? styles.courseSelectionGrid : ""}`}>
-        {showSelect ? (
-          <aside className={styles.selectionStepRail} aria-label="과목 담기 순서">
-            <p>STEP 3 순서</p>
-            <ol>
-              <li>
-                <span>1</span>
-                <div>
-                  <strong>담을 곳 선택</strong>
-                  <small>필수 또는 조합 선택을 고르세요.</small>
-                </div>
-              </li>
-              <li>
-                <span>2</span>
-                <div>
-                  <strong>과목·분반 고르기</strong>
-                  <small>전공·교양과 강의 형식으로 찾으세요.</small>
-                </div>
-              </li>
-              <li>
-                <span>3</span>
-                <div>
-                  <strong>담은 과목 확인</strong>
-                  <small>오른쪽에서 묶음과 분반을 조정하세요.</small>
-                </div>
-              </li>
-            </ol>
-          </aside>
-        ) : null}
         {showSelect ? (
         <aside className={styles.controls}>
           <fieldset>
@@ -2885,6 +2886,7 @@ export function TimetablePlanner({
         </div>
       </div>
     </section>
+    </div>
   );
 }
 
