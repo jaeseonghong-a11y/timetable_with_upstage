@@ -226,6 +226,23 @@
   line-height: 1.55;
 }
 
+.resaveLink {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 2px;
+  padding: 3px 7px;
+  border: 1px solid #61c99a;
+  border-radius: 7px;
+  color: #d9ffe9;
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.resaveLink:hover {
+  background: rgb(97 201 154 / 14%);
+}
+
 .results > ol {
   display: grid;
   gap: 20px;

@@ -78,7 +78,7 @@ export default async function Image() {
               color: MUTED,
             }}
           >
-            SKKU TIMETABLE
+            SKKU-DULE
           </div>
           <div
             style={{

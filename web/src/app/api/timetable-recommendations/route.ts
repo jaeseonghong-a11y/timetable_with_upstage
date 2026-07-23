@@ -9,18 +9,24 @@ import {
 import {
   DEFAULT_RECOMMENDATION_WEIGHTS,
   getFreeDayLabels,
-  scoreTimetables,
   type RecommendationWeight,
   type ScoreBreakdown,
-  type ScoredTimetable,
   type WeightId,
   type WeightImportance,
 } from "../../../lib/timetable-scoring";
 import { requestSolarCompletion, type SolarJsonSchema } from "../../../lib/upstage";
+import {
+  buildRecommendationCopy,
+  rankValidTimetables,
+  type GraduationConsiderationStrength,
+  type RankedValidTimetable,
+  type UnmetGraduationRequirement,
+  type ValidTimetableRecommendationContext,
+} from "../../../lib/valid-timetable-recommendation";
 
 type ApiErrorCode = "invalid_request";
 
-const MAX_RECOMMENDATIONS = 5;
+const MAX_RECOMMENDATIONS = 2;
 const MAX_TIMETABLES = 500;
 const MAX_CUSTOM_PREFERENCE_CHARACTERS = 500;
 
@@ -38,6 +44,7 @@ const IMPORTANCE_SET = new Set<WeightImportance>([1, 2, 3, 4, 5]);
 interface TimetableRecommendationItem {
   candidateId: string;
   rank: number;
+  name: string;
   timetable: Timetable;
   scoreBreakdown: ScoreBreakdown[];
   reason: string | null;
@@ -49,6 +56,7 @@ interface SolarExplanation {
   /** Resolved locally from Solar's 1-based `position`, never trusted from its own output. */
   candidateId: string;
   rank: number | null;
+  name: string | null;
   reason: string;
   customPreferenceNote: string | null;
 }
@@ -83,15 +91,23 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
   const weights = parseWeights(body.weights);
-  const requiredCourseTitles = parseCourseTitleList(body.requiredCourseTitles);
+  const contexts = parseRecommendationContexts(body.candidateContexts, timetables);
+  const unmetRequirements = parseUnmetRequirements(body.unmetRequirements);
+  const graduationStrength = parseGraduationStrength(body.graduationStrength);
   const customPreference = parseCustomPreference(body.customPreference);
 
-  const scored = scoreTimetables(timetables, weights).slice(0, MAX_RECOMMENDATIONS);
+  const scored = rankValidTimetables(
+    timetables,
+    weights,
+    contexts,
+    unmetRequirements,
+    graduationStrength,
+  ).slice(0, MAX_RECOMMENDATIONS);
 
   const apiKey = process.env.UPSTAGE_API_KEY;
   if (!apiKey || scored.length === 0) {
     return Response.json({
-      recommendations: toRecommendationList(scored),
+      recommendations: toRecommendationList(scored, weights, graduationStrength),
       aiExplanationFailed: !apiKey && scored.length > 0,
     });
   }
@@ -99,29 +115,32 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const explanations = await requestRecommendationExplanations(
       scored,
-      requiredCourseTitles,
       customPreference,
       apiKey,
     );
-    const ordered = customPreference
-      ? (tryReorderByCustomPreference(scored, explanations) ?? scored)
-      : scored;
     return Response.json({
-      recommendations: ensureDistinctReasons(applyExplanations(ordered, explanations)),
+      recommendations: ensureDistinctReasons(
+        applyExplanations(scored, explanations, weights, graduationStrength),
+      ),
       aiExplanationFailed: false,
     });
   } catch {
     return Response.json({
-      recommendations: toRecommendationList(scored),
+      recommendations: toRecommendationList(scored, weights, graduationStrength),
       aiExplanationFailed: true,
     });
   }
 }
 
-function toRecommendationList(scored: readonly ScoredTimetable[]): TimetableRecommendationItem[] {
+function toRecommendationList(
+  scored: readonly RankedValidTimetable[],
+  weights: readonly RecommendationWeight[],
+  graduationStrength: GraduationConsiderationStrength,
+): TimetableRecommendationItem[] {
   return scored.map((entry, index) => ({
     candidateId: entry.candidateId,
     rank: index + 1,
+    ...buildRecommendationCopy(entry, weights, graduationStrength),
     timetable: entry.timetable,
     scoreBreakdown: entry.breakdown,
     reason: null,
@@ -131,18 +150,22 @@ function toRecommendationList(scored: readonly ScoredTimetable[]): TimetableReco
 }
 
 function applyExplanations(
-  scored: readonly ScoredTimetable[],
+  scored: readonly RankedValidTimetable[],
   explanations: readonly SolarExplanation[],
+  weights: readonly RecommendationWeight[],
+  graduationStrength: GraduationConsiderationStrength,
 ): TimetableRecommendationItem[] {
   const byId = new Map(explanations.map((item) => [item.candidateId, item]));
   return scored.map((entry, index) => {
     const explanation = byId.get(entry.candidateId);
+    const fallback = buildRecommendationCopy(entry, weights, graduationStrength);
     return {
       candidateId: entry.candidateId,
       rank: index + 1,
+      name: explanation?.name || fallback.name,
       timetable: entry.timetable,
       scoreBreakdown: entry.breakdown,
-      reason: explanation?.reason ?? null,
+      reason: explanation?.reason ?? fallback.reason,
       // 졸업요건 기여도는 각 과목의 교양 영역을 아는 클라이언트가 결정론적으로 계산한다("계산은
       // 코드로") — Solar가 근거 없이 특정 영역(예: DS기반) 충족을 지어내던 문제를 원천 차단.
       requirementContribution: null,
@@ -203,29 +226,6 @@ function describeDistinguishingDetail(timetable: Timetable, other: Timetable): s
   return `(다른 추천과 달리 ${notes.slice(0, 2).join(", ")}입니다.)`;
 }
 
-/** Only reorders when Solar returned a rank for every candidate forming a clean 1..N permutation. */
-function tryReorderByCustomPreference(
-  scored: readonly ScoredTimetable[],
-  explanations: readonly SolarExplanation[],
-): ScoredTimetable[] | null {
-  if (explanations.length !== scored.length) {
-    return null;
-  }
-  const rankById = new Map(explanations.map((item) => [item.candidateId, item.rank]));
-  const ranks = scored.map((entry) => rankById.get(entry.candidateId));
-  if (ranks.some((rank) => rank === null || rank === undefined)) {
-    return null;
-  }
-  const sortedRanks = [...(ranks as number[])].sort((a, b) => a - b);
-  const isCleanPermutation = sortedRanks.every((rank, index) => rank === index + 1);
-  if (!isCleanPermutation) {
-    return null;
-  }
-  return [...scored].sort(
-    (a, b) => (rankById.get(a.candidateId) ?? 0) - (rankById.get(b.candidateId) ?? 0),
-  );
-}
-
 /**
  * Strict response_format schema for the explanation call, mirroring the same reasoning as
  * academic-document.ts's ACADEMIC_EXTRACTION_SCHEMA: without it, Solar is free to add markdown
@@ -266,13 +266,13 @@ const RECOMMENDATION_EXPLANATION_SCHEMA: SolarJsonSchema = {
 };
 
 async function requestRecommendationExplanations(
-  scored: readonly ScoredTimetable[],
-  requiredCourseTitles: readonly string[],
+  scored: readonly RankedValidTimetable[],
   customPreference: string | undefined,
   apiKey: string,
 ): Promise<SolarExplanation[]> {
-  const requiredTitleSet = new Set(requiredCourseTitles);
   const systemPrompt = [
+    "You verify two already-valid timetables. Write a concise Korean recommendation reason using only optionalCourses, appliedFilters, graduationRequirementMatches, freeDays, and scoreHighlights supplied below.",
+    "Never mention required courses. Do not claim a graduation requirement is completed; say it was considered only when graduationRequirementMatches is non-empty.",
     "당신은 성균관대 시간표 추천 서비스의 설명 엔진입니다.",
     "이미 결정론적으로 정렬된 시간표 후보 목록이 주어집니다.",
     "각 후보에 대해 한국어 2~3문장으로 추천 이유를 작성하세요.",
@@ -307,17 +307,14 @@ async function requestRecommendationExplanations(
   ].join("\n");
 
   const userPrompt = JSON.stringify({
-    requiredCourseTitles,
     candidates: scored.map((entry, index) => ({
       position: index + 1,
-      addedCourses: entry.timetable.courses
-        .filter((course) => !requiredTitleSet.has(course.title))
-        .map((course) => ({
-          title: course.title,
-          professor: course.professor ?? null,
-          schedule: course.schedule,
-          courseType: course.courseType ?? null,
-        })),
+      optionalCourses: entry.context.optionalCourses,
+      graduationRequirementMatches: entry.matchedRequirementLabels,
+      appliedFilters: entry.breakdown
+        .filter((item) => item.weightedScore > 0)
+        .map((item) => item.weightId),
+      addedCourses: entry.context.optionalCourses,
       // 실제 공강 요일의 사실 근거 — Solar가 스스로 추론하다 틀리는 대신(수업만 없고 고정
       // 일정이 있는 요일을 공강으로 착각하는 등) 이 목록만 그대로 옮겨 쓰게 한다.
       freeDays: getFreeDayLabels(entry.timetable),
@@ -346,7 +343,7 @@ const WEEKDAY_KOREAN_NAMES = ["월요일", "화요일", "수요일", "목요일"
 /** 실제로는 공강이 아닌 요일을 "공강"이라고 주장하는 reason이 있으면 코드가 만든 문장으로 교체. */
 function sanitizeFreeDayClaims(
   explanations: readonly SolarExplanation[],
-  scored: readonly ScoredTimetable[],
+  scored: readonly RankedValidTimetable[],
 ): SolarExplanation[] {
   const byId = new Map(scored.map((entry) => [entry.candidateId, entry]));
   return explanations.map((explanation) => {
@@ -385,7 +382,7 @@ function buildFreeDayFallbackReason(freeDays: readonly string[]): string {
 
 function parseSolarExplanations(
   content: string,
-  scored: readonly ScoredTimetable[],
+  scored: readonly RankedValidTimetable[],
 ): SolarExplanation[] {
   const trimmed = content
     .trim()
@@ -427,6 +424,7 @@ function parseSolarExplanations(
     explanations.push({
       candidateId: scored[entry.position - 1]!.candidateId,
       rank: typeof entry.rank === "number" && Number.isInteger(entry.rank) ? entry.rank : null,
+      name: null,
       reason: entry.reason.trim(),
       customPreferenceNote:
         typeof entry.customPreferenceNote === "string" && entry.customPreferenceNote.trim()
@@ -598,18 +596,86 @@ function parsePreferredFreeDays(value: unknown): Weekday[] | undefined {
   return days;
 }
 
-/** 필수(고정) 과목 제목 목록 — 추천 이유를 이 과목들이 아닌 '추가된' 과목에 집중시키는 데 쓴다. */
-function parseCourseTitleList(value: unknown): string[] {
+/** Accepts only metadata for candidate schedules supplied by the active browser session. */
+function parseRecommendationContexts(
+  value: unknown,
+  timetables: readonly Timetable[],
+): ValidTimetableRecommendationContext[] {
   if (!Array.isArray(value)) {
     return [];
   }
-  const titles = new Set<string>();
+  const knownCandidateIds = new Set(
+    timetables.map((timetable) => timetable.courses.map((course) => course.id).sort().join("|")),
+  );
+  const contexts: ValidTimetableRecommendationContext[] = [];
+  const seen = new Set<string>();
   for (const entry of value) {
-    if (typeof entry === "string" && entry.trim()) {
-      titles.add(entry.trim());
+    if (!isRecord(entry) || typeof entry.candidateId !== "string" || seen.has(entry.candidateId)) {
+      continue;
     }
+    if (!knownCandidateIds.has(entry.candidateId) || !Array.isArray(entry.optionalCourses)) {
+      continue;
+    }
+    const optionalCourses = entry.optionalCourses.flatMap((course) => {
+      if (
+        !isRecord(course) ||
+        typeof course.title !== "string" ||
+        typeof course.classification !== "string" ||
+        (course.scope !== "general" && course.scope !== "major")
+      ) {
+        return [];
+      }
+      return [{
+        title: course.title.slice(0, 120),
+        classification: course.classification.slice(0, 120),
+        scope: course.scope as "general" | "major",
+      }];
+    });
+    seen.add(entry.candidateId);
+    contexts.push({ candidateId: entry.candidateId, optionalCourses });
   }
-  return [...titles];
+  return contexts;
+}
+
+function parseUnmetRequirements(value: unknown): UnmetGraduationRequirement[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const allowedScopes = new Set([
+    "primary_major",
+    "secondary_major",
+    "general",
+    "ds",
+    "university",
+    "other",
+  ]);
+  const requirements: UnmetGraduationRequirement[] = [];
+  const seen = new Set<string>();
+  for (const entry of value) {
+    if (
+      !isRecord(entry) ||
+      typeof entry.scope !== "string" ||
+      !allowedScopes.has(entry.scope) ||
+      typeof entry.label !== "string"
+    ) {
+      continue;
+    }
+    const label = entry.label.trim().slice(0, 160);
+    const key = `${entry.scope}:${label}`;
+    if (!label || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    requirements.push({
+      scope: entry.scope as UnmetGraduationRequirement["scope"],
+      label,
+    });
+  }
+  return requirements;
+}
+
+function parseGraduationStrength(value: unknown): GraduationConsiderationStrength {
+  return value === "weak" || value === "strong" ? value : "none";
 }
 
 function parseCustomPreference(value: unknown): string | undefined {

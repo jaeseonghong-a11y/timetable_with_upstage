@@ -59,6 +59,11 @@ import {
   type WeightId,
   type WeightImportance,
 } from "@/lib/timetable-scoring";
+import type {
+  GraduationConsiderationStrength,
+  OptionalCourseForRecommendation,
+  UnmetGraduationRequirement,
+} from "@/lib/valid-timetable-recommendation";
 
 import { DepartmentAddCombobox } from "./DepartmentAddCombobox";
 import { EverytimeReviewButton } from "./EverytimeReviewButton";
@@ -104,6 +109,7 @@ const WEIGHT_LABELS: Record<WeightId, string> = {
 interface TimetableRecommendationItem {
   candidateId: string;
   rank: number;
+  name: string;
   timetable: Timetable;
   scoreBreakdown: ScoreBreakdown[];
   reason: string | null;
@@ -1217,6 +1223,10 @@ export function TimetablePlanner({
   const [recommendationWeights, setRecommendationWeights] = useState<RecommendationWeight[]>(
     DEFAULT_RECOMMENDATION_WEIGHTS,
   );
+  const [recommendationMinimumCredits, setRecommendationMinimumCredits] = useState("12");
+  const [recommendationMaximumCredits, setRecommendationMaximumCredits] = useState("21");
+  const [graduationConsiderationStrength, setGraduationConsiderationStrength] =
+    useState<GraduationConsiderationStrength>("strong");
   const [customPreference, setCustomPreference] = useState("");
   const [recommendations, setRecommendations] = useState<TimetableRecommendationItem[] | null>(
     null,
@@ -1234,6 +1244,15 @@ export function TimetablePlanner({
   const [recommendationError, setRecommendationError] = useState("");
   const [aiExplanationFailed, setAiExplanationFailed] = useState(false);
   const recommendationDurationSamples = useRef<number[]>([]);
+
+  const unmetGraduationRequirements = useMemo<UnmetGraduationRequirement[]>(
+    () =>
+      requirements
+        .filter((requirement) => requirement.status !== "satisfied")
+        .map((requirement) => ({ scope: requirement.scope, label: requirement.label })),
+    [requirements],
+  );
+  const canConsiderGraduationRequirements = requirements.length > 0;
 
   useEffect(() => {
     if (!isRecommending) {
@@ -1434,7 +1453,7 @@ export function TimetablePlanner({
    * bag (`minSubjects: 0`) so the combination engine can freely mix in 0..N of them — the existing
    * credit-range filter then keeps only combinations that actually land in the desired range.
    */
-  async function buildAiFillerSubjects(): Promise<{
+async function buildAiFillerSubjects(): Promise<{
     bag: ChoiceBag | null;
     extrasBySectionId: Map<string, TimetableExtra>;
   }> {
@@ -1534,6 +1553,10 @@ export function TimetablePlanner({
     };
   }
 
+  // STEP 5 no longer invokes this legacy filler path. Keep the helper referenced while the
+  // elective catalogue code is still shared with the STEP 3 preview path; it must not run here.
+  void buildAiFillerSubjects;
+
   async function fetchAiRecommendations(): Promise<void> {
     const hasAnySelection =
       manualSelectionPlanSubjects.requiredSubjects.length > 0 ||
@@ -1556,30 +1579,31 @@ export function TimetablePlanner({
     setRecommendationFlavorIndex(-1);
     setRecommendationError("");
     try {
-      const filler = await buildAiFillerSubjects();
-      const timetables = generateTimetablesForSelectionPlan(
-        {
-          requiredSubjects: manualSelectionPlanSubjects.requiredSubjects,
-          choiceBags: [
-            ...manualSelectionPlanSubjects.choiceBags,
-            ...(filler.bag ? [filler.bag] : []),
-          ],
-          creditRange: {
-            minCredits: minimumCredits === "" ? Number.NaN : Number(minimumCredits),
-            maxCredits: maximumCredits === "" ? Number.NaN : Number(maximumCredits),
-          },
-        },
-        {
-          unavailableDays,
-          fixedEvents,
-        },
-      );
-      const dayFiltered =
+      const recommendationMinimum = Number(recommendationMinimumCredits);
+      const recommendationMaximum = Number(recommendationMaximumCredits);
+      if (
+        !Number.isFinite(recommendationMinimum) ||
+        !Number.isFinite(recommendationMaximum) ||
+        recommendationMinimum < 0 ||
+        recommendationMaximum < recommendationMinimum
+      ) {
+        setRecommendationError("추천 학점 범위를 다시 확인해 주세요.");
+        setRecommendations(null);
+        return;
+      }
+      // STEP 5 deliberately reuses only the conflict-checked candidates already shown in STEP 4.
+      // It neither calls the selection engine nor fetches/adds a filler subject.
+      const timetables = result.entries.map(({ timetable }) => timetable);
+      const dayFiltered = (
         dayOffFilters.length === 0
           ? timetables
           : timetables.filter((timetable) =>
               dayOffFilters.every((day) => isDayFree(timetable, day)),
-            );
+            )
+      ).filter((timetable) => {
+        const credits = getTimetableCredits(timetable);
+        return credits >= recommendationMinimum && credits <= recommendationMaximum;
+      });
 
       if (dayFiltered.length === 0) {
         setRecommendationError(
@@ -1599,7 +1623,6 @@ export function TimetablePlanner({
             sectionIdToGroup,
             courseOwners,
             choiceGroups,
-            filler.extrasBySectionId,
           ),
         });
       }
@@ -1624,9 +1647,19 @@ export function TimetablePlanner({
         weights: weightsForRequest,
         // 필수(고정) 과목 제목 — Solar가 추천 이유를 이 과목들이 아니라 '추가로 담긴' 과목에
         // 집중해서 쓰도록 알려준다.
-        requiredCourseTitles: manualSelectionPlanSubjects.requiredSubjects.map(
-          (subject) => subject.title,
-        ),
+        candidateContexts: dayFiltered.map((timetable) => ({
+          candidateId: getTimetableCandidateId(timetable),
+          optionalCourses: describeOptionalCoursesForRecommendation(
+            timetable,
+            sectionIdToGroup,
+            courseOwners,
+            choiceGroups,
+          ),
+        })),
+        unmetRequirements: unmetGraduationRequirements,
+        graduationStrength: canConsiderGraduationRequirements
+          ? graduationConsiderationStrength
+          : "none",
         customPreference: customPreference.trim() || undefined,
       });
       const parsed = readRecommendationResponse(payload);
@@ -2632,6 +2665,75 @@ export function TimetablePlanner({
               <>
             <h3>AI 추천 조건</h3>
 
+            <div className={styles.recommendationFilters}>
+              <fieldset className={styles.recommendationFilterGroup}>
+                <legend>추천 학점 범위</legend>
+                <div className={styles.recommendationCreditRange}>
+                  <label>
+                    <span>최소</span>
+                    <input
+                      inputMode="numeric"
+                      min="0"
+                      type="number"
+                      value={recommendationMinimumCredits}
+                      onChange={(event) => setRecommendationMinimumCredits(event.target.value)}
+                    />
+                  </label>
+                  <span aria-hidden="true">~</span>
+                  <label>
+                    <span>최대</span>
+                    <input
+                      inputMode="numeric"
+                      min="0"
+                      type="number"
+                      value={recommendationMaximumCredits}
+                      onChange={(event) => setRecommendationMaximumCredits(event.target.value)}
+                    />
+                  </label>
+                  <small>STEP 4의 유효 시간표만 이 범위로 다시 고릅니다.</small>
+                </div>
+              </fieldset>
+              <fieldset
+                className={`${styles.recommendationFilterGroup} ${
+                  !canConsiderGraduationRequirements ? styles.recommendationFilterDisabled : ""
+                }`}
+                disabled={!canConsiderGraduationRequirements}
+              >
+                <legend>졸업요건 고려 강도</legend>
+                <div className={styles.graduationStrengthChoices}>
+                  <label>
+                    <input
+                      checked={graduationConsiderationStrength === "weak"}
+                      name="graduation-consideration"
+                      type="radio"
+                      value="weak"
+                      onChange={() => setGraduationConsiderationStrength("weak")}
+                    />
+                    약하게
+                  </label>
+                  <label>
+                    <input
+                      checked={graduationConsiderationStrength === "strong"}
+                      name="graduation-consideration"
+                      type="radio"
+                      value="strong"
+                      onChange={() => setGraduationConsiderationStrength("strong")}
+                    />
+                    강하게
+                  </label>
+                </div>
+              </fieldset>
+              {!canConsiderGraduationRequirements ? (
+                <p className={styles.recommendationFilterHint}>
+                  졸업요건충족현황을 등록하면 고려 강도를 선택할 수 있어요.
+                </p>
+              ) : (
+                <p className={styles.recommendationFilterHint}>
+                  미충족 요건 {unmetGraduationRequirements.length}개를 선택 과목 기준으로 반영합니다.
+                </p>
+              )}
+            </div>
+
             <div className={styles.recommendationWeights}>
               <datalist id="importance-ticks">
                 <option value="1" />
@@ -2854,7 +2956,6 @@ export function TimetablePlanner({
                   const extras = localEntry?.extras ?? [];
                   const hasFooterContent =
                     recommendation.reason ||
-                    recommendation.requirementContribution ||
                     recommendation.customPreferenceNote;
                   return (
                     <TimetableCard
@@ -2869,12 +2970,6 @@ export function TimetablePlanner({
                                 {recommendation.reason}
                               </p>
                             ) : null}
-                            {recommendation.requirementContribution ? (
-                              <p className={styles.recommendationRequirement}>
-                                <span className={styles.recommendationLabel}>졸업요건 기여</span>
-                                {recommendation.requirementContribution}
-                              </p>
-                            ) : null}
                             {recommendation.customPreferenceNote ? (
                               <p className={styles.recommendationCustomNote}>
                                 <span className={styles.recommendationLabel}>입력하신 조건 반영</span>
@@ -2884,7 +2979,7 @@ export function TimetablePlanner({
                           </div>
                         ) : null
                       }
-                      heading={`AI 추천 ${recommendation.rank}순위`}
+                      heading={recommendation.name || `AI 추천 ${recommendation.rank}순위`}
                       index={recommendation.rank - 1}
                       key={recommendation.candidateId}
                       requiredCourseIds={requiredSectionIds}
@@ -3235,6 +3330,38 @@ function describeTimetableExtras(
     });
   }
   return extras;
+}
+
+/** Supplies STEP 5 with only the courses chosen through 고민 중인 과목 groups, never 필수 과목. */
+function describeOptionalCoursesForRecommendation(
+  timetable: Timetable,
+  sectionIdToGroup: ReadonlyMap<string, PlannerCourseGroup>,
+  courseOwners: Readonly<Record<string, CourseDestination>>,
+  choiceGroups: readonly ChoiceGroupConfig[],
+): OptionalCourseForRecommendation[] {
+  const optionalCourses: OptionalCourseForRecommendation[] = [];
+  const seenSelectionIds = new Set<string>();
+  for (const course of timetable.courses) {
+    const group = sectionIdToGroup.get(course.id);
+    if (!group || seenSelectionIds.has(group.selectionId)) {
+      continue;
+    }
+    const owner = courseOwners[group.selectionId] ?? "required";
+    if (!choiceGroups.some((choiceGroup) => choiceGroup.id === owner)) {
+      continue;
+    }
+    seenSelectionIds.add(group.selectionId);
+    optionalCourses.push({
+      title: group.title,
+      classification: group.classification || course.courseType || "영역 미상",
+      scope: group.source === "elective" ? "general" : "major",
+    });
+  }
+  return optionalCourses;
+}
+
+function getTimetableCredits(timetable: Timetable): number {
+  return timetable.courses.reduce((total, course) => total + (course.credits ?? 0), 0);
 }
 
 function isDayFree(timetable: Timetable, day: Weekday): boolean {

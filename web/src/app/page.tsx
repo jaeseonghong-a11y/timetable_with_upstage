@@ -19,7 +19,7 @@ export default async function Home({
       <OnboardingGuide />
       <section className={styles.hero}>
         <div className={styles.heroTop}>
-          <h1>SKKU TIMETABLE</h1>
+          <h1>SKKU-DULE</h1>
           <Link className={styles.friendsButton} href="/friends">
             내 시간표 · 친구 시간표 보기
           </Link>

@@ -2199,6 +2199,94 @@
   gap: 8px;
 }
 
+.recommendationFilters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.recommendationFilterGroup {
+  min-width: 0;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--surface-card);
+}
+
+.recommendationFilterGroup legend {
+  padding: 0 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.recommendationCreditRange {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 6px;
+}
+
+.recommendationCreditRange label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.recommendationCreditRange label span,
+.recommendationCreditRange small,
+.recommendationFilterHint {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.recommendationCreditRange input {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-page);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+}
+
+.recommendationCreditRange small {
+  flex-basis: 100%;
+}
+
+.graduationStrengthChoices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.graduationStrengthChoices label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.graduationStrengthChoices input {
+  accent-color: var(--accent-strong);
+}
+
+.recommendationFilterDisabled {
+  opacity: 0.55;
+}
+
+.recommendationFilterHint {
+  grid-column: 1 / -1;
+  margin: -2px 0 0;
+}
+
 .recommendationWeight {
   display: grid;
   gap: 8px;
@@ -2489,6 +2577,10 @@
   .controls,
   .results {
     padding: 22px;
+  }
+
+  .recommendationFilters {
+    grid-template-columns: 1fr;
   }
 
 }

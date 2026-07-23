@@ -45,6 +45,8 @@ const INITIAL_SOURCE_STATE: SourceState = {
   errors: [],
 };
 
+const LEGACY_REQUIRED_COURSE_ERROR = "이 시간표는 필수 과목 정보가 없는 이전 저장본입니다.";
+
 export function FriendTimetableRemix() {
   const [sourceState, setSourceState] = useState<SourceState>(INITIAL_SOURCE_STATE);
   const [selectedFriendCode, setSelectedFriendCode] = useState("");
@@ -110,7 +112,7 @@ export function FriendTimetableRemix() {
     }
     if (sourceState.mine.requiredCourseIds === null) {
       setGenerationError(
-        "내 시간표를 다시 저장하면 필수 과목 기준으로 리믹스할 수 있어요.",
+        LEGACY_REQUIRED_COURSE_ERROR,
       );
       setResults([]);
       return;
@@ -264,7 +266,20 @@ export function FriendTimetableRemix() {
         </p>
       </section>
 
-      {generationError ? <p className={styles.error}>{generationError}</p> : null}
+      {generationError ? (
+        <p className={styles.error} role="alert">
+          {generationError}
+          {generationError === LEGACY_REQUIRED_COURSE_ERROR ? (
+            <>
+              {" "}
+              <Link className={styles.resaveLink} href="/friends">
+                내 시간표 다시 저장하기
+              </Link>
+              {" 후 다시 시도해 주세요."}
+            </>
+          ) : null}
+        </p>
+      ) : null}
       {results.length > 0 ? (
         <section className={styles.results}>
           <div className={styles.resultHeading}>

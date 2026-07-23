@@ -33,7 +33,13 @@ export async function loadFriendRemixSources(input: {
       }
     }),
   );
-  return { mine, friends: loadedFriends.flatMap((friend) => (friend ? [friend] : [])), errors };
+  return {
+    mine,
+    friends: loadedFriends.flatMap((friend) => (friend ? [friend] : [])),
+    // A stale code can be listed as both “my code” and a friend code. Surface the explanation
+    // once instead of repeating the same red error for each failed fetch.
+    errors: [...new Set(errors)],
+  };
 }
 
 async function fetchFriendRemixSource(code: string, fallbackLabel: string): Promise<FriendRemixSource> {

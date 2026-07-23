@@ -433,26 +433,6 @@ export function PlanningWorkspace({
             </li>
           ))}
         </ol>
-        {/* 3(과목 담기) → 5(AI 추천) 지름길: 4(유효 시간표 확인)를 건너뛸 수 있음을 곡선으로 표시.
-            step 3에 있을 때만 강조해, "여기서 바로 건너뛸 수 있다"는 안내로 읽히게 한다. 6개 슬롯
-            기준(1,2-1,2-2,3,4,5) x=58.33은 3의 중심, x=91.67은 5의 중심. */}
-        <svg
-          className={styles.skipArc}
-          data-active={step === 3}
-          viewBox="0 0 100 34"
-          preserveAspectRatio="none"
-          aria-hidden="true"
-        >
-          <path
-            className={styles.skipArcPath}
-            d="M58.33 4 Q75 30 91.67 4"
-            fill="none"
-            vectorEffect="non-scaling-stroke"
-          />
-        </svg>
-        <span className={styles.skipArcLabel} data-active={step === 3} aria-hidden="true">
-          유효 시간표 건너뛰기
-        </span>
         </div>
       </div>
 
@@ -508,17 +488,6 @@ export function PlanningWorkspace({
           {step === 2 ? (
             <button type="button" onClick={skipCurrentDocument}>
               건너뛰기
-            </button>
-          ) : null}
-          {step === 3 ? (
-            // 유효 시간표 확인(4)을 건너뛰고 AI 추천(5)으로 바로 이동하는 지름길.
-            // 유효 시간표가 0개면 눌러도 소용없으니 막고, 이유는 버튼 아래에 STEP 4와 동일하게 적는다.
-            <button
-              disabled={!aiRecommendAction.canRun}
-              type="button"
-              onClick={() => goToStep(5)}
-            >
-              유효 시간표 건너뛰고 AI 추천
             </button>
           ) : null}
           {showNextButton ? (

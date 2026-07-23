@@ -1,11 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "SKKU Timetable Connector",
+  "name": "SKKU-DULE Connector",
   "version": "0.1.0",
-  "description": "SKKU Timetable에서 고른 과목을 에브리타임 강의평으로 안전하게 연결합니다.",
+  "description": "SKKU-DULE에서 고른 과목을 에브리타임 강의평으로 안전하게 연결합니다.",
   "permissions": ["storage", "tabs"],
   "host_permissions": [
-    "https://timetable-with-upstage.vercel.app/*",
+    "https://skku-dule.vercel.app/*",
     "http://localhost:3000/*",
     "http://localhost:3001/*",
     "https://everytime.kr/lecture/*"
@@ -15,12 +15,12 @@
     "type": "module"
   },
   "action": {
-    "default_title": "SKKU 시간표 연결 도우미"
+    "default_title": "SKKU-DULE 강의평 연결 도우미"
   },
   "content_scripts": [
     {
       "matches": [
-        "https://timetable-with-upstage.vercel.app/*",
+        "https://skku-dule.vercel.app/*",
         "http://localhost:3000/*",
         "http://localhost:3001/*"
       ],

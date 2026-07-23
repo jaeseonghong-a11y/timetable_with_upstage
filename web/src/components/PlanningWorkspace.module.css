@@ -94,7 +94,7 @@
    곡선(30px)과 라벨(아래 14px 영역) 사이에 여유를 둬서 라벨 글자가 점선에 겹치지 않게 한다. */
 .stepListWrap {
   position: relative;
-  padding-bottom: 50px;
+  padding-bottom: 0;
 }
 
 /* 3(과목 담기)→5(AI 추천) 지름길 곡선: 4단계 아래로 휘어 건너뜀을 나타낸다. viewBox x 0~100이 폭

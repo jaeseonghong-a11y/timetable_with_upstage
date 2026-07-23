@@ -1,6 +1,6 @@
-# SKKU Timetable Connector
+# SKKU-DULE Connector
 
-`SKKU TIMETABLE` 웹서비스에서 선택한 과목을 에브리타임 강의평으로 연결하는 개인용 브라우저
+`SKKU-DULE` 웹서비스에서 선택한 과목을 에브리타임 강의평으로 연결하는 개인용 브라우저
 확장프로그램이다. Chrome·Edge·Whale의 Chromium 확장프로그램 형식을 사용한다.
 
 ## 하는 일
@@ -27,7 +27,7 @@
 2. 우측 상단의 **개발자 모드**를 켠다.
 3. **압축해제된 확장 프로그램을 로드합니다**를 누른다.
 4. 이 `extension/` 폴더를 선택한다.
-5. 에브리타임에 로그인하고, `https://timetable-with-upstage.vercel.app`를 새로고침한다.
+5. 에브리타임에 로그인하고, `https://skku-dule.vercel.app`를 새로고침한다.
 
 로컬 개발 시에는 `http://localhost:3000` 또는 `http://localhost:3001`도 이미 허용되어 있다.
 코드를 고친 뒤에는 확장프로그램 관리 화면에서 새로고침 아이콘을 누른다.

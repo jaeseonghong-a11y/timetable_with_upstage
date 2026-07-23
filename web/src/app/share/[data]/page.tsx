@@ -29,7 +29,7 @@ export default async function SharePage({ params }: SharePageProps) {
     return (
       <main className={pageStyles.page}>
         <section className={pageStyles.hero}>
-          <p className={pageStyles.eyebrow}>SKKU TIMETABLE</p>
+          <p className={pageStyles.eyebrow}>SKKU-DULE</p>
           <h1>링크를 열 수 없습니다</h1>
           <p>공유 링크가 손상되었거나 잘못된 주소입니다. 링크를 보낸 친구에게 다시 요청해 주세요.</p>
         </section>
@@ -43,7 +43,7 @@ export default async function SharePage({ params }: SharePageProps) {
   return (
     <main className={pageStyles.page}>
       <section className={pageStyles.hero}>
-        <p className={pageStyles.eyebrow}>SKKU TIMETABLE</p>
+        <p className={pageStyles.eyebrow}>SKKU-DULE</p>
         <h1>친구가 공유한 시간표</h1>
         <p>로그인 없이 열람만 가능한 화면입니다. 마음에 들면 나도 만들어 볼 수 있어요.</p>
       </section>

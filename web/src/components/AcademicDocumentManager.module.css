@@ -679,6 +679,12 @@
   font-weight: 800;
 }
 
+.analysisTiming {
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .analysisProgressBar {
   position: relative;
   height: 6px;

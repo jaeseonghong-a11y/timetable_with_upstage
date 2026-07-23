@@ -12,7 +12,7 @@
 ────────────────────────────────────────
 - 서비스: 성균관대 시간표 추천 웹앱. "인텐시브 워크숍(with Upstage)" AI
   Document Builders Challenge 출품작.
-- 배포 주소: https://timetable-with-upstage.vercel.app/
+- 배포 주소: https://skku-dule.vercel.app/
 - 데모데이: 2026-07-25
 - 핵심 가치: Upstage의 Document Parse/Extract/Solar로 학생이 올린 문서
   (수강내역 PDF, 졸업요건충족현황 캡처 이미지)를 분석해서 시간표를 짜준다.

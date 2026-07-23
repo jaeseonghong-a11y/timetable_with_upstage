@@ -252,7 +252,7 @@ export default function FriendsPage() {
     <main className={pageStyles.page}>
       <PageReturnLink href="/" label="시간표 만들기로 돌아가기" />
       <section className={pageStyles.hero}>
-        <p className={pageStyles.eyebrow}>SKKU TIMETABLE</p>
+        <p className={pageStyles.eyebrow}>SKKU-DULE</p>
         <h1>친구 시간표</h1>
         <p>로그인 없이 코드로 서로의 최신 시간표를 확인합니다.</p>
       </section>

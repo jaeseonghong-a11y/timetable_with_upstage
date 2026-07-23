@@ -94,7 +94,7 @@
 
   function highlight(entries) {
     const banner = document.createElement("aside");
-    banner.textContent = "SKKU 시간표: 교수명·강의명을 확인해 맞는 항목을 선택하면 다음부터 바로 연결됩니다.";
+    banner.textContent = "SKKU-DULE: 교수명·강의명을 확인해 맞는 항목을 선택하면 다음부터 바로 연결됩니다.";
     banner.setAttribute(
       "style",
       "position:sticky;top:8px;z-index:9999;margin:8px;padding:10px 12px;border:1px solid #2a7a5b;border-radius:8px;background:#edf8f2;color:#14543d;font-size:13px;font-weight:700;",

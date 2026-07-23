@@ -77,6 +77,25 @@ describe("POST /api/timetable-recommendations", () => {
     expect(body.recommendations.every((entry) => entry.reason === null)).toBe(true);
   });
 
+  it("returns exactly the top two already-valid timetable candidates", async () => {
+    vi.unstubAllEnvs();
+    const thirdTimetable = timetable("C1", [{ day: "tue", startMinutes: 600, endMinutes: 660 }]);
+
+    const response = await POST(
+      jsonRequest({
+        timetables: [weekdayFilledTimetable, spaciousTimetable, thirdTimetable],
+        weights: [{ id: "free_days", enabled: true, importance: 3 }],
+      }),
+    );
+    const body = (await response.json()) as {
+      recommendations: Array<{ candidateId: string }>;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.recommendations).toHaveLength(2);
+    expect(body.recommendations.map((entry) => entry.candidateId)).toEqual(["B1", "C1"]);
+  });
+
   it("attaches Solar reasons on the happy path; requirement contribution stays null (computed client-side)", async () => {
     const solarResult = JSON.stringify({
       explanations: [
@@ -147,7 +166,7 @@ describe("POST /api/timetable-recommendations", () => {
     expect(body.recommendations.every((entry) => entry.reason === null)).toBe(true);
   });
 
-  it("reorders by customPreference only when Solar returns a clean rank permutation", async () => {
+  it("keeps deterministic filter ranking even when Solar returns a different rank", async () => {
     const solarResult = JSON.stringify({
       explanations: [
         { position: 1, rank: 2, reason: "이유1", requirementContribution: null, customPreferenceNote: "덜 맞음" },
@@ -172,8 +191,8 @@ describe("POST /api/timetable-recommendations", () => {
       recommendations: Array<{ candidateId: string; rank: number }>;
     };
 
-    expect(body.recommendations[0]).toMatchObject({ candidateId: "A1", rank: 1 });
-    expect(body.recommendations[1]).toMatchObject({ candidateId: "B1", rank: 2 });
+    expect(body.recommendations[0]).toMatchObject({ candidateId: "B1", rank: 1 });
+    expect(body.recommendations[1]).toMatchObject({ candidateId: "A1", rank: 2 });
   });
 
   it("keeps valid explanations and drops out-of-range or duplicate positions instead of failing outright", async () => {
@@ -204,7 +223,10 @@ describe("POST /api/timetable-recommendations", () => {
 
     expect(body.aiExplanationFailed).toBe(false);
     expect(body.recommendations[0]).toMatchObject({ candidateId: "B1", reason: "공강이 더 많습니다." });
-    expect(body.recommendations[1]).toMatchObject({ candidateId: "A1", reason: null });
+    expect(body.recommendations[1]).toMatchObject({
+      candidateId: "A1",
+      reason: "선택한 시간표 조건을 기준으로 비교해 추천한 조합입니다.",
+    });
   });
 
   it("uses default weights when weights is omitted", async () => {
