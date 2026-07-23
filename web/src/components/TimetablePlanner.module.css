@@ -329,20 +329,14 @@
   line-height: 1.55;
 }
 
-/* 현재 전공과 다른 전공 검색을 나란히 두되, 긴 전공·연계전공·트랙 검색 문구가 잘리지 않도록
-   검색 칸에 더 넉넉한 폭을 준다. */
+/* STEP 3은 좌측 진행 안내와 우측 담은 과목 패널 사이의 폭이 제한적이다. 전공 선택과
+   다른 전공 검색을 한 열로 쌓아, 긴 전공·연계전공·트랙 검색 칸이 이웃 패널과 겹치지 않게 한다. */
 .majorFilters {
   display: grid;
-  gap: 10px 14px;
-  max-width: 820px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  max-width: none;
   padding-top: 4px;
-}
-
-@media (min-width: 760px) {
-  .majorFilters {
-    grid-template-columns: minmax(240px, 0.8fr) minmax(400px, 1.2fr);
-    align-items: start;
-  }
 }
 
 /* 전체·전공·복수전공 칩을 고정 열 그리드 대신 가로로 흐르게 하고(내용 너비만큼만 차지),
@@ -1574,6 +1568,11 @@
   align-items: start;
 }
 
+.aiRecommendationList {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
 .timetableCard {
   border: 1px solid var(--border-subtle);
   border-radius: 14px;
@@ -1591,17 +1590,6 @@
   --text-muted: #789b88;
   --accent-strong: #62c996;
   --border-subtle: #294b3a;
-}
-
-.timetableCard[data-tone="remix"] .timetableReviewHint {
-  border-color: #2f654a;
-  background: #10291d;
-  color: #bce9cf;
-}
-
-.timetableCard[data-tone="remix"] .timetableReviewHint strong {
-  background: #1e5a3d;
-  color: #e1f8e9;
 }
 
 .timetableCard summary {
@@ -1715,6 +1703,58 @@
 .dayColumn {
   position: relative;
   border-left: 1px solid var(--border-subtle);
+}
+
+/* Two-column comparison is only useful when both schedules are visible without a second,
+   nested horizontal scroll. Keep phone calendars at their readable scrollable size below. */
+@media (min-width: 761px) {
+  .timetableCard[data-compact="true"] .weeklyViewport {
+    padding: 10px;
+    overflow-x: hidden;
+  }
+
+  .timetableCard[data-compact="true"] .weeklyTimetable {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .timetableCard[data-compact="true"] .weekHeader {
+    grid-template-columns: 36px repeat(5, minmax(0, 1fr));
+    min-height: 30px;
+  }
+
+  .timetableCard[data-compact="true"] .weekHeader strong {
+    font-size: 11px;
+  }
+
+  .timetableCard[data-compact="true"] .dayColumns {
+    left: 36px;
+  }
+
+  .timetableCard[data-compact="true"] .hourLine span {
+    left: 3px;
+    padding-right: 2px;
+    font-size: 9px;
+  }
+
+  .timetableCard[data-compact="true"] .courseBlock,
+  .timetableCard[data-compact="true"] .fixedEventBlock {
+    right: 2px;
+    left: 2px;
+    gap: 1px;
+    padding: 4px;
+  }
+
+  .timetableCard[data-compact="true"] .courseBlock strong,
+  .timetableCard[data-compact="true"] .fixedEventBlock strong {
+    font-size: 9px;
+  }
+
+  .timetableCard[data-compact="true"] .courseBlock small,
+  .timetableCard[data-compact="true"] .fixedEventBlock small {
+    font-size: 8px;
+  }
 }
 
 .courseBlock {
@@ -1985,12 +2025,12 @@
   font-size: 12px;
 }
 
-.timetableReviewHint {
+.timetableReviewNotice {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 5px 8px;
-  margin: 0 14px;
+  margin: 0 0 14px;
   padding: 8px 10px;
   border: 1px solid #b8dfcf;
   border-radius: 9px;
@@ -2001,19 +2041,12 @@
   line-height: 1.4;
 }
 
-.timetableReviewHint strong {
+.timetableReviewNotice strong {
   padding: 2px 6px;
   border-radius: 999px;
   background: #d9f0e4;
   color: #0a684a;
   font-size: 10px;
-}
-
-.timetableReviewStatus {
-  flex-basis: 100%;
-  color: var(--text-secondary);
-  font-size: 10px;
-  line-height: 1.4;
 }
 
 .sharePanel {
@@ -2235,9 +2268,10 @@
 .importanceSlider {
   display: inline-flex;
   align-items: center;
-  flex: 1;
+  flex: 0 1 210px;
   gap: 6px;
-  min-width: 180px;
+  width: min(100%, 210px);
+  min-width: 140px;
   color: var(--text-secondary);
   font-size: 11px;
   font-weight: 700;
@@ -2478,7 +2512,8 @@
     margin: 0 22px 22px;
   }
 
-  .validTimetableList {
+  .validTimetableList,
+  .aiRecommendationList {
     grid-template-columns: 1fr;
   }
 

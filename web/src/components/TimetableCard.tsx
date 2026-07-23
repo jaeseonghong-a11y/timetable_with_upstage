@@ -56,6 +56,7 @@ export interface TimetableExtra {
 type TimetableCourseColor = FriendRemixCourseOrigin;
 
 export function TimetableCard({
+  compact = false,
   courseColorsById,
   extras,
   footer,
@@ -65,6 +66,8 @@ export function TimetableCard({
   timetable,
   tone = "default",
 }: {
+  /** Two-column result grids use a denser desktop-only calendar that fits inside the card. */
+  compact?: boolean;
   courseColorsById?: ReadonlyMap<string, TimetableCourseColor>;
   extras: readonly TimetableExtra[];
   footer?: ReactNode;
@@ -237,7 +240,11 @@ export function TimetableCard({
   }
 
   return (
-    <li className={styles.timetableCard} data-tone={tone === "remix" ? "remix" : undefined}>
+    <li
+      className={styles.timetableCard}
+      data-compact={compact ? "true" : undefined}
+      data-tone={tone === "remix" ? "remix" : undefined}
+    >
       <details open={index === 0}>
         <summary>
           <span>
@@ -260,15 +267,7 @@ export function TimetableCard({
         <p className={styles.mobileTimetableScrollHint}>
           옆으로 밀어서 다른 요일도 보세요
         </p>
-        <p className={styles.timetableReviewHint}>
-          <strong>강의평 보기</strong>
-          <span>시간표의 과목을 누르면 에브리타임 강의평으로 바로 연결돼요.</span>
-          {reviewStatus ? (
-            <span className={styles.timetableReviewStatus} role="status">
-              {reviewStatus}
-            </span>
-          ) : null}
-        </p>
+        {reviewStatus ? <span className={styles.srOnly} role="status">{reviewStatus}</span> : null}
         <div className={styles.weeklyViewport}>
           <div className={styles.weeklyTimetable} ref={gridRef}>
             <div className={styles.weekHeader}>

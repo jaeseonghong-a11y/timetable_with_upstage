@@ -2514,6 +2514,12 @@ export function TimetablePlanner({
         ) : null}
 
         <div className={styles.results} aria-live="polite">
+          {showResults || showAiResults ? (
+            <p className={styles.timetableReviewNotice}>
+              <strong>강의평 보기</strong>
+              <span>시간표의 과목을 누르면 에브리타임 강의평으로 바로 연결돼요.</span>
+            </p>
+          ) : null}
           {showResults ? (
             <>
           <div className={styles.resultHeading}>
@@ -2572,6 +2578,7 @@ export function TimetablePlanner({
             <ol className={`${styles.timetableList} ${styles.validTimetableList}`}>
               {filteredEntries.map(({ index, timetable, extras }) => (
                 <TimetableCard
+                  compact
                   extras={extras}
                   index={index}
                   key={timetable.courses.map(({ id }) => id).join("-")}
@@ -2822,7 +2829,7 @@ export function TimetablePlanner({
               </p>
             ) : null}
             {recommendations && recommendations.length > 0 ? (
-              <ol className={styles.timetableList}>
+              <ol className={`${styles.timetableList} ${styles.aiRecommendationList}`}>
                 {recommendations.map((recommendation) => {
                   const localEntry = aiCandidateTimetables.get(recommendation.candidateId);
                   const timetable = localEntry?.timetable ?? recommendation.timetable;
@@ -2833,6 +2840,7 @@ export function TimetablePlanner({
                     recommendation.customPreferenceNote;
                   return (
                     <TimetableCard
+                      compact
                       extras={extras}
                       footer={
                         hasFooterContent ? (
