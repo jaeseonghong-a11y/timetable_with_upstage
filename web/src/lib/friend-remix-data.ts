@@ -41,7 +41,7 @@ async function fetchFriendRemixSource(code: string, fallbackLabel: string): Prom
   const response = await fetch(`/api/friend-timetable/${encodeURIComponent(code)}`);
   const payload: unknown = await response.json();
   if (!response.ok) throw new Error(readApiError(payload));
-  const parsed = parseResponse(payload);
+  const parsed = parseFriendRemixTimetableResponse(payload);
   if (!parsed) throw new Error("시간표 응답 형식이 올바르지 않습니다.");
   return {
     code,
@@ -51,7 +51,12 @@ async function fetchFriendRemixSource(code: string, fallbackLabel: string): Prom
   };
 }
 
-function parseResponse(payload: unknown): {
+/**
+ * Parses the existing friend-timetable endpoint response. `requiredCourseIds: null` is a valid
+ * legacy response for shares created before we stored the required-subject marker; it is not a
+ * malformed timetable. The remix UI can then explain that the owner needs to save again.
+ */
+export function parseFriendRemixTimetableResponse(payload: unknown): {
   ownerLabel: string;
   timetable: Timetable;
   requiredCourseIds: string[] | null;
@@ -69,17 +74,19 @@ function parseResponse(payload: unknown): {
     return parsed ? [parsed] : [];
   });
   if (courses.length !== rawCourses.length) return null;
+  const rawRequiredCourseIds = record.requiredCourseIds;
   if (
-    record.requiredCourseIds !== undefined &&
-    (!Array.isArray(record.requiredCourseIds) ||
-      !record.requiredCourseIds.every((courseId) => typeof courseId === "string"))
+    rawRequiredCourseIds !== undefined &&
+    rawRequiredCourseIds !== null &&
+    (!Array.isArray(rawRequiredCourseIds) ||
+      !rawRequiredCourseIds.every((courseId) => typeof courseId === "string"))
   ) {
     return null;
   }
   const knownCourseIds = new Set(courses.map((course) => course.id));
-  const requiredCourseIds = record.requiredCourseIds === undefined
-    ? null
-    : [...new Set(record.requiredCourseIds.filter((courseId) => knownCourseIds.has(courseId)))];
+  const requiredCourseIds = Array.isArray(rawRequiredCourseIds)
+    ? [...new Set(rawRequiredCourseIds.filter((courseId) => knownCourseIds.has(courseId)))]
+    : null;
   return {
     ownerLabel: record.ownerLabel,
     timetable: { courses, meetings: [], fixedEvents: [] },

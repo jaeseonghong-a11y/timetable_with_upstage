@@ -393,7 +393,7 @@ function validatePlan(plan: SelectionPlan, excludedIds: ReadonlySet<string>): vo
       minSubjects > maxSubjects ||
       maxSubjects > bag.subjects.length
     ) {
-      throw new SelectionPlanError(`${bag.title}의 최소·최대 선택 과목 수가 올바르지 않습니다.`);
+      throw new SelectionPlanError(`${bag.title}의 최소·최대 포함 과목 수가 올바르지 않습니다.`);
     }
 
     for (const subject of bag.subjects) {

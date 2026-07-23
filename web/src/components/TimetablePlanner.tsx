@@ -162,7 +162,7 @@ interface ChoiceGroupConfig {
 type CourseDestination = "required" | string;
 
 const INITIAL_CHOICE_GROUPS: ChoiceGroupConfig[] = [
-  { id: "choice-1", title: "선택 묶음 1", minSubjects: 1, maxSubjects: 1 },
+  { id: "choice-1", title: "고민 중인 과목 1", minSubjects: 1, maxSubjects: 1 },
 ];
 
 const CAMPUS_OPTIONS: ReadonlyArray<{
@@ -300,8 +300,12 @@ export function TimetablePlanner({
   const electivePreviewLaneCursor = useRef(0);
   const electivePreviewGeneration = useRef(0);
   const electivePrefetchAttempted = useRef(new Set<string>());
-  // 선택 묶음을 새로 추가할 때마다 번호를 늘려가며 고유 id를 만든다.
+  // 고민 중인 과목 그룹을 새로 추가할 때마다 번호를 늘려가며 고유 id를 만든다.
   const nextChoiceGroupId = useRef(2);
+  // The catalog must only reload when the course query changes. Browser-storage writes happen
+  // after every checkbox toggle, so using the saved plan itself as a catalog-load dependency
+  // would recreate the course list and throw its scroll position back to the top.
+  const restoredCoursePlanKey = useRef<string | null>(null);
   const savedPlanForQuery = useMemo(
     () =>
       query && savedCoursePlan?.queryKey === buildCoursePlanQueryKey(query)
@@ -315,6 +319,7 @@ export function TimetablePlanner({
       return;
     }
     const activeQuery = query;
+    restoredCoursePlanKey.current = null;
     electivePreviewGeneration.current += 1;
     electivePreviewRequestIds.current.clear();
     electivePreviewLanes.current = createElectivePreviewLanes();
@@ -326,9 +331,7 @@ export function TimetablePlanner({
       setCollectionError("");
       setElectiveError("");
       setMajorCourseGroups([]);
-      setElectiveCourseGroups(
-        savedPlanForQuery?.selectedGroups.filter(({ source }) => source === "elective") ?? [],
-      );
+      setElectiveCourseGroups([]);
       setElectivePreviewGroups({});
       setElectiveCatalogs({});
       setElectiveCampus(activeQuery.campus);
@@ -337,24 +340,19 @@ export function TimetablePlanner({
       // 원전공(기본 정보 입력에서 고른 주전공, roadmapProgramCodes의 첫 번째 코드)을 기본 선택
       // 상태로 시작한다 — "전체"부터 보여주면 복수전공 과목까지 한꺼번에 섞여서 헷갈리기 쉽다.
       setSelectedMajorProgramCode(roadmapProgramCodes[0] ?? activeQuery.departmentCode);
-      setExtraProgramCodes(savedPlanForQuery?.extraProgramCodes ?? []);
+      setExtraProgramCodes([]);
       setExtraDepartmentError("");
-      setSelectedGroupIds(savedPlanForQuery?.selectedGroups.map(({ selectionId }) => selectionId) ?? []);
-      const restoredChoiceGroups = savedPlanForQuery?.choiceGroups.length
-        ? savedPlanForQuery.choiceGroups
-        : INITIAL_CHOICE_GROUPS;
-      setChoiceGroups(restoredChoiceGroups);
-      nextChoiceGroupId.current = getNextChoiceGroupNumber(restoredChoiceGroups);
-      setActiveDestination(
-        savedPlanForQuery &&
-          (savedPlanForQuery.activeDestination === "required" ||
-            restoredChoiceGroups.some(({ id }) => id === savedPlanForQuery.activeDestination))
-          ? savedPlanForQuery.activeDestination
-          : "required",
-      );
-      setCourseOwners(savedPlanForQuery?.courseOwners ?? {});
-      setEnabledSectionIds(savedPlanForQuery?.enabledSectionIds ?? {});
-      setFixedEvents(savedPlanForQuery?.fixedEvents ?? []);
+      setSelectedGroupIds([]);
+      const initialChoiceGroups = INITIAL_CHOICE_GROUPS.map((group, index) => ({
+        ...group,
+        title: normalizeChoiceGroupTitle(group.title, index),
+      }));
+      setChoiceGroups(initialChoiceGroups);
+      nextChoiceGroupId.current = getNextChoiceGroupNumber(initialChoiceGroups);
+      setActiveDestination("required");
+      setCourseOwners({});
+      setEnabledSectionIds({});
+      setFixedEvents([]);
       setPreviewLoadingIds([]);
       setDisabledCourseTypes(new Set());
       setDayOffFilters([]);
@@ -416,7 +414,39 @@ export function TimetablePlanner({
     }
     void loadCourses();
     return () => controller.abort();
-  }, [query, roadmapProgramCodes, savedPlanForQuery]);
+  }, [query, roadmapProgramCodes]);
+
+  // Restore a matching saved plan once, separately from loading the live catalog. Subsequent
+  // writes are the student's own current selections, so replaying them would only reset UI state.
+  useEffect(() => {
+    if (!query || !savedPlanForQuery || restoredCoursePlanKey.current === savedPlanForQuery.queryKey) {
+      return;
+    }
+
+    const restoredChoiceGroups = (savedPlanForQuery.choiceGroups.length
+      ? savedPlanForQuery.choiceGroups
+      : INITIAL_CHOICE_GROUPS).map((group, index) => ({
+      ...group,
+      title: normalizeChoiceGroupTitle(group.title, index),
+    }));
+    restoredCoursePlanKey.current = savedPlanForQuery.queryKey;
+    setElectiveCourseGroups(
+      savedPlanForQuery.selectedGroups.filter(({ source }) => source === "elective"),
+    );
+    setExtraProgramCodes(savedPlanForQuery.extraProgramCodes);
+    setSelectedGroupIds(savedPlanForQuery.selectedGroups.map(({ selectionId }) => selectionId));
+    setChoiceGroups(restoredChoiceGroups);
+    nextChoiceGroupId.current = getNextChoiceGroupNumber(restoredChoiceGroups);
+    setActiveDestination(
+      savedPlanForQuery.activeDestination === "required" ||
+        restoredChoiceGroups.some(({ id }) => id === savedPlanForQuery.activeDestination)
+        ? savedPlanForQuery.activeDestination
+        : "required",
+    );
+    setCourseOwners(savedPlanForQuery.courseOwners);
+    setEnabledSectionIds(savedPlanForQuery.enabledSectionIds);
+    setFixedEvents(savedPlanForQuery.fixedEvents);
+  }, [query, savedPlanForQuery]);
 
   /**
    * Adds one more department's courses to the Step-3 catalog without resetting anything else the
@@ -558,7 +588,7 @@ export function TimetablePlanner({
   /**
    * A course can only belong to one destination at a time. The catalog checkbox reflects
    * membership in the *currently active* destination, not "selected anywhere" — otherwise a
-   * course assigned to 필수 still looks checked while browsing 선택 그룹 1, even though it isn't
+   * course assigned to 필수 still looks checked while browsing 고민 중인 과목 1, even though it isn't
    * actually in that group.
    */
   function isAssignedToActiveDestination(selectionId: string): boolean {
@@ -573,7 +603,7 @@ export function TimetablePlanner({
     nextChoiceGroupId.current += 1;
     const group = {
       id: `choice-${number}`,
-      title: `선택 묶음 ${number}`,
+      title: getDefaultChoiceGroupTitle(number),
       minSubjects: 1,
       maxSubjects: 1,
     };
@@ -1066,7 +1096,7 @@ export function TimetablePlanner({
     [manualSelectionPlanSubjects.requiredSubjects],
   );
 
-  // 필수 과목 학점 + 선택 묶음별 최소/최대 선택 개수로 담긴 학점의 하한·상한을 자동 계산한다.
+  // 필수 과목 학점 + 고민 중인 과목 그룹별 최소/최대 선택 개수로 담긴 학점의 하한·상한을 자동 계산한다.
   const packedCreditRange = useMemo(
     () => estimateCreditRangeFromPlan(manualSelectionPlanSubjects),
     [manualSelectionPlanSubjects],
@@ -1278,7 +1308,7 @@ export function TimetablePlanner({
     if (!hasSelectionForAi) {
       return {
         title: "과목을 먼저 담아 주세요",
-        detail: "이전 단계에서 필수 과목이나 선택 묶음 후보를 추가해 주세요.",
+        detail: "이전 단계에서 필수 과목이나 고민 중인 과목 후보를 추가해 주세요.",
       };
     }
     if (result.entries.length === 0) {
@@ -1509,7 +1539,7 @@ export function TimetablePlanner({
       manualSelectionPlanSubjects.requiredSubjects.length > 0 ||
       manualSelectionPlanSubjects.choiceBags.length > 0;
     if (!hasAnySelection) {
-      setRecommendationError("이전 단계에서 필수 과목이나 선택 묶음 후보를 먼저 추가해 주세요.");
+      setRecommendationError("이전 단계에서 필수 과목이나 고민 중인 과목 후보를 먼저 추가해 주세요.");
       setIsRecommending(false);
       return;
     }
@@ -1808,7 +1838,7 @@ export function TimetablePlanner({
             <section className={styles.destinationPicker} aria-label="새로 선택한 과목을 담을 곳">
               <div className={styles.destinationPickerHeading}>
                 <span>과목을 담을 곳</span>
-                <small>필수 또는 선택 묶음을 고르세요.</small>
+                <small>필수 또는 고민 중인 과목 그룹을 고르세요.</small>
               </div>
               <div className={styles.destinationTabs}>
                 <button
@@ -2234,6 +2264,10 @@ export function TimetablePlanner({
 
           <fieldset>
             <legend>고정 일정(알바 등)</legend>
+            <p className={styles.featureStepCue}>
+              <span>4</span>
+              수업 불가 시간 설정
+            </p>
             {fixedEvents.length > 0 ? (
               <ul className={styles.fixedEventList}>
                 {fixedEvents.map((event) => (
@@ -2289,11 +2323,11 @@ export function TimetablePlanner({
             <div className={styles.selectionPlanHeading}>
               <div>
                 <p className={styles.featureStepCue}>
-                  <span>4</span>
+                  <span>5</span>
                   담은 과목 확인
                 </p>
                 <strong className={styles.sectionTitle}>담은 과목</strong>
-                <small>필수·선택 묶음별 과목과 분반을 바로 확인하고 수정하세요.</small>
+                <small>필수·고민 중인 과목별 과목과 분반을 바로 확인하고 수정하세요.</small>
               </div>
               <button className={styles.addChoiceGroupButton} onClick={addChoiceGroup} type="button">
                 + 그룹 추가
@@ -2317,10 +2351,6 @@ export function TimetablePlanner({
                   </span>
                 </div>
                 <div className={styles.destinationBlock}>
-                  <div className={styles.requiredRule}>
-                    <span>고정 선택</span>
-                    <small>이곳에 담은 과목은 조합마다 바뀌지 않습니다.</small>
-                  </div>
                   <div className={styles.selectedSubjectList}>
                     {selectedCourseGroups
                       .filter(
@@ -2341,8 +2371,8 @@ export function TimetablePlanner({
               <section className={`${styles.subjectSection} ${styles.choiceSubjectSection}`}>
                 <div className={styles.subjectSectionHeading}>
                   <div>
-                    <strong>선택 과목</strong>
-                    <small>선택 묶음마다 설정한 수만 시간표에 들어갑니다.</small>
+                    <strong>고민 중인 과목</strong>
+                    <small>그룹마다 설정한 수만 시간표에 들어갑니다.</small>
                   </div>
                   <span>
                     {selectedCourseGroups.filter(({ selectionId }) =>
@@ -2359,7 +2389,7 @@ export function TimetablePlanner({
                     <div className={styles.choiceGroupRule}>
                       <div className={styles.choiceGroupRuleHeader}>
                         <label>
-                          <span className={styles.srOnly}>선택 묶음 이름</span>
+                          <span className={styles.srOnly}>고민 중인 과목 그룹 이름</span>
                           <input
                             onChange={(event) =>
                               updateChoiceGroup(choiceGroup.id, { title: event.target.value })
@@ -2372,7 +2402,7 @@ export function TimetablePlanner({
                       </div>
                       <div className={styles.cardinalityInputs}>
                         <p className={styles.cardinalityLabel}>
-                          이 묶음에서 시간표에 넣을 과목 수 (예: 1~2개면, 담긴 과목 중 1개 또는
+                          이 그룹에서 시간표에 넣을 과목 수 (예: 1~2개면, 담긴 과목 중 1개 또는
                           2개가 시간표에 포함됩니다)
                         </p>
                         <div className={styles.cardinalityFields}>
@@ -2461,7 +2491,7 @@ export function TimetablePlanner({
               </div>
             ) : null}
 
-            <fieldset>
+            <fieldset className={styles.creditSummary}>
               <legend>현재 담긴 과목의 총 학점</legend>
               <div className={styles.creditRangeInputs}>
                 <label>
@@ -2548,7 +2578,7 @@ export function TimetablePlanner({
 
           {result.error ? <p className={styles.error}>{result.error}</p> : null}
           {!result.error && effectiveSelectedGroupIds.length === 0 ? (
-            <p className={styles.empty}>이전 단계에서 필수 과목이나 선택 묶음 후보를 추가해 주세요.</p>
+            <p className={styles.empty}>이전 단계에서 필수 과목이나 고민 중인 과목 후보를 추가해 주세요.</p>
           ) : null}
           {!result.error && effectiveSelectedGroupIds.length > 0 && result.entries.length === 0 ? (() => {
             const diagnosisText = describeEmptyTimetableDiagnosis(emptyTimetableDiagnosis);
@@ -3356,8 +3386,25 @@ function getDestinationLabel(
 }
 
 function getChoiceGroupButtonLabel(choiceGroup: ChoiceGroupConfig, index: number): string {
-  const defaultTitle = `선택 묶음 ${index + 1}`;
-  return choiceGroup.title.trim() === defaultTitle ? `선택 ${index + 1}` : choiceGroup.title;
+  return normalizeChoiceGroupTitle(choiceGroup.title, index);
+}
+
+function getDefaultChoiceGroupTitle(number: number): string {
+  return `고민 중인 과목 ${number}`;
+}
+
+/** Renames only the previous default labels; a student-written group name stays untouched. */
+function normalizeChoiceGroupTitle(title: string, index: number): string {
+  const normalized = title.trim();
+  const number = index + 1;
+  if (
+    !normalized ||
+    normalized === `선택 묶음 ${number}` ||
+    normalized === `선택 ${number}`
+  ) {
+    return getDefaultChoiceGroupTitle(number);
+  }
+  return title;
 }
 
 function getNextChoiceGroupNumber(groups: readonly ChoiceGroupConfig[]): number {

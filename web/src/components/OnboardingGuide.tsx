@@ -98,7 +98,7 @@ const STEPS: readonly OnboardingStep[] = [
   },
   {
     title: "3. 과목 담기",
-    body: "필수·선택 과목을 담아요. 이미 이수한 과목은 후보 목록에서 자동으로 빠져 있어요.",
+    body: "필수·고민 중인 과목을 담아요. 이미 이수한 과목은 후보 목록에서 자동으로 빠져 있어요.",
     diagram: (
       <svg viewBox="0 0 160 100" aria-hidden="true">
         <rect x="10" y="12" width="140" height="76" rx="8" className={styles.diagramCard} />
