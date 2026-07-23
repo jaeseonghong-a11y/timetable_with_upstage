@@ -164,154 +164,168 @@ export function FriendTimetableRemix() {
         <span>같이 들을 핑계, 혹은 완벽하게 피할 이유.</span>
       </section>
 
-      <section className={styles.panel}>
-        <div className={styles.panelHeading}>
-          <div>
-            <p>01 · 대상 선택</p>
-            <h2>누구의 시간표를 기준으로 할까요?</h2>
-          </div>
-        </div>
+      <div className={styles.workspace}>
+        <div className={styles.controlsColumn}>
+          <section className={styles.panel}>
+            <div className={styles.panelHeading}>
+              <div>
+                <p>01 · 대상 선택</p>
+                <h2>누구의 시간표를 기준으로 할까요?</h2>
+              </div>
+            </div>
 
-        {sourceState.status === "loading" ? <p className={styles.status}>시간표를 불러오는 중…</p> : null}
-        {sourceState.status === "error" ? (
-          <p className={styles.status}>
-            내 시간표와 친구 시간표를 각각 하나 이상 불러와야 리믹스할 수 있어요.
-          </p>
-        ) : null}
-        {sourceState.errors.length > 0 ? (
-          <p className={styles.error}>{sourceState.errors.join(" ")}</p>
-        ) : null}
+            {sourceState.status === "loading" ? <p className={styles.status}>시간표를 불러오는 중…</p> : null}
+            {sourceState.status === "error" ? (
+              <p className={styles.status}>
+                내 시간표와 친구 시간표를 각각 하나 이상 불러와야 리믹스할 수 있어요.
+              </p>
+            ) : null}
+            {sourceState.errors.length > 0 ? (
+              <p className={styles.error}>{sourceState.errors.join(" ")}</p>
+            ) : null}
 
-        {sourceState.status === "ready" ? (
-          <label className={styles.friendSelect}>
-            <span>대상 친구</span>
-            <select value={selectedFriendCode} onChange={(event) => setSelectedFriendCode(event.target.value)}>
-              {sourceState.friends.map((friend) => (
-                <option key={friend.code} value={friend.code}>{friend.label}</option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-      </section>
+            {sourceState.status === "ready" ? (
+              <label className={styles.friendSelect}>
+                <span>대상 친구</span>
+                <select value={selectedFriendCode} onChange={(event) => setSelectedFriendCode(event.target.value)}>
+                  {sourceState.friends.map((friend) => (
+                    <option key={friend.code} value={friend.code}>{friend.label}</option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+          </section>
 
-      <section className={styles.panel}>
-        <div className={styles.panelHeading}>
-          <div>
-            <p>02 · 리믹스 규칙</p>
-            <h2>같이 들을까요, 살짝 피할까요?</h2>
-          </div>
-        </div>
+          <section className={styles.panel}>
+            <div className={styles.panelHeading}>
+              <div>
+                <p>02 · 리믹스 규칙</p>
+                <h2>같이 들을까요, 살짝 피할까요?</h2>
+              </div>
+            </div>
 
-        <fieldset className={styles.optionGroup}>
-          <legend>모드</legend>
-          <label>
-            <input checked={mode === "together"} name="mode" type="radio" value="together" onChange={() => setMode("together")} />
-            비슷하게
-          </label>
-          <label>
-            <input checked={mode === "opposite"} name="mode" type="radio" value="opposite" onChange={() => setMode("opposite")} />
-            반대로
-          </label>
-        </fieldset>
+            <fieldset className={styles.optionGroup}>
+              <legend>모드</legend>
+              <label>
+                <input checked={mode === "together"} name="mode" type="radio" value="together" onChange={() => setMode("together")} />
+                비슷하게
+              </label>
+              <label>
+                <input checked={mode === "opposite"} name="mode" type="radio" value="opposite" onChange={() => setMode("opposite")} />
+                반대로
+              </label>
+            </fieldset>
 
-        <fieldset className={styles.optionGroup}>
-          <legend>범위</legend>
-          <label>
-            <input checked={scope === "general_only"} name="scope" type="radio" value="general_only" onChange={() => setScope("general_only")} />
-            {mode === "together" ? "교양만 같이 듣기" : "교양만 피하기"}
-          </label>
-          <label>
-            <input checked={scope === "major_only"} name="scope" type="radio" value="major_only" onChange={() => setScope("major_only")} />
-            {mode === "together" ? "전공만 같이 듣기" : "전공만 피하기"}
-          </label>
-          <label>
-            <input checked={scope === "general_and_major"} name="scope" type="radio" value="general_and_major" onChange={() => setScope("general_and_major")} />
-            {mode === "together" ? "교양+전공 같이 듣기" : "교양+전공 피하기"}
-          </label>
-        </fieldset>
+            <fieldset className={styles.optionGroup}>
+              <legend>범위</legend>
+              <label>
+                <input checked={scope === "general_only"} name="scope" type="radio" value="general_only" onChange={() => setScope("general_only")} />
+                {mode === "together" ? "교양만 같이 듣기" : "교양만 피하기"}
+              </label>
+              <label>
+                <input checked={scope === "major_only"} name="scope" type="radio" value="major_only" onChange={() => setScope("major_only")} />
+                {mode === "together" ? "전공만 같이 듣기" : "전공만 피하기"}
+              </label>
+              <label>
+                <input checked={scope === "general_and_major"} name="scope" type="radio" value="general_and_major" onChange={() => setScope("general_and_major")} />
+                {mode === "together" ? "교양+전공 같이 듣기" : "교양+전공 피하기"}
+              </label>
+            </fieldset>
 
-        <fieldset className={`${styles.optionGroup} ${!strengthAvailable ? styles.disabledGroup : ""}`} disabled={!strengthAvailable}>
-          <legend>강도</legend>
-          <label>
-            <input checked={strength === "strong"} name="strength" type="radio" value="strong" onChange={() => setStrength("strong")} />
-            강하게
-          </label>
-          <label>
-            <input checked={strength === "weak"} name="strength" type="radio" value="weak" onChange={() => setStrength("weak")} />
-            약하게 · 미충족 요건 영역 우선
-          </label>
-        </fieldset>
-        {!strengthAvailable ? (
-          <div className={styles.requirementNotice}>
-            <p className={styles.mutedHint}>졸업요건 문서를 등록하면 강도를 조절할 수 있어요.</p>
-            <Link className={styles.requirementLink} href="/?step=graduation-requirements">
-              졸업요건충족현황 입력하러 가기
-            </Link>
-          </div>
-        ) : (
-          <p className={styles.mutedHint}>확정한 졸업요건 기준 미충족 영역 {unmetRequirementLabels.length}개를 반영합니다.</p>
-        )}
+            <fieldset className={`${styles.optionGroup} ${!strengthAvailable ? styles.disabledGroup : ""}`} disabled={!strengthAvailable}>
+              <legend>강도</legend>
+              <label>
+                <input checked={strength === "strong"} name="strength" type="radio" value="strong" onChange={() => setStrength("strong")} />
+                강하게
+              </label>
+              <label>
+                <input checked={strength === "weak"} name="strength" type="radio" value="weak" onChange={() => setStrength("weak")} />
+                약하게 · 미충족 요건 영역 우선
+              </label>
+            </fieldset>
+            {!strengthAvailable ? (
+              <div className={styles.requirementNotice}>
+                <p className={styles.mutedHint}>졸업요건 문서를 등록하면 강도를 조절할 수 있어요.</p>
+                <Link className={styles.requirementLink} href="/?step=graduation-requirements">
+                  졸업요건충족현황 입력하러 가기
+                </Link>
+              </div>
+            ) : (
+              <p className={styles.mutedHint}>확정한 졸업요건 기준 미충족 영역 {unmetRequirementLabels.length}개를 반영합니다.</p>
+            )}
 
-        <button
-          className={styles.generateButton}
-          disabled={sourceState.status !== "ready" || !selectedFriend}
-          type="button"
-          onClick={makeRemix}
-        >
-          시간표 만들기
-        </button>
-        <p className={styles.ruleHint}>
-          기본은 교양+전공을 모두 보고, 비슷하게는 친구 과목이 포함된 유효 조합을 먼저 보여줘요.
-          두 시간표에 이미 있는 과목·분반만 섞고 새 과목을 찾거나 서버에 저장하지 않아요.
-        </p>
-      </section>
+            <button
+              className={styles.generateButton}
+              disabled={sourceState.status !== "ready" || !selectedFriend}
+              type="button"
+              onClick={makeRemix}
+            >
+              시간표 만들기
+            </button>
+            <p className={styles.ruleHint}>
+              기본은 교양+전공을 모두 보고, 비슷하게는 친구 과목이 포함된 유효 조합을 먼저 보여줘요.
+              두 시간표에 이미 있는 과목·분반만 섞고 새 과목을 찾거나 서버에 저장하지 않아요.
+            </p>
+          </section>
 
-      {generationError ? (
-        <p className={styles.error} role="alert">
-          {generationError}
-          {generationError === LEGACY_REQUIRED_COURSE_ERROR ? (
-            <>
-              {" "}
-              <Link className={styles.resaveLink} href="/friends">
-                내 시간표 다시 저장하기
-              </Link>
-              {" 후 다시 시도해 주세요."}
-            </>
+          {generationError ? (
+            <p className={styles.error} role="alert">
+              {generationError}
+              {generationError === LEGACY_REQUIRED_COURSE_ERROR ? (
+                <>
+                  {" "}
+                  <Link className={styles.resaveLink} href="/friends">
+                    내 시간표 다시 저장하기
+                  </Link>
+                  {" 후 다시 시도해 주세요."}
+                </>
+              ) : null}
+            </p>
           ) : null}
-        </p>
-      ) : null}
-      {results.length > 0 ? (
-        <section className={styles.results}>
-          <div className={styles.resultHeading}>
-            <p>TOP 5 REMIXES</p>
-            <h2>내 기준 결과</h2>
-          </div>
-          <div className={styles.courseLegend} aria-label="리믹스 과목 색상 구분">
-            <span><i className={styles.sharedCourse} aria-hidden="true" />대상 친구와 겹치는 과목</span>
-            <span><i className={styles.friendOnlyCourse} aria-hidden="true" />친구만 듣는 과목</span>
-            <span><i className={styles.myOnlyCourse} aria-hidden="true" />나만 듣는 과목</span>
-          </div>
-          <ol>
-            {results.map((result, index) => (
-              <li key={result.candidateId}>
-                <div className={styles.scoreLine}>
-                  <span>#{index + 1}</span>
-                  <strong>{result.totalScore >= 0 ? "+" : ""}{result.totalScore} remix point</strong>
-                  <small>점수에 반영된 친구 과목 {result.matchedCourseCount}개</small>
-                </div>
-                <TimetableCard
-                  courseColorsById={courseColorsById}
-                  extras={[]}
-                  heading={`${index + 1}번 리믹스`}
-                  index={index}
-                  timetable={result.timetable}
-                  tone="remix"
-                />
-              </li>
-            ))}
-          </ol>
-        </section>
-      ) : null}
+        </div>
+
+        <div className={styles.resultsColumn}>
+          {results.length > 0 ? (
+            <section className={styles.results}>
+              <div className={styles.resultHeading}>
+                <p>TOP 5 REMIXES</p>
+                <h2>내 기준 결과</h2>
+              </div>
+              <p className={styles.resultHint}>1위 시간표만 펼쳐두었어요. 다른 결과는 눌러서 확인하세요.</p>
+              <div className={styles.courseLegend} aria-label="리믹스 과목 색상 구분">
+                <span><i className={styles.sharedCourse} aria-hidden="true" />대상 친구와 겹치는 과목</span>
+                <span><i className={styles.friendOnlyCourse} aria-hidden="true" />친구만 듣는 과목</span>
+                <span><i className={styles.myOnlyCourse} aria-hidden="true" />나만 듣는 과목</span>
+              </div>
+              <ol>
+                {results.map((result, index) => (
+                  <li key={result.candidateId}>
+                    <div className={styles.scoreLine}>
+                      <span>#{index + 1}</span>
+                      <strong>{result.totalScore >= 0 ? "+" : ""}{result.totalScore} remix point</strong>
+                      <small>점수에 반영된 친구 과목 {result.matchedCourseCount}개</small>
+                    </div>
+                    <TimetableCard
+                      courseColorsById={courseColorsById}
+                      extras={[]}
+                      heading={`${index + 1}번 리믹스`}
+                      index={index}
+                      timetable={result.timetable}
+                      tone="remix"
+                    />
+                  </li>
+                ))}
+              </ol>
+            </section>
+          ) : (
+            <section className={styles.resultPlaceholder}>
+              <p>03 · 생성 결과</p>
+              <h2>리믹스 시간표가 여기에 표시돼요.</h2>
+              <span>왼쪽에서 대상과 규칙을 정한 뒤 시간표를 만들어 보세요.</span>
+            </section>
+          )}
+        </div>
+      </div>
     </main>
   );
 }

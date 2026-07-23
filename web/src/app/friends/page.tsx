@@ -60,6 +60,7 @@ export default function FriendsPage() {
   const [myView, setMyView] = useState<FriendView | undefined>(undefined);
 
   const [friendViews, setFriendViews] = useState<Record<string, FriendView>>({});
+  const [selectedFriendCode, setSelectedFriendCode] = useState<string | null>(null);
   const [newNickname, setNewNickname] = useState("");
   const [newCode, setNewCode] = useState("");
   const [addError, setAddError] = useState("");
@@ -180,6 +181,7 @@ export default function FriendsPage() {
         ...current,
         [code]: { status: "ready", ownerLabel: view.ownerLabel, timetable: view.timetable },
       }));
+      setSelectedFriendCode(code);
       setNewNickname("");
       setNewCode("");
     } catch {
@@ -191,6 +193,7 @@ export default function FriendsPage() {
 
   function handleRemoveFriend(code: string): void {
     setFriendListOverride(removeFriend(window.localStorage, code));
+    setSelectedFriendCode((current) => (current === code ? null : current));
     setFriendViews((current) => {
       const next = { ...current };
       delete next[code];
@@ -247,166 +250,197 @@ export default function FriendsPage() {
           friendViews[friend.code]?.status === "ready" && friendViews[friend.code]?.timetable,
       ),
   );
+  const selectedFriend = selectedFriendCode
+    ? friends.find((friend) => friend.code === selectedFriendCode) ?? friends[0] ?? null
+    : friends[0] ?? null;
+  const selectedFriendView = selectedFriend ? friendViews[selectedFriend.code] : undefined;
 
   return (
     <main className={pageStyles.page}>
       <PageReturnLink href="/" label="시간표 만들기로 돌아가기" />
       <section className={pageStyles.hero}>
         <p className={pageStyles.eyebrow}>SKKU-DULE</p>
-        <h1>친구 시간표</h1>
+        <h1>내 시간표·친구 시간표</h1>
         <p>로그인 없이 코드로 서로의 최신 시간표를 확인합니다.</p>
       </section>
 
-      <section className={styles.myCodeSection}>
-        <div className={styles.sectionHeading}>
-          <h2>내 코드</h2>
-          {canStartRemix ? (
+      <section className={styles.timetableWorkspace}>
+        <section className={styles.myCodeSection}>
+          <div className={styles.sectionHeading}>
+            <h2>내 시간표</h2>
+            <span>내 코드</span>
+          </div>
+          {myCode ? (
+            <>
+              <div className={styles.myCodeCard}>
+                <div>
+                  <span className={styles.myCodeValue}>{myCode}</span>
+                  {storedMyLabel ? <small>{storedMyLabel}</small> : null}
+                </div>
+                <div className={styles.myCodeActions}>
+                  <button type="button" onClick={() => void handleCopyMyCode()}>
+                    {copyFeedback ? "복사됨" : "코드 복사"}
+                  </button>
+                  <button
+                    className={styles.dangerButton}
+                    disabled={isDeletingMine}
+                    type="button"
+                    onClick={() => void handleDeleteMine()}
+                  >
+                    {isDeletingMine ? "삭제 중…" : "저장 삭제"}
+                  </button>
+                </div>
+              </div>
+              {!myView || myView.status === "loading" ? (
+                <p className={styles.emptyHint}>불러오는 중…</p>
+              ) : myView.status === "error" ? (
+                <p className={styles.error}>{myView.error}</p>
+              ) : myView.timetable ? (
+                <>
+                  <label className={styles.mergeCheckbox}>
+                    <input
+                      checked={selectedIds.has(ME_SOURCE_ID)}
+                      type="checkbox"
+                      onChange={() => toggleSelected(ME_SOURCE_ID)}
+                    />
+                    <span>겹쳐보기에 포함</span>
+                  </label>
+                  <ol className={`${timetableStyles.timetableList} ${styles.myTimetableList}`}>
+                    <TimetableCard
+                      extras={[]}
+                      heading={storedMyLabel || "내 시간표"}
+                      index={0}
+                      requiredCourseIds={
+                        myView.requiredCourseIds === null
+                          ? undefined
+                          : new Set(myView.requiredCourseIds ?? [])
+                      }
+                      timetable={myView.timetable}
+                    />
+                  </ol>
+                </>
+              ) : null}
+            </>
+          ) : (
+            <p className={styles.emptyHint}>
+              아직 저장한 시간표가 없어요. 시간표 카드의 &ldquo;코드로 공유&rdquo; 버튼을 먼저 눌러
+              주세요. <Link href="/">메인으로 가기</Link>
+            </p>
+          )}
+          {deleteMineError ? <p className={styles.error}>{deleteMineError}</p> : null}
+        </section>
+
+        <aside className={styles.friendSidebar}>
+          <section className={styles.addFriendSection}>
+            <h2>친구 시간표 추가</h2>
+            <form className={styles.addFriendForm} onSubmit={(event) => void handleAddFriend(event)}>
+              <label>
+                <span>닉네임(선택)</span>
+                <input
+                  maxLength={24}
+                  placeholder="예: 재성"
+                  value={newNickname}
+                  onChange={(event) => setNewNickname(event.target.value)}
+                />
+              </label>
+              <label>
+                <span>코드</span>
+                <input
+                  maxLength={8}
+                  placeholder="8자리 코드"
+                  value={newCode}
+                  onChange={(event) => setNewCode(event.target.value)}
+                />
+              </label>
+              <button disabled={isAdding} type="submit">
+                {isAdding ? "확인 중…" : "추가"}
+              </button>
+            </form>
+            {addError ? <p className={styles.error}>{addError}</p> : null}
+          </section>
+
+          <section className={styles.friendListSection}>
+            <h2>친구 목록 {friends.length > 0 ? `(${friends.length})` : ""}</h2>
+            {friends.length === 0 ? (
+              <p className={styles.emptyHint}>아직 추가한 친구가 없어요.</p>
+            ) : (
+              <ol className={styles.friendList}>
+                {friends.map((friend) => {
+                  const view = friendViews[friend.code];
+                  const isSelected = selectedFriend?.code === friend.code;
+                  return (
+                    <li className={styles.friendItem} key={friend.code}>
+                      <button
+                        aria-pressed={isSelected}
+                        className={styles.friendSelectButton}
+                        type="button"
+                        onClick={() => setSelectedFriendCode(friend.code)}
+                      >
+                        <strong>{friend.nickname || view?.ownerLabel || friend.code}</strong>
+                        <small>
+                          {!view || view.status === "loading"
+                            ? "불러오는 중…"
+                            : view.status === "error"
+                              ? "불러오지 못함"
+                              : "시간표 보기"}
+                        </small>
+                      </button>
+                      <button
+                        aria-label={`${friend.nickname || friend.code} 목록에서 제거`}
+                        className={styles.removeFriendButton}
+                        type="button"
+                        onClick={() => handleRemoveFriend(friend.code)}
+                      >
+                        삭제
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+          </section>
+
+          {selectedFriend ? (
+            <section className={styles.selectedFriendSection}>
+              <h2>{selectedFriend.nickname || selectedFriendView?.ownerLabel || "친구"}의 시간표</h2>
+              {!selectedFriendView || selectedFriendView.status === "loading" ? (
+                <p className={styles.emptyHint}>불러오는 중…</p>
+              ) : selectedFriendView.status === "error" ? (
+                <p className={styles.error}>{selectedFriendView.error}</p>
+              ) : selectedFriendView.timetable ? (
+                <>
+                  <label className={styles.mergeCheckbox}>
+                    <input
+                      checked={selectedIds.has(selectedFriend.code)}
+                      type="checkbox"
+                      onChange={() => toggleSelected(selectedFriend.code)}
+                    />
+                    <span>겹쳐보기에 포함</span>
+                  </label>
+                  <TimetableCard
+                    compact
+                    extras={[]}
+                    heading={selectedFriend.nickname || selectedFriendView.ownerLabel || "친구의 시간표"}
+                    index={0}
+                    timetable={selectedFriendView.timetable}
+                  />
+                </>
+              ) : null}
+            </section>
+          ) : null}
+
+          <section className={styles.remixSection}>
+            <h2>시간표 리믹스</h2>
+            <p className={styles.emptyHint}>
+              {canStartRemix
+                ? "내 시간표와 선택한 친구 시간표를 섞어 새 조합을 만들어 보세요."
+                : "내 시간표와 친구 시간표를 각각 하나 이상 불러오면 리믹스할 수 있어요."}
+            </p>
             <Link className={styles.remixButton} href="/friends/remix">
               리믹스 하러가기
             </Link>
-          ) : null}
-        </div>
-        {myCode ? (
-          <>
-            <div className={styles.myCodeCard}>
-              <div>
-                <span className={styles.myCodeValue}>{myCode}</span>
-                {storedMyLabel ? <small>{storedMyLabel}</small> : null}
-              </div>
-              <div className={styles.myCodeActions}>
-                <button type="button" onClick={() => void handleCopyMyCode()}>
-                  {copyFeedback ? "복사됨" : "코드 복사"}
-                </button>
-                <button
-                  className={styles.dangerButton}
-                  disabled={isDeletingMine}
-                  type="button"
-                  onClick={() => void handleDeleteMine()}
-                >
-                  {isDeletingMine ? "삭제 중…" : "저장 삭제"}
-                </button>
-              </div>
-            </div>
-            {!myView || myView.status === "loading" ? (
-              <p className={styles.emptyHint}>불러오는 중…</p>
-            ) : myView.status === "error" ? (
-              <p className={styles.error}>{myView.error}</p>
-            ) : myView.timetable ? (
-              <>
-                <label className={styles.mergeCheckbox}>
-                  <input
-                    checked={selectedIds.has(ME_SOURCE_ID)}
-                    type="checkbox"
-                    onChange={() => toggleSelected(ME_SOURCE_ID)}
-                  />
-                  <span>겹쳐보기에 포함</span>
-                </label>
-                <ol className={`${timetableStyles.timetableList} ${styles.friendList}`}>
-                  <TimetableCard
-                    extras={[]}
-                    heading={storedMyLabel || "내 시간표"}
-                    index={0}
-                    requiredCourseIds={
-                      myView.requiredCourseIds === null
-                        ? undefined
-                        : new Set(myView.requiredCourseIds ?? [])
-                    }
-                    timetable={myView.timetable}
-                  />
-                </ol>
-              </>
-            ) : null}
-          </>
-        ) : (
-          <p className={styles.emptyHint}>
-            아직 저장한 시간표가 없어요. 시간표 카드의 &ldquo;코드로 공유&rdquo; 버튼을 먼저 눌러
-            주세요. <Link href="/">메인으로 가기</Link>
-          </p>
-        )}
-        {deleteMineError ? <p className={styles.error}>{deleteMineError}</p> : null}
-      </section>
-
-      {canStartRemix ? (
-        <section className={styles.myCodeSection}>
-          <h2>친구 시간표 리믹스</h2>
-          <p className={styles.emptyHint}>내 시간표와 친구 시간표를 섞어 재미있는 조합을 만들어 보세요.</p>
-          <Link className={styles.remixButton} href="/friends/remix">
-            리믹스 화면으로 가기
-          </Link>
-        </section>
-      ) : null}
-
-      <section className={styles.addFriendSection}>
-        <h2>친구 시간표 추가</h2>
-        <form className={styles.addFriendForm} onSubmit={(event) => void handleAddFriend(event)}>
-          <label>
-            <span>닉네임(선택)</span>
-            <input
-              maxLength={24}
-              placeholder="예: 재성"
-              value={newNickname}
-              onChange={(event) => setNewNickname(event.target.value)}
-            />
-          </label>
-          <label>
-            <span>코드</span>
-            <input
-              maxLength={8}
-              placeholder="8자리 코드"
-              value={newCode}
-              onChange={(event) => setNewCode(event.target.value)}
-            />
-          </label>
-          <button disabled={isAdding} type="submit">
-            {isAdding ? "확인 중…" : "추가"}
-          </button>
-        </form>
-        {addError ? <p className={styles.error}>{addError}</p> : null}
-      </section>
-
-      <section className={styles.friendListSection}>
-        <h2>친구 목록 {friends.length > 0 ? `(${friends.length})` : ""}</h2>
-        {friends.length === 0 ? (
-          <p className={styles.emptyHint}>아직 추가한 친구가 없어요.</p>
-        ) : (
-          <ol className={`${timetableStyles.timetableList} ${styles.friendList}`}>
-            {friends.map((friend) => {
-              const view = friendViews[friend.code];
-              return (
-                <li className={styles.friendItem} key={friend.code}>
-                  <div className={styles.friendItemHeading}>
-                    <strong>{friend.nickname || view?.ownerLabel || friend.code}</strong>
-                    <button type="button" onClick={() => handleRemoveFriend(friend.code)}>
-                      목록에서 제거
-                    </button>
-                  </div>
-                  {!view || view.status === "loading" ? (
-                    <p className={styles.emptyHint}>불러오는 중…</p>
-                  ) : view.status === "error" ? (
-                    <p className={styles.error}>{view.error}</p>
-                  ) : view.timetable ? (
-                    <>
-                      <label className={styles.mergeCheckbox}>
-                        <input
-                          checked={selectedIds.has(friend.code)}
-                          type="checkbox"
-                          onChange={() => toggleSelected(friend.code)}
-                        />
-                        <span>겹쳐보기에 포함</span>
-                      </label>
-                      <TimetableCard
-                        extras={[]}
-                        heading={friend.nickname || view.ownerLabel || "친구의 시간표"}
-                        index={0}
-                        timetable={view.timetable}
-                      />
-                    </>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ol>
-        )}
+          </section>
+        </aside>
       </section>
 
       {mergedSources.length > 0 ? (

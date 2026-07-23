@@ -1,8 +1,52 @@
 .myCodeSection,
 .addFriendSection,
-.friendListSection {
+.friendListSection,
+.selectedFriendSection,
+.remixSection {
   max-width: 720px;
   margin: 0 auto 32px;
+}
+
+.timetableWorkspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.18fr) minmax(340px, 0.82fr);
+  align-items: start;
+  gap: 24px;
+  max-width: 1120px;
+  margin: 0 auto 32px;
+}
+
+.timetableWorkspace .myCodeSection,
+.timetableWorkspace .addFriendSection,
+.timetableWorkspace .friendListSection,
+.timetableWorkspace .selectedFriendSection,
+.timetableWorkspace .remixSection {
+  max-width: none;
+  min-width: 0;
+  margin: 0;
+}
+
+.timetableWorkspace .myCodeSection {
+  display: grid;
+  gap: 14px;
+  padding: 22px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  background: var(--surface-card);
+}
+
+.friendSidebar {
+  display: grid;
+  min-width: 0;
+  gap: 16px;
+}
+
+.friendSidebar > section {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  background: var(--surface-card);
 }
 
 .mergedSection {
@@ -13,6 +57,8 @@
 .myCodeSection h2,
 .addFriendSection h2,
 .friendListSection h2,
+.selectedFriendSection h2,
+.remixSection h2,
 .mergedSection h2 {
   margin: 0 0 12px;
   color: var(--text-primary);
@@ -31,8 +77,14 @@
   margin-bottom: 12px;
 }
 
-.sectionHeading .remixButton {
+.sectionHeading > span {
   margin-bottom: 12px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: var(--surface-note);
+  color: var(--accent-strong);
+  font-size: 11px;
+  font-weight: 800;
   white-space: nowrap;
 }
 
@@ -129,15 +181,15 @@
 }
 
 .addFriendForm {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
   align-items: end;
   gap: 10px;
 }
 
 .addFriendForm label {
   display: flex;
-  flex: 1 1 160px;
+  min-width: 0;
   flex-direction: column;
   gap: 4px;
 }
@@ -180,7 +232,7 @@
 
 .friendList {
   display: grid;
-  gap: 16px;
+  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -188,22 +240,50 @@
 
 .friendItem {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   gap: 8px;
 }
 
-.friendItemHeading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+.friendSelectButton {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  padding: 10px 11px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  background: var(--surface-page);
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
 }
 
-.friendItemHeading strong {
+.friendSelectButton strong {
+  min-width: 0;
+  overflow: hidden;
   color: var(--text-primary);
   font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.friendItemHeading button {
+.friendSelectButton small {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.friendSelectButton[aria-pressed="true"] {
+  border-color: var(--accent-strong);
+  background: var(--surface-note);
+}
+
+.friendSelectButton[aria-pressed="true"] strong {
+  color: var(--accent-strong);
+}
+
+.removeFriendButton {
+  flex: none;
   padding: 6px 10px;
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
@@ -212,6 +292,25 @@
   font: inherit;
   font-size: 12px;
   cursor: pointer;
+}
+
+.selectedFriendSection {
+  display: grid;
+  gap: 8px;
+}
+
+.selectedFriendSection .mergeCheckbox {
+  margin-bottom: 0;
+}
+
+.remixSection {
+  display: grid;
+  gap: 10px;
+}
+
+.remixSection h2,
+.remixSection p {
+  margin-bottom: 0;
 }
 
 /* 리믹스는 이전 화면으로 돌아가기와 다른, 친구 시간표에서 실행하는 별도 행동이다. */
@@ -228,4 +327,25 @@
 
 .remixButton:hover {
   background: var(--surface-note);
+}
+
+@media (max-width: 760px) {
+  .timetableWorkspace {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .timetableWorkspace .myCodeSection,
+  .friendSidebar > section {
+    padding: 16px;
+  }
+
+  .addFriendForm {
+    grid-template-columns: 1fr;
+  }
+
+  .addFriendForm button {
+    justify-self: start;
+  }
 }

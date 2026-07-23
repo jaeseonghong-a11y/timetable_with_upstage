@@ -208,11 +208,11 @@ const ANALYSIS_LONG_WAIT_FLAVORS: Record<AcademicDocumentKind, readonly string[]
   ],
 };
 const ANALYSIS_LONG_WAIT_INTERVAL_MS = 3000;
-// Before this page sees an actual completed analysis, use the same conservative baseline for
-// both document types. Completed runs replace it with the rolling in-memory average below.
-const DEFAULT_ANALYSIS_AVERAGE_SECONDS: Record<AcademicDocumentKind, number> = {
-  course_history: 20,
-  graduation_requirements: 20,
+// Never fabricate a numerical "average" before a document type has finished at least once.
+// The upload content and upstream Parse/Solar queue make a fixed 20-second baseline misleading.
+const EMPTY_ANALYSIS_AVERAGES: Record<AcademicDocumentKind, number | null> = {
+  course_history: null,
+  graduation_requirements: null,
 };
 const ANALYSIS_DURATION_SAMPLE_LIMIT = 5;
 // The server has its own Upstage/Vercel limits, but an unbounded browser fetch leaves a student
@@ -290,7 +290,7 @@ export function AcademicDocumentManager({
   const [analysisFileIndex, setAnalysisFileIndex] = useState(0);
   const [analysisElapsedSeconds, setAnalysisElapsedSeconds] = useState(0);
   const [analysisAverageSecondsByKind, setAnalysisAverageSecondsByKind] = useState(
-    DEFAULT_ANALYSIS_AVERAGE_SECONDS,
+    EMPTY_ANALYSIS_AVERAGES,
   );
   const analysisDurationSamples = useRef<Record<AcademicDocumentKind, number[]>>({
     course_history: [],
@@ -510,6 +510,7 @@ export function AcademicDocumentManager({
     track("document_upload_start", { doc_type: kind });
     const startedAt = performance.now();
     let failureTracked = false;
+    let didSucceed = false;
     const trackFailure = (errorType: string): void => {
       failureTracked = true;
       track("document_parse_fail", {
@@ -546,6 +547,7 @@ export function AcademicDocumentManager({
       onConfirmedProfileChange?.(kind, undefined);
       setAcknowledgements((current) => ({ ...current, [kind]: [] }));
       setCollapsedResults((current) => ({ ...current, [kind]: false }));
+      didSucceed = true;
       // Keep the browser-memory-only selection after success, so "다시 분석하기" can rerun the
       // exact same file set without a re-upload. The API never persists originals.
       track("document_parse_success", {
@@ -562,18 +564,20 @@ export function AcademicDocumentManager({
           : "학사문서 분석을 완료하지 못했습니다. 다시 시도해 주세요.",
       );
     } finally {
-      const durationSeconds = Math.max(1, Math.round((performance.now() - startedAt) / 1000));
-      const nextSamples = [
-        ...analysisDurationSamples.current[kind],
-        durationSeconds,
-      ].slice(-ANALYSIS_DURATION_SAMPLE_LIMIT);
-      analysisDurationSamples.current[kind] = nextSamples;
-      setAnalysisAverageSecondsByKind((current) => ({
-        ...current,
-        [kind]: Math.round(
-          nextSamples.reduce((total, sample) => total + sample, 0) / nextSamples.length,
-        ),
-      }));
+      if (didSucceed) {
+        const durationSeconds = Math.max(1, Math.round((performance.now() - startedAt) / 1000));
+        const nextSamples = [
+          ...analysisDurationSamples.current[kind],
+          durationSeconds,
+        ].slice(-ANALYSIS_DURATION_SAMPLE_LIMIT);
+        analysisDurationSamples.current[kind] = nextSamples;
+        setAnalysisAverageSecondsByKind((current) => ({
+          ...current,
+          [kind]: Math.round(
+            nextSamples.reduce((total, sample) => total + sample, 0) / nextSamples.length,
+          ),
+        }));
+      }
       setIsAnalyzing(false);
       setAnalysisFileIndex(0);
       setAnalysisElapsedSeconds(0);
@@ -970,7 +974,8 @@ export function AcademicDocumentManager({
             </small>
           ) : null}
           <small className={styles.analysisTiming}>
-            현재 {analysisElapsedSeconds}초 · 평균 {analysisAverageSeconds}초
+            현재 {analysisElapsedSeconds}초 · 평균 {analysisAverageSeconds ?? "계산 중"}
+            {analysisAverageSeconds === null ? "" : "초"}
           </small>
           {/* 복수전공처럼 과목이 많은 문서는 실제로 몇 분 걸릴 수 있다 — 진행 중인데 멈춘 것으로
               오해해 재시도/이탈하지 않도록 처음부터 넉넉한 기대치를 알려준다. */}
