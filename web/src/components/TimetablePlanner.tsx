@@ -2317,11 +2317,11 @@ async function buildAiFillerSubjects(): Promise<{
           </fieldset>
 
           <fieldset>
-            <legend>고정 일정(알바 등)</legend>
             <p className={styles.featureStepCue}>
               <span>4</span>
               수업 불가 시간 설정
             </p>
+            <p className={styles.fixedEventSubtitle}>고정 일정(알바 등)</p>
             {fixedEvents.length > 0 ? (
               <ul className={styles.fixedEventList}>
                 {fixedEvents.map((event) => (
