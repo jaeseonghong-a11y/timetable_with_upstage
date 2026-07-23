@@ -70,6 +70,13 @@ export function StudentProfileForm({ profile, onChange }: Props) {
     [visibleDepartments],
   );
   const selectedDepartment = findSkkuDepartment(profile.departmentCode);
+  // 브라우저 저장소에서 기본정보가 복원되면 profile은 첫 렌더 뒤에 갱신된다. 입력 자체의 로컬
+  // 검색 상태는 그 시점에 비어 있을 수 있으므로, 목록을 닫은 상태에서는 확정된 소속명을 우선
+  // 표시한다. 사용자가 입력창을 열어 검색을 시작할 때만 departmentSearch를 그대로 쓴다.
+  const selectedDepartmentLabel = selectedDepartment?.name ?? profile.departmentCode;
+  const displayedDepartmentSearch = isDepartmentListOpen
+    ? departmentSearch
+    : selectedDepartmentLabel || departmentSearch;
   const departmentMetadata = selectedDepartment
     ? `${selectedDepartment.college} · ${selectedDepartment.name} · ${selectedDepartment.code}`
     : profile.departmentCode
@@ -194,13 +201,16 @@ export function StudentProfileForm({ profile, onChange }: Props) {
                 placeholder="학과명·전공명·트랙명 또는 6자리 코드 검색"
                 role="combobox"
                 type="search"
-                value={departmentSearch}
+                value={displayedDepartmentSearch}
                 onChange={(event) => {
                   changeDepartment(event.target.value);
                   setIsDepartmentListOpen(true);
                 }}
                 onFocus={() => {
                   trackFieldFocus("department");
+                  if (selectedDepartmentLabel) {
+                    setDepartmentSearch(selectedDepartmentLabel);
+                  }
                   if (selectedDepartment) {
                     setDepartmentFilter("");
                   }
@@ -215,6 +225,9 @@ export function StudentProfileForm({ profile, onChange }: Props) {
                 onClick={() => {
                   const nextOpen = !isDepartmentListOpen;
                   if (nextOpen) {
+                    if (selectedDepartmentLabel) {
+                      setDepartmentSearch(selectedDepartmentLabel);
+                    }
                     setDepartmentFilter("");
                   }
                   setIsDepartmentListOpen(nextOpen);

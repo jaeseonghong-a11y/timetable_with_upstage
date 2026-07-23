@@ -73,22 +73,8 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
-/* STEP 3의 순서 안내는 작업 카드 밖의 전용 열에 둔다. 흰색 카드 안은 과목 탐색과
-   담은 과목 편집에만 쓰므로, 좁은 중앙 열에서 안내 패널·필터·과목 목록이 경쟁하지 않는다. */
-.plannerShell {
-  display: grid;
-  grid-template-columns: 164px minmax(0, 1fr);
-  align-items: start;
-  gap: 16px;
-}
-
-.plannerShell > .planner {
-  max-width: none;
-  margin: 0;
-}
-
 .courseSelectionGrid {
-  grid-template-columns: minmax(0, 1fr) minmax(340px, 0.78fr);
+  grid-template-columns: minmax(0, 1.18fr) minmax(400px, 0.82fr);
   align-items: start;
 }
 
@@ -100,77 +86,13 @@
   display: none;
 }
 
-.selectionStepRail {
-  position: sticky;
-  top: 72px;
-  display: grid;
-  gap: 14px;
-  margin: 0;
-  padding: 16px 14px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 14px;
-  background: var(--surface-note);
-}
-
-.selectionStepRail > p {
-  margin: 0;
-  color: var(--accent-strong);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-}
-
-.selectionStepRail ol {
-  display: grid;
-  gap: 14px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.selectionStepRail li {
-  display: grid;
-  grid-template-columns: 24px minmax(0, 1fr);
-  gap: 8px;
-  align-items: start;
-}
-
-.selectionStepRail li > span {
-  display: grid;
-  width: 24px;
-  height: 24px;
-  place-items: center;
-  border-radius: 999px;
-  background: var(--accent-strong);
-  color: var(--surface-card);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.selectionStepRail li > div {
-  display: grid;
-  gap: 3px;
-}
-
-.selectionStepRail strong {
-  color: var(--text-primary);
-  font-size: 13px;
-  line-height: 1.35;
-}
-
-.selectionStepRail small {
-  color: var(--text-secondary);
-  font-size: 11px;
-  line-height: 1.45;
-}
-
 .controls {
   display: flex;
   flex-direction: column;
   gap: 28px;
   align-self: start;
   width: 100%;
-  padding: 28px;
+  padding: 32px;
   border-right: 1px solid var(--border-subtle);
 }
 
@@ -199,6 +121,34 @@
   font-weight: 700;
 }
 
+.featureStepCue {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 18px 0 8px;
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: -0.01em;
+}
+
+.controls legend.sectionTitle + .featureStepCue,
+.selectionPlanHeading .featureStepCue {
+  margin-top: 0;
+}
+
+.featureStepCue > span {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--accent-strong);
+  color: var(--surface-card);
+  font-size: 11px;
+  font-weight: 900;
+}
+
 .sourceTabs {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -207,13 +157,14 @@
 }
 
 .sourceTabs button {
-  padding: 9px 10px;
+  min-height: 46px;
+  padding: 10px 12px;
   border: 1px solid var(--border-subtle);
   border-radius: 9px;
   background: var(--surface-page);
   color: var(--text-secondary);
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
   cursor: pointer;
 }
@@ -226,11 +177,11 @@
 
 .destinationPicker {
   display: grid;
-  grid-template-columns: minmax(120px, 0.55fr) minmax(0, 1fr);
+  grid-template-columns: minmax(150px, 0.5fr) minmax(0, 1fr);
   align-items: center;
-  gap: 10px 14px;
-  margin: 2px 0 14px;
-  padding: 10px 0;
+  gap: 12px 18px;
+  margin: 0;
+  padding: 13px 0;
   border-top: 1px solid var(--border-subtle);
   border-bottom: 1px solid var(--border-subtle);
 }
@@ -242,13 +193,13 @@
 
 .destinationPickerHeading > span {
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 900;
 }
 
 .destinationPickerHeading > small {
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.45;
 }
 
@@ -261,23 +212,23 @@
 
 .destinationTabs button {
   display: inline-flex;
-  min-height: 42px;
+  min-height: 46px;
   align-items: center;
   gap: 7px;
-  padding: 8px 11px;
+  padding: 9px 13px;
   border: 1px solid var(--border-subtle);
   border-radius: 9px;
   background: var(--surface-card);
   color: var(--text-secondary);
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 850;
   cursor: pointer;
 }
 
 .destinationTabs button > small {
   color: inherit;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -379,7 +330,7 @@
   min-height: 38px;
   padding: 8px 40px 8px 10px;
   border-radius: 10px;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .selectedMajorProgram {
@@ -392,7 +343,7 @@
   border-radius: 9px;
   background: var(--surface-note);
   color: var(--accent-strong);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -767,19 +718,20 @@
 
 .courseSearch input {
   width: 100%;
-  max-width: 360px;
-  padding: 10px 11px;
+  max-width: 440px;
+  min-height: 44px;
+  padding: 10px 12px;
   border: 1px solid var(--border-subtle);
   border-radius: 10px;
   background: var(--surface-card);
   color: var(--text-primary);
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .courseList {
-  max-height: 460px;
-  padding: 4px 6px;
+  max-height: 520px;
+  padding: 6px 8px;
   overflow-y: auto;
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
@@ -804,8 +756,8 @@
 
 .selectionPlanEditor {
   display: grid;
-  gap: 12px;
-  padding: 18px 16px;
+  gap: 14px;
+  padding: 22px 20px;
   border: 1px solid var(--border-subtle);
   border-radius: 14px;
   background: var(--surface-page);
@@ -815,7 +767,7 @@
   position: sticky;
   top: 72px;
   max-height: calc(100vh - 88px);
-  margin: 28px 28px 28px 0;
+  margin: 32px 32px 32px 0;
   overflow-y: auto;
 }
 
@@ -2501,28 +2453,8 @@
     grid-template-columns: 1fr;
   }
 
-  .plannerShell {
-    grid-template-columns: 1fr;
-    gap: 14px;
-  }
-
   .courseSelectionGrid {
     grid-template-columns: 1fr;
-  }
-
-  .selectionStepRail {
-    position: static;
-    margin: 0;
-  }
-
-  .selectionStepRail ol {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-  }
-
-  .selectionStepRail li {
-    grid-template-columns: 22px minmax(0, 1fr);
-    gap: 6px;
   }
 
   .courseSelectionGrid .selectionPlanEditor {
@@ -2544,10 +2476,6 @@
 
 @media (max-width: 520px) {
   .destinationPicker {
-    grid-template-columns: 1fr;
-  }
-
-  .selectionStepRail ol {
     grid-template-columns: 1fr;
   }
 

@@ -1732,35 +1732,6 @@ export function TimetablePlanner({
   }
 
   return (
-    <div className={showSelect ? styles.plannerShell : undefined}>
-      {showSelect ? (
-        <aside className={styles.selectionStepRail} aria-label="과목 담기 순서">
-          <p>STEP 3 순서</p>
-          <ol>
-            <li>
-              <span>1</span>
-              <div>
-                <strong>담을 곳 선택</strong>
-                <small>필수 또는 조합 선택을 고르세요.</small>
-              </div>
-            </li>
-            <li>
-              <span>2</span>
-              <div>
-                <strong>과목·분반 고르기</strong>
-                <small>전공·교양과 강의 형식으로 찾으세요.</small>
-              </div>
-            </li>
-            <li>
-              <span>3</span>
-              <div>
-                <strong>담은 과목 확인</strong>
-                <small>오른쪽에서 묶음과 분반을 조정하세요.</small>
-              </div>
-            </li>
-          </ol>
-        </aside>
-      ) : null}
     <section className={styles.planner} aria-label="시간표 조합">
       {showSelect ? (
         <div className={styles.stepIntro}>
@@ -1830,6 +1801,10 @@ export function TimetablePlanner({
         <aside className={styles.controls}>
           <fieldset>
             <legend className={styles.sectionTitle}>과목 담기</legend>
+            <p className={styles.featureStepCue}>
+              <span>1</span>
+              담을 곳 선택
+            </p>
             <section className={styles.destinationPicker} aria-label="새로 선택한 과목을 담을 곳">
               <div className={styles.destinationPickerHeading}>
                 <span>과목을 담을 곳</span>
@@ -1875,6 +1850,10 @@ export function TimetablePlanner({
                 </button>
               </div>
             </section>
+            <p className={styles.featureStepCue}>
+              <span>2</span>
+              전공·교양 고르기
+            </p>
             <div className={styles.sourceTabs} role="tablist" aria-label="과목 분류">
               <button
                 aria-selected={courseSource === "major"}
@@ -2057,6 +2036,10 @@ export function TimetablePlanner({
                 ) : null}
               </div>
             ) : null}
+            <p className={styles.featureStepCue}>
+              <span>3</span>
+              과목·분반 고르기
+            </p>
             <label className={styles.courseSearch}>
               <span className={styles.srOnly}>과목 검색</span>
               <input
@@ -2305,6 +2288,10 @@ export function TimetablePlanner({
           <section className={styles.selectionPlanEditor} aria-label="담은 과목 확인">
             <div className={styles.selectionPlanHeading}>
               <div>
+                <p className={styles.featureStepCue}>
+                  <span>4</span>
+                  담은 과목 확인
+                </p>
                 <strong className={styles.sectionTitle}>담은 과목</strong>
                 <small>필수·선택 묶음별 과목과 분반을 바로 확인하고 수정하세요.</small>
               </div>
@@ -2886,7 +2873,6 @@ export function TimetablePlanner({
         </div>
       </div>
     </section>
-    </div>
   );
 }
 
