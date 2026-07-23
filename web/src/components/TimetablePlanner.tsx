@@ -292,6 +292,7 @@ export function TimetablePlanner({
   const minimumCredits: string = "12";
   const maximumCredits: string = "21";
   const [disabledCourseTypes, setDisabledCourseTypes] = useState<Set<string>>(new Set());
+  const [isCourseTypeFilterOpen, setIsCourseTypeFilterOpen] = useState(false);
   const [dayOffFilters, setDayOffFilters] = useState<Weekday[]>([]);
   const [courseSearch, setCourseSearch] = useState("");
   const [collectionError, setCollectionError] = useState("");
@@ -1946,11 +1947,35 @@ async function buildAiFillerSubjects(): Promise<{
             </div>
             {courseSource === "major" ? (
               <div className={styles.majorFilters}>
-                <div className={styles.electiveAreaFilter}>
-                  <span>선택한 전공</span>
-                  <p className={styles.selectedMajorProgram}>{selectedMajorProgramLabel}</p>
-                  {majorProgramTabs.length > 1 ? (
-                    <div className={styles.areaChoices} aria-label="전공 선택">
+                <div className={styles.majorProgramHeader}>
+                  <div className={styles.electiveAreaFilter}>
+                    <span>선택한 전공</span>
+                    <p className={styles.selectedMajorProgram}>{selectedMajorProgramLabel}</p>
+                  </div>
+                  <div className={styles.extraProgramSearch}>
+                    <DepartmentAddCombobox
+                      excludeCodes={[...roadmapProgramCodes, ...extraProgramCodes]}
+                      id="planner-extra-department-search"
+                      placeholder="다른 전공·연계전공·트랙명 또는 코드 검색"
+                      onSelect={(department) => void loadExtraDepartment(department)}
+                    />
+                    {loadingExtraDepartmentCodes.length > 0 ? (
+                      <small className={styles.electiveCatalogNote}>
+                        {loadingExtraDepartmentCodes
+                          .map((code) => findSkkuDepartment(code)?.name ?? code)
+                          .join(", ")}{" "}
+                        과목을 불러오는 중…
+                      </small>
+                    ) : null}
+                    {extraDepartmentError ? (
+                      <p className={styles.courseEmpty} role="alert">
+                        {extraDepartmentError}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+                {majorProgramTabs.length > 1 ? (
+                  <div className={styles.areaChoices} aria-label="전공 선택">
                       <button
                         aria-pressed={selectedMajorProgramCode === "all"}
                         className={selectedMajorProgramCode === "all" ? styles.activeArea : undefined}
@@ -2003,30 +2028,8 @@ async function buildAiFillerSubjects(): Promise<{
                           </button>
                         ),
                       )}
-                    </div>
-                  ) : null}
-                </div>
-              <div className={styles.electiveAreaFilter}>
-                <DepartmentAddCombobox
-                  excludeCodes={[...roadmapProgramCodes, ...extraProgramCodes]}
-                  id="planner-extra-department-search"
-                  placeholder="다른 전공·연계전공·트랙명 또는 코드 검색"
-                  onSelect={(department) => void loadExtraDepartment(department)}
-                />
-                {loadingExtraDepartmentCodes.length > 0 ? (
-                  <small className={styles.electiveCatalogNote}>
-                    {loadingExtraDepartmentCodes
-                      .map((code) => findSkkuDepartment(code)?.name ?? code)
-                      .join(", ")}{" "}
-                    과목을 불러오는 중…
-                  </small>
+                  </div>
                 ) : null}
-                {extraDepartmentError ? (
-                  <p className={styles.courseEmpty} role="alert">
-                    {extraDepartmentError}
-                  </p>
-                ) : null}
-              </div>
               </div>
             ) : null}
             {courseSource === "elective" ? (
@@ -2103,48 +2106,66 @@ async function buildAiFillerSubjects(): Promise<{
               <span>3</span>
               과목·분반 고르기
             </p>
-            <label className={styles.courseSearch}>
-              <span className={styles.srOnly}>과목 검색</span>
-              <input
-                disabled={
-                  courseSource === "major"
-                    ? visibleMajorCourseGroups.length === 0 && !courseSearch
-                    : !electiveCatalog || isElectiveLoading
-                }
-                placeholder={
-                  courseSource === "major"
-                    ? "과목명·학수번호·이수구분 검색"
-                    : `${getCampusLabel(electiveCampus)} ${selectedElectiveAreaLabel}에서 과목명·학수번호 검색`
-                }
-                type="search"
-                value={courseSearch}
-                onChange={(event) => setCourseSearch(event.target.value)}
-              />
-            </label>
+            <div className={styles.courseSearchFilterControl}>
+              <label className={styles.courseSearch}>
+                <span className={styles.srOnly}>과목 검색</span>
+                <input
+                  disabled={
+                    courseSource === "major"
+                      ? visibleMajorCourseGroups.length === 0 && !courseSearch
+                      : !electiveCatalog || isElectiveLoading
+                  }
+                  placeholder={
+                    courseSource === "major"
+                      ? "과목명·학수번호·이수구분 검색"
+                      : `${getCampusLabel(electiveCampus)} ${selectedElectiveAreaLabel}에서 과목명·학수번호 검색`
+                  }
+                  type="search"
+                  value={courseSearch}
+                  onChange={(event) => setCourseSearch(event.target.value)}
+                />
+              </label>
+              {availableCourseTypes.length > 0 ? (
+                <button
+                  aria-controls="course-type-filter"
+                  aria-expanded={isCourseTypeFilterOpen}
+                  className={styles.courseTypeFilterToggle}
+                  type="button"
+                  onClick={() => setIsCourseTypeFilterOpen((open) => !open)}
+                >
+                  필터 <span aria-hidden="true">{isCourseTypeFilterOpen ? "⌃" : "⌄"}</span>
+                </button>
+              ) : null}
+              {availableCourseTypes.length > 0 && isCourseTypeFilterOpen ? (
+                <div className={styles.courseTypeFilter} id="course-type-filter">
+                  <div className={styles.courseTypeFilterHeading}>
+                    <span>강의 형식으로 좁히기</span>
+                    <button type="button" onClick={() => setDisabledCourseTypes(new Set())}>
+                      초기화
+                    </button>
+                  </div>
+                  <div className={styles.courseTypeChoices}>
+                    {availableCourseTypes.map((label) => {
+                      const checked = !disabledCourseTypes.has(label);
+                      return (
+                        <label className={styles.courseTypeChoice} key={label}>
+                          <input
+                            checked={checked}
+                            type="checkbox"
+                            onChange={() => toggleCourseType(label)}
+                          />
+                          <span>{label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+            </div>
             {excludedCount > 0 ? (
               <p className={styles.excludedNotice}>
                 기수강 과목 {excludedCount}개 자동 제외 · 재수강 체크 시 다시 표시
               </p>
-            ) : null}
-            {availableCourseTypes.length > 0 ? (
-              <div className={styles.courseTypeFilter}>
-                <span>강의 형식으로 좁히기</span>
-                <div className={styles.courseTypeChoices}>
-                  {availableCourseTypes.map((label) => {
-                    const checked = !disabledCourseTypes.has(label);
-                    return (
-                      <label className={styles.courseTypeChoice} key={label}>
-                        <input
-                          checked={checked}
-                          type="checkbox"
-                          onChange={() => toggleCourseType(label)}
-                        />
-                        <span>{label}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
             ) : null}
             <div className={styles.courseList}>
               {courseSource === "major" ? visibleMajorCourseGroups.map((group) => {

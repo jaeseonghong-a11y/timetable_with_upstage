@@ -299,26 +299,41 @@
 .majorFilters {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
+  gap: 10px;
   max-width: none;
   padding-top: 4px;
 }
 
+.majorProgramHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 320px);
+  align-items: end;
+  gap: 16px;
+}
+
+.extraProgramSearch {
+  display: grid;
+  width: min(320px, 100%);
+  min-width: 0;
+  gap: 5px;
+  justify-self: end;
+}
+
 /* 전체·전공·복수전공 칩을 고정 열 그리드 대신 가로로 흐르게 하고(내용 너비만큼만 차지),
    폭이 모자라면 자연스럽게 다음 줄로 넘어가게 한다(1행 고정이 아니라 여러 행으로 흐름). */
-.majorFilters .areaChoices {
+.majorFilters > .areaChoices {
   display: flex;
   flex-wrap: wrap;
   max-height: none;
   overflow: visible;
 }
 
-.majorFilters .areaChoices button {
+.majorFilters > .areaChoices button {
   flex: 0 0 auto;
   width: auto;
 }
 
-.majorFilters .areaChoiceExtra {
+.majorFilters > .areaChoices .areaChoiceExtra {
   flex: 0 0 auto;
 }
 
@@ -877,23 +892,23 @@
 }
 
 .requiredSubjectSection .subjectSectionHeading {
-  border-bottom: 2px solid var(--accent-strong);
+  border-bottom: 2px solid #168060;
   background: transparent;
 }
 
 .requiredSubjectSection .subjectSectionHeading > span {
-  background: var(--accent-strong);
+  background: #168060;
   color: var(--surface-card);
 }
 
 .choiceSubjectSection .subjectSectionHeading {
-  border-bottom: 2px solid #8da7a0;
+  border-bottom: 2px solid #bd7a36;
   background: transparent;
 }
 
 .choiceSubjectSection .subjectSectionHeading > span {
-  background: var(--surface-card);
-  color: var(--accent-strong);
+  background: #fff0df;
+  color: #8a531b;
 }
 
 .destinationBlock {
@@ -902,9 +917,10 @@
 }
 
 .choiceGroupRule {
-  position: relative;
   display: grid;
-  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
   padding: 0 0 8px;
   border: 0;
   border-radius: 0;
@@ -921,7 +937,7 @@
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: 10px;
-  padding-right: 48px;
+  min-width: 0;
 }
 
 .choiceGroupRuleHeader label {
@@ -949,6 +965,7 @@
 
 .cardinalityInputs {
   display: grid;
+  grid-column: 1 / -1;
   gap: 6px;
 }
 
@@ -997,9 +1014,8 @@
 }
 
 .removeChoiceGroup {
-  position: absolute;
-  top: 9px;
-  right: 9px;
+  position: static;
+  align-self: center;
   padding: 6px 8px;
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
@@ -1057,9 +1073,14 @@
 
 .selectedSubjectCard {
   border: 1px solid var(--border-subtle);
+  border-left: 4px solid #168060;
   border-radius: 10px;
   overflow: hidden;
   background: var(--surface-card);
+}
+
+.choiceSubjectSection .selectedSubjectCard {
+  border-left-color: #bd7a36;
 }
 
 .selectedSubject {
@@ -1298,16 +1319,84 @@
   color: var(--text-secondary);
 }
 
-.courseTypeFilter {
+.courseSearchFilterControl {
+  position: relative;
   display: grid;
-  gap: 6px;
-  margin-bottom: 10px;
+  grid-template-columns: minmax(0, 440px) auto;
+  align-items: start;
+  gap: 8px;
 }
 
-.courseTypeFilter > span {
+.courseSearchFilterControl .courseSearch {
+  min-width: 0;
+}
+
+.courseSearchFilterControl .courseSearch input {
+  max-width: none;
+}
+
+.courseTypeFilterToggle {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 9px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.courseTypeFilterToggle:hover,
+.courseTypeFilterToggle[aria-expanded="true"] {
+  border-color: var(--accent-strong);
+  background: var(--surface-note);
+  color: var(--accent-strong);
+}
+
+.courseTypeFilter {
+  position: absolute;
+  z-index: 12;
+  top: calc(100% + 7px);
+  right: 0;
+  display: grid;
+  width: min(340px, 100%);
+  box-sizing: border-box;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--surface-card);
+  box-shadow: 0 14px 28px rgb(32 63 67 / 14%);
+}
+
+.courseTypeFilterHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.courseTypeFilterHeading > span {
   color: var(--text-secondary);
   font-size: 11px;
   font-weight: 700;
+}
+
+.courseTypeFilterHeading button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-strong);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
 }
 
 .courseTypeChoices {
@@ -1441,6 +1530,9 @@
 
 .creditSummary {
   display: grid;
+  width: 100%;
+  min-inline-size: 0;
+  box-sizing: border-box;
   gap: 10px;
   margin: 0;
   padding: 14px;
@@ -2543,6 +2635,16 @@
     grid-template-columns: 1fr;
   }
 
+  .majorProgramHeader {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .extraProgramSearch {
+    width: 100%;
+    justify-self: stretch;
+  }
+
   .courseSelectionGrid {
     grid-template-columns: 1fr;
   }
@@ -2577,6 +2679,15 @@
   .controls,
   .results {
     padding: 22px;
+  }
+
+  .courseSearchFilterControl {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .courseTypeFilter {
+    left: 0;
+    width: 100%;
   }
 
   .recommendationFilters {
