@@ -34,18 +34,9 @@
   line-height: 1.2;
 }
 
-.skipAvailability {
-  display: inline-block;
-  margin-left: 6px;
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0;
-  vertical-align: middle;
-}
-
 .skipButton {
   flex: 0 0 auto;
+  margin-left: auto;
   min-height: 36px;
   padding: 7px 10px;
   border: 1px solid var(--border-subtle);
@@ -153,6 +144,7 @@
 .documentInfoList {
   display: grid;
   gap: 8px;
+  margin-top: -14px;
 }
 
 .documentInfoPanel {
@@ -162,12 +154,23 @@
   background: var(--surface-note);
 }
 
+.documentInfoHeader {
+  display: flex;
+  align-items: stretch;
+}
+
+.documentInfoHeader[data-open="true"] {
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-card);
+}
+
 .documentInfoToggle {
   display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  width: 100%;
   min-height: 54px;
   padding: 10px 12px;
   border: 0;
@@ -178,9 +181,11 @@
   cursor: pointer;
 }
 
-.documentInfoToggle[aria-expanded="true"] {
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--surface-card);
+.documentInfoAction {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 8px 12px 8px 0;
 }
 
 .documentInfoToggle > span:first-child {
@@ -216,6 +221,26 @@
   display: grid;
   gap: 10px;
   padding: 12px;
+}
+
+.privacyConsent {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 245px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.privacyConsent input {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  margin: 0;
+  accent-color: var(--accent-strong);
 }
 
 .privacyNotice {
@@ -257,24 +282,6 @@
 
 .privacyNoticeDetails dd strong {
   color: var(--text-primary);
-}
-
-.privacyNotice label {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.5;
-  cursor: pointer;
-}
-
-.privacyNotice input {
-  width: 18px;
-  height: 18px;
-  margin-top: 2px;
-  accent-color: var(--accent-strong);
 }
 
 .consentHint {
@@ -435,12 +442,11 @@
 }
 
 .pdfPreview {
+  width: min(100%, var(--document-preview-max-width));
+  aspect-ratio: var(--document-preview-aspect-ratio);
   overflow: hidden;
-  height: min(280px, 48vw);
-  min-height: 190px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  background: var(--surface-page);
+  border-radius: 4px;
+  background: transparent;
 }
 
 .pdfPreview iframe {
@@ -1264,9 +1270,20 @@
     padding: 10px;
   }
 
+  .documentInfoHeader {
+    flex-direction: column;
+  }
+
+  .documentInfoAction {
+    padding: 0 10px 10px;
+  }
+
+  .privacyConsent {
+    max-width: none;
+  }
+
   .pdfPreview {
-    height: 220px;
-    min-height: 0;
+    max-width: 100%;
   }
 
   .kindTabs,

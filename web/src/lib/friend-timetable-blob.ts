@@ -28,6 +28,8 @@ interface StoredRecord {
   ownerLabel: string;
   editTokenHash: string;
   courses: CourseCandidate[];
+  /** Course section ids that the owner had placed in the required-subject area. */
+  requiredCourseIds?: string[];
   updatedAt: string;
 }
 
@@ -37,6 +39,8 @@ export interface FriendTimetableSaveInput {
   editToken?: string;
   ownerLabel: string;
   courses: CourseCandidate[];
+  /** Kept with a live share so remix can distinguish fixed courses from optional choices. */
+  requiredCourseIds?: readonly string[];
 }
 
 export type FriendTimetableSaveResult =
@@ -49,6 +53,8 @@ export type FriendTimetableSaveResult =
 export interface FriendTimetableView {
   ownerLabel: string;
   timetable: Timetable;
+  /** null means this is a legacy share made before required-course metadata existed. */
+  requiredCourseIds: string[] | null;
   updatedAt: string;
 }
 
@@ -83,6 +89,17 @@ function normalizeCourses(value: unknown): CourseCandidate[] | null {
     return course ? [course] : [];
   });
   return courses.length > 0 ? courses : null;
+}
+
+function normalizeRequiredCourseIds(
+  value: readonly string[] | undefined,
+  courses: readonly CourseCandidate[],
+): string[] {
+  if (!value) {
+    return [];
+  }
+  const availableIds = new Set(courses.map((course) => course.id));
+  return [...new Set(value.map((id) => id.trim()).filter((id) => availableIds.has(id)))];
 }
 
 async function readRecord(code: string): Promise<StoredRecord | null> {
@@ -121,6 +138,7 @@ export async function saveFriendTimetable(
     return { outcome: "invalid", message: "저장할 과목이 없습니다." };
   }
   const ownerLabel = sanitizeOwnerLabel(input.ownerLabel);
+  const requiredCourseIds = normalizeRequiredCourseIds(input.requiredCourseIds, courses);
 
   if (input.code) {
     const existing = await readRecord(input.code);
@@ -135,6 +153,7 @@ export async function saveFriendTimetable(
       ownerLabel,
       editTokenHash: existing.editTokenHash,
       courses,
+      requiredCourseIds,
       updatedAt: new Date().toISOString(),
     };
     await put(blobPathname(input.code), JSON.stringify(record), {
@@ -160,6 +179,7 @@ export async function saveFriendTimetable(
       ownerLabel,
       editTokenHash: hashEditToken(editToken),
       courses,
+      requiredCourseIds,
       updatedAt: new Date().toISOString(),
     };
     await put(blobPathname(code), JSON.stringify(record), {
@@ -181,6 +201,9 @@ export async function getFriendTimetable(code: string): Promise<FriendTimetableV
   return {
     ownerLabel: record.ownerLabel,
     timetable: { courses: record.courses, meetings: [], fixedEvents: [] },
+    requiredCourseIds: Array.isArray(record.requiredCourseIds)
+      ? normalizeRequiredCourseIds(record.requiredCourseIds, record.courses)
+      : null,
     updatedAt: record.updatedAt,
   };
 }

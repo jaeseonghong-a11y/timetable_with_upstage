@@ -61,6 +61,7 @@ export function TimetableCard({
   footer,
   heading,
   index,
+  requiredCourseIds,
   timetable,
   tone = "default",
 }: {
@@ -69,6 +70,8 @@ export function TimetableCard({
   footer?: ReactNode;
   heading?: string;
   index: number;
+  /** Optional because shared/legacy timetable views do not know how their courses were chosen. */
+  requiredCourseIds?: ReadonlySet<string>;
   timetable: Timetable;
   tone?: "default" | "remix";
 }) {
@@ -178,6 +181,9 @@ export function TimetableCard({
           editToken: existingEditToken,
           ownerLabel: label,
           courses: timetable.courses,
+          requiredCourseIds: timetable.courses
+            .filter((course) => requiredCourseIds?.has(course.id))
+            .map((course) => course.id),
         }),
       });
       const payload: unknown = await response.json();

@@ -1,10 +1,12 @@
 const UPSTAGE_DOCUMENT_DIGITIZATION_URL = "https://api.upstage.ai/v1/document-digitization";
 const UPSTAGE_CHAT_COMPLETIONS_URL = "https://api.upstage.ai/v1/chat/completions";
+const DOCUMENT_PARSE_TIMEOUT_MS = 75_000;
+const SOLAR_TIMEOUT_MS = 55_000;
 
 export { MAX_DOCUMENT_BYTES } from "./document-limits";
 
 export type UpstageService = "document_parse" | "solar";
-export type UpstageFailure = "unavailable" | "request_failed" | "invalid_response";
+export type UpstageFailure = "unavailable" | "request_failed" | "invalid_response" | "timed_out";
 
 export class UpstageApiError extends Error {
   constructor(
@@ -43,17 +45,17 @@ export async function parseDocumentWithUpstage(
   formData.set("coordinates", "true");
   formData.set("output_formats", '["html","markdown"]');
 
-  let response: Response;
-  try {
-    response = await fetch(UPSTAGE_DOCUMENT_DIGITIZATION_URL, {
+  const response = await fetchUpstage(
+    UPSTAGE_DOCUMENT_DIGITIZATION_URL,
+    {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}` },
       body: formData,
       cache: "no-store",
-    });
-  } catch {
-    throw new UpstageApiError("document_parse", "unavailable");
-  }
+    },
+    "document_parse",
+    DOCUMENT_PARSE_TIMEOUT_MS,
+  );
 
   if (!response.ok) {
     throw new UpstageApiError("document_parse", "request_failed");
@@ -92,9 +94,9 @@ export async function requestSolarCompletion(
   apiKey: string,
   jsonSchema?: SolarJsonSchema,
 ): Promise<string> {
-  let response: Response;
-  try {
-    response = await fetch(UPSTAGE_CHAT_COMPLETIONS_URL, {
+  const response = await fetchUpstage(
+    UPSTAGE_CHAT_COMPLETIONS_URL,
+    {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -117,10 +119,10 @@ export async function requestSolarCompletion(
           : {}),
       }),
       cache: "no-store",
-    });
-  } catch {
-    throw new UpstageApiError("solar", "unavailable");
-  }
+    },
+    "solar",
+    SOLAR_TIMEOUT_MS,
+  );
 
   if (!response.ok) {
     throw new UpstageApiError("solar", "request_failed");
@@ -150,6 +152,23 @@ function getSolarMessageContent(body: unknown): string | null {
   }
   const content = firstChoice.message.content;
   return typeof content === "string" && content.trim() ? content.trim() : null;
+}
+
+async function fetchUpstage(
+  url: string,
+  init: RequestInit,
+  service: UpstageService,
+  timeoutMilliseconds: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMilliseconds);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch {
+    throw new UpstageApiError(service, controller.signal.aborted ? "timed_out" : "unavailable");
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

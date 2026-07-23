@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import type { AcademicDocumentKind, AcademicProfile } from "@/lib/academic-profile";
 import {
@@ -24,6 +24,11 @@ import { AcademicCourseEditor } from "./AcademicCourseEditor";
 import { AcademicRequirementEditor } from "./AcademicRequirementEditor";
 import styles from "./AcademicDocumentManager.module.css";
 
+interface DocumentPreview {
+  maxWidth: string;
+  aspectRatio: string;
+}
+
 const KIND_DETAILS: Record<
   AcademicDocumentKind,
   {
@@ -33,6 +38,8 @@ const KIND_DETAILS: Record<
     attachGuide: string;
     guidePdf: string;
     examplePdf: string;
+    guidePreview: DocumentPreview;
+    examplePreview: DocumentPreview;
   }
 > = {
   course_history: {
@@ -47,6 +54,8 @@ const KIND_DETAILS: Record<
       "성균관대학교 GLS → 학적/개인영역 → 졸업자가진단 → 졸업요건충족현황조회 → 수강/취득 과목 출력 → PDF 저장 → 업로드",
     guidePdf: "/step2-guides/course-history-guide.pdf",
     examplePdf: "/step2-guides/course-history-example.pdf",
+    guidePreview: { maxWidth: "100%", aspectRatio: "1700.79 / 310.123" },
+    examplePreview: { maxWidth: "320px", aspectRatio: "595.276 / 841.89" },
   },
   graduation_requirements: {
     label: "졸업요건충족현황",
@@ -59,6 +68,8 @@ const KIND_DETAILS: Record<
       "성균관대학교 GLS → 학적/개인영역 → 졸업자가진단 → 졸업요건충족현황조회 → 영역별 학점취득/수강현황 + 이수구분별 학점취득/수강현황 부분이 모두 보이도록 스크린샷 → 붙여넣기, 혹은 저장 후 업로드",
     guidePdf: "/step2-guides/graduation-requirements-guide.pdf",
     examplePdf: "/step2-guides/graduation-requirements-example.pdf",
+    guidePreview: { maxWidth: "640px", aspectRatio: "1700.79 / 1180.52" },
+    examplePreview: { maxWidth: "520px", aspectRatio: "1137 / 609" },
   },
 };
 
@@ -79,6 +90,7 @@ interface DocumentInfoPanelProps {
   isOpen: boolean;
   onToggle: () => void;
   children: ReactNode;
+  action?: ReactNode;
 }
 
 function DocumentInfoPanel({
@@ -88,24 +100,28 @@ function DocumentInfoPanel({
   isOpen,
   onToggle,
   children,
+  action,
 }: DocumentInfoPanelProps) {
   return (
     <section className={styles.documentInfoPanel}>
-      <button
-        aria-controls={id}
-        aria-expanded={isOpen}
-        className={styles.documentInfoToggle}
-        type="button"
-        onClick={onToggle}
-      >
-        <span>
-          <strong>{title}</strong>
-          <small>{summary}</small>
-        </span>
-        <span aria-hidden="true" className={styles.documentInfoChevron}>
-          {isOpen ? "−" : "+"}
-        </span>
-      </button>
+      <div className={styles.documentInfoHeader} data-open={isOpen}>
+        <button
+          aria-controls={id}
+          aria-expanded={isOpen}
+          className={styles.documentInfoToggle}
+          type="button"
+          onClick={onToggle}
+        >
+          <span>
+            <strong>{title}</strong>
+            <small>{summary}</small>
+          </span>
+          <span aria-hidden="true" className={styles.documentInfoChevron}>
+            {isOpen ? "−" : "+"}
+          </span>
+        </button>
+        {action ? <div className={styles.documentInfoAction}>{action}</div> : null}
+      </div>
       {isOpen ? (
         <div className={styles.documentInfoContent} id={id}>
           {children}
@@ -113,6 +129,13 @@ function DocumentInfoPanel({
       ) : null}
     </section>
   );
+}
+
+function getDocumentPreviewStyle(preview: DocumentPreview): CSSProperties {
+  return {
+    "--document-preview-max-width": preview.maxWidth,
+    "--document-preview-aspect-ratio": preview.aspectRatio,
+  } as CSSProperties;
 }
 
 /**
@@ -166,6 +189,31 @@ const ANALYSIS_LONG_WAIT_FLAVORS: Record<AcademicDocumentKind, readonly string[]
   ],
 };
 const ANALYSIS_LONG_WAIT_INTERVAL_MS = 3000;
+// The server has its own Upstage/Vercel limits, but an unbounded browser fetch leaves a student
+// looking at an endless spinner when an upstream connection never settles. Keep this below the
+// server's 300-second ceiling so the UI can always recover with a retry/manual-entry option.
+const ANALYSIS_REQUEST_TIMEOUT_MS = 180_000;
+
+async function postAcademicDocument(formData: FormData): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), ANALYSIS_REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch("/api/parse-academic-document", {
+      method: "POST",
+      body: formData,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(
+        "분석이 3분을 넘어 중단되었습니다. 잠시 후 다시 시도하거나 서류 없이 직접 입력해 주세요.",
+      );
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
 
 interface Props {
   profileDetails?: AcademicProfile["profile"];
@@ -374,10 +422,7 @@ export function AcademicDocumentManager({
         const formData = new FormData();
         formData.set("kind", kind);
         formData.set("document", file);
-        const response = await fetch("/api/parse-academic-document", {
-          method: "POST",
-          body: formData,
-        });
+        const response = await postAcademicDocument(formData);
         const payload: unknown = await response.json();
         if (!response.ok) {
           trackFailure(getAcademicDocumentApiErrorCode(payload));
@@ -522,11 +567,11 @@ export function AcademicDocumentManager({
       <div className={styles.intro}>
         <div className={styles.heading}>
           <h2 id="academic-document-heading">
-            STEP 2 · 내 기록 적용하기 <span className={styles.skipAvailability}>(Skip 가능)</span>
+            STEP 2 · 내 기록 적용하기
           </h2>
           {onSkip ? (
             <button className={styles.skipButton} type="button" onClick={onSkip}>
-              이번 문서 건너뛰기
+              Skip 하기
             </button>
           ) : null}
         </div>
@@ -548,6 +593,16 @@ export function AcademicDocumentManager({
         summary={hasConsented ? "동의 완료" : "내용 확인 후 동의"}
         title="개인정보 수집 및 이용 동의"
         onToggle={() => toggleDocumentInfoPanel("privacy")}
+        action={
+          <label className={styles.privacyConsent}>
+            <input
+              checked={hasConsented}
+              type="checkbox"
+              onChange={(event) => setHasConsented(event.target.checked)}
+            />
+            <span>개인정보 수집 및 이용에 동의합니다.</span>
+          </label>
+        }
       >
         <div className={styles.privacyNotice}>
           <dl className={styles.privacyNoticeDetails}>
@@ -586,14 +641,6 @@ export function AcademicDocumentManager({
               </dd>
             </div>
           </dl>
-          <label>
-            <input
-              checked={hasConsented}
-              type="checkbox"
-              onChange={(event) => setHasConsented(event.target.checked)}
-            />
-            <span>위 내용을 확인했으며, 개인정보 수집 및 이용에 동의합니다.</span>
-          </label>
         </div>
       </DocumentInfoPanel>
 
@@ -679,10 +726,10 @@ export function AcademicDocumentManager({
               GLS 열기
             </a>
           </p>
-          <div className={styles.pdfPreview}>
+          <div className={styles.pdfPreview} style={getDocumentPreviewStyle(detail.guidePreview)}>
             <iframe
               loading="lazy"
-              src={`${detail.guidePdf}#view=FitH&toolbar=0&navpanes=0`}
+              src={`${detail.guidePdf}#page=1&view=Fit`}
               title={`${detail.label} 발급 안내 PDF 미리보기`}
             />
           </div>
@@ -706,10 +753,10 @@ export function AcademicDocumentManager({
           <p className={styles.exampleDescription}>
             아래처럼 필요한 표가 모두 보이는 PDF 또는 캡처 이미지를 첨부해 주세요.
           </p>
-          <div className={styles.pdfPreview}>
+          <div className={styles.pdfPreview} style={getDocumentPreviewStyle(detail.examplePreview)}>
             <iframe
               loading="lazy"
-              src={`${detail.examplePdf}#view=FitH&toolbar=0&navpanes=0`}
+              src={`${detail.examplePdf}#page=1&view=Fit`}
               title={`${detail.label} 예시 PDF 미리보기`}
             />
           </div>

@@ -25,7 +25,8 @@ type ApiErrorCode =
   | "upstage_not_configured"
   | "document_parse_failed"
   | "solar_extraction_failed"
-  | "upstage_unavailable";
+  | "upstage_unavailable"
+  | "upstage_timed_out";
 
 function errorResponse(status: number, code: ApiErrorCode, message: string): Response {
   return Response.json({ error: { code, message } }, { status });
@@ -112,6 +113,13 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
     if (error instanceof UpstageApiError) {
+      if (error.failure === "timed_out") {
+        return errorResponse(
+          504,
+          "upstage_timed_out",
+          "문서 분석 응답이 오래 걸려 중단되었습니다. 잠시 후 다시 시도해 주세요.",
+        );
+      }
       if (error.failure === "unavailable") {
         return errorResponse(502, "upstage_unavailable", "Upstage에 연결할 수 없습니다.");
       }

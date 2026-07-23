@@ -462,7 +462,7 @@ export function PlanningWorkspace() {
         <div className={styles.navActions}>
           {step === 2 ? (
             <button type="button" onClick={skipCurrentDocument}>
-              이번 문서 건너뛰기
+              건너뛰기
             </button>
           ) : null}
           {step === 3 ? (

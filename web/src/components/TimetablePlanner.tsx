@@ -123,6 +123,8 @@ const RECOMMENDATION_STAGE1_FLAVORS = [
   "거의 다 됐어요, 조금만 더…",
 ] as const;
 const RECOMMENDATION_STAGE1_FLAVOR_INTERVAL_MS = 2600;
+const DEFAULT_RECOMMENDATION_AVERAGE_SECONDS = 20;
+const MAX_RECOMMENDATION_DURATION_SAMPLES = 5;
 
 type CourseSource = "major" | "elective";
 
@@ -980,6 +982,15 @@ export function TimetablePlanner({
     });
     return { requiredSubjects, choiceBags };
   }, [choiceGroups, courseOwners, enabledSectionIds, selectedCourseGroups]);
+  const requiredSectionIds = useMemo(
+    () =>
+      new Set(
+        manualSelectionPlanSubjects.requiredSubjects.flatMap((subject) =>
+          subject.sections.map((section) => section.id),
+        ),
+      ),
+    [manualSelectionPlanSubjects.requiredSubjects],
+  );
 
   // 필수 과목 학점 + 선택 그룹별 최소/최대 선택 개수로 담긴 학점의 하한·상한을 자동 계산한다.
   const packedCreditRange = useMemo(
@@ -1112,8 +1123,24 @@ export function TimetablePlanner({
   const [isRecommending, setIsRecommending] = useState(false);
   const [recommendationStage, setRecommendationStage] = useState(0);
   const [recommendationFlavorIndex, setRecommendationFlavorIndex] = useState(-1);
+  const [recommendationElapsedSeconds, setRecommendationElapsedSeconds] = useState(0);
+  const [recommendationAverageSeconds, setRecommendationAverageSeconds] = useState(
+    DEFAULT_RECOMMENDATION_AVERAGE_SECONDS,
+  );
   const [recommendationError, setRecommendationError] = useState("");
   const [aiExplanationFailed, setAiExplanationFailed] = useState(false);
+  const recommendationDurationSamples = useRef<number[]>([]);
+
+  useEffect(() => {
+    if (!isRecommending) {
+      return;
+    }
+    const startedAt = performance.now();
+    const timer = window.setInterval(() => {
+      setRecommendationElapsedSeconds(Math.floor((performance.now() - startedAt) / 1000));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [isRecommending]);
 
   useEffect(() => {
     if (!isRecommending || recommendationStage !== 1) {
@@ -1419,6 +1446,7 @@ export function TimetablePlanner({
     }
     track("ai_recommend_click");
     const startedAt = performance.now();
+    setRecommendationElapsedSeconds(0);
     setIsRecommending(true);
     setRecommendationStage(0);
     setRecommendationFlavorIndex(-1);
@@ -1517,7 +1545,19 @@ export function TimetablePlanner({
       setRecommendationError(readThrownMessage(error));
       setRecommendations(null);
     } finally {
-      track("ai_recommend_done", { duration_ms: Math.round(performance.now() - startedAt) });
+      const durationMilliseconds = Math.round(performance.now() - startedAt);
+      const durationSeconds = Math.max(1, Math.round(durationMilliseconds / 1000));
+      recommendationDurationSamples.current = [
+        ...recommendationDurationSamples.current.slice(-(MAX_RECOMMENDATION_DURATION_SAMPLES - 1)),
+        durationSeconds,
+      ];
+      setRecommendationAverageSeconds(
+        Math.round(
+          recommendationDurationSamples.current.reduce((sum, seconds) => sum + seconds, 0) /
+            recommendationDurationSamples.current.length,
+        ),
+      );
+      track("ai_recommend_done", { duration_ms: durationMilliseconds });
       setIsRecommending(false);
       setRecommendationStage(0);
     }
@@ -2378,12 +2418,13 @@ export function TimetablePlanner({
             <p className={styles.empty}>선택한 공강일 필터에 맞는 조합이 없습니다. 필터를 줄여 보세요.</p>
           ) : null}
           {!result.error && filteredEntries.length > 0 ? (
-            <ol className={styles.timetableList}>
+            <ol className={`${styles.timetableList} ${styles.validTimetableList}`}>
               {filteredEntries.map(({ index, timetable, extras }) => (
                 <TimetableCard
                   extras={extras}
                   index={index}
                   key={timetable.courses.map(({ id }) => id).join("-")}
+                  requiredCourseIds={requiredSectionIds}
                   timetable={timetable}
                 />
               ))}
@@ -2401,6 +2442,9 @@ export function TimetablePlanner({
               <div className={styles.aiLoadingPanel} role="status" aria-live="polite">
                 <span className={styles.aiSpinner} aria-hidden="true" />
                 <strong>AI가 분석 중입니다...</strong>
+                <p className={styles.aiLoadingTiming}>
+                  {recommendationElapsedSeconds}초째 · 평균 {recommendationAverageSeconds}초
+                </p>
                 <p>{recommendationStageLabel} 잠시만 기다려 주세요.</p>
                 <div className={styles.aiSkeletonList} aria-hidden="true">
                   <div className={styles.aiSkeletonCard} />
@@ -2666,6 +2710,7 @@ export function TimetablePlanner({
                       heading={`AI 추천 ${recommendation.rank}순위`}
                       index={recommendation.rank - 1}
                       key={recommendation.candidateId}
+                      requiredCourseIds={requiredSectionIds}
                       timetable={timetable}
                     />
                   );

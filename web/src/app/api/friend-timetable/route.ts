@@ -29,12 +29,14 @@ export async function POST(request: Request): Promise<Response> {
   }
   const code = typeof body.code === "string" && body.code ? body.code : undefined;
   const editToken = typeof body.editToken === "string" && body.editToken ? body.editToken : undefined;
+  const requiredCourseIds = isStringArray(body.requiredCourseIds) ? body.requiredCourseIds : undefined;
 
   const result = await saveFriendTimetable({
     code,
     editToken,
     ownerLabel: body.ownerLabel,
     courses: body.courses,
+    requiredCourseIds,
   });
 
   switch (result.outcome) {
@@ -53,4 +55,8 @@ export async function POST(request: Request): Promise<Response> {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
 }

@@ -77,12 +77,21 @@ export function FriendTimetableRemix() {
   }, []);
 
   const selectedFriend = sourceState.friends.find((friend) => friend.code === selectedFriendCode) ?? null;
+  const myRequiredCourses = useMemo(
+    () =>
+      sourceState.mine?.requiredCourseIds
+        ? sourceState.mine.timetable.courses.filter((course) =>
+            sourceState.mine?.requiredCourseIds?.includes(course.id),
+          )
+        : [],
+    [sourceState.mine],
+  );
   const courseColorsById = useMemo(
     () =>
       sourceState.mine && selectedFriend
-        ? getFriendRemixCourseOrigins(sourceState.mine.timetable.courses, selectedFriend.timetable.courses)
+        ? getFriendRemixCourseOrigins(myRequiredCourses, selectedFriend.timetable.courses)
         : new Map(),
-    [selectedFriend, sourceState.mine],
+    [myRequiredCourses, selectedFriend, sourceState.mine],
   );
   const strengthAvailable = requirementSummaries !== null && requirementSummaries.length > 0;
   const unmetRequirementLabels = useMemo(
@@ -98,7 +107,18 @@ export function FriendTimetableRemix() {
     if (!sourceState.mine || !selectedFriend) {
       return;
     }
-    const plan = createFriendRemixSelectionPlan(sourceState.mine.timetable, selectedFriend.timetable);
+    if (sourceState.mine.requiredCourseIds === null) {
+      setGenerationError(
+        "내 시간표를 다시 저장하면 필수 과목 기준으로 리믹스할 수 있어요.",
+      );
+      setResults([]);
+      return;
+    }
+    const plan = createFriendRemixSelectionPlan(
+      sourceState.mine.timetable,
+      selectedFriend.timetable,
+      sourceState.mine.requiredCourseIds,
+    );
     if (!plan) {
       setGenerationError("섞을 수업이 없습니다. 두 시간표에 수업이 있는지 확인해 주세요.");
       setResults([]);
@@ -240,7 +260,7 @@ export function FriendTimetableRemix() {
         <section className={styles.results}>
           <div className={styles.resultHeading}>
             <p>TOP 5 REMIXES</p>
-            <h2>{selectedFriend?.label ?? "친구"} 기준 결과</h2>
+            <h2>내 기준 결과</h2>
           </div>
           <div className={styles.courseLegend} aria-label="리믹스 과목 색상 구분">
             <span><i className={styles.sharedCourse} aria-hidden="true" />대상 친구와 겹치는 과목</span>

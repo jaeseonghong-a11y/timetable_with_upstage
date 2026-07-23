@@ -5,6 +5,8 @@ export interface FriendRemixSource {
   code: string;
   label: string;
   timetable: Timetable;
+  /** null only for a share saved before the required-course marker was introduced. */
+  requiredCourseIds: string[] | null;
 }
 
 export async function loadFriendRemixSources(input: {
@@ -41,12 +43,25 @@ async function fetchFriendRemixSource(code: string, fallbackLabel: string): Prom
   if (!response.ok) throw new Error(readApiError(payload));
   const parsed = parseResponse(payload);
   if (!parsed) throw new Error("시간표 응답 형식이 올바르지 않습니다.");
-  return { code, label: fallbackLabel || parsed.ownerLabel || code, timetable: parsed.timetable };
+  return {
+    code,
+    label: fallbackLabel || parsed.ownerLabel || code,
+    timetable: parsed.timetable,
+    requiredCourseIds: parsed.requiredCourseIds,
+  };
 }
 
-function parseResponse(payload: unknown): { ownerLabel: string; timetable: Timetable } | null {
+function parseResponse(payload: unknown): {
+  ownerLabel: string;
+  timetable: Timetable;
+  requiredCourseIds: string[] | null;
+} | null {
   if (typeof payload !== "object" || payload === null) return null;
-  const record = payload as { ownerLabel?: unknown; timetable?: { courses?: unknown } };
+  const record = payload as {
+    ownerLabel?: unknown;
+    requiredCourseIds?: unknown;
+    timetable?: { courses?: unknown };
+  };
   if (typeof record.ownerLabel !== "string" || !Array.isArray(record.timetable?.courses)) return null;
   const rawCourses = record.timetable.courses;
   const courses = rawCourses.flatMap((course) => {
@@ -54,7 +69,22 @@ function parseResponse(payload: unknown): { ownerLabel: string; timetable: Timet
     return parsed ? [parsed] : [];
   });
   if (courses.length !== rawCourses.length) return null;
-  return { ownerLabel: record.ownerLabel, timetable: { courses, meetings: [], fixedEvents: [] } };
+  if (
+    record.requiredCourseIds !== undefined &&
+    (!Array.isArray(record.requiredCourseIds) ||
+      !record.requiredCourseIds.every((courseId) => typeof courseId === "string"))
+  ) {
+    return null;
+  }
+  const knownCourseIds = new Set(courses.map((course) => course.id));
+  const requiredCourseIds = record.requiredCourseIds === undefined
+    ? null
+    : [...new Set(record.requiredCourseIds.filter((courseId) => knownCourseIds.has(courseId)))];
+  return {
+    ownerLabel: record.ownerLabel,
+    timetable: { courses, meetings: [], fixedEvents: [] },
+    requiredCourseIds,
+  };
 }
 
 function readApiError(payload: unknown): string {

@@ -101,6 +101,20 @@ describe("saveFriendTimetable — creating a new entry", () => {
     const view = await getFriendTimetable(result.code);
     expect(view?.ownerLabel).toBe("이름 없음");
   });
+
+  it("round-trips only required ids that belong to the saved timetable", async () => {
+    const result = await saveFriendTimetable({
+      ownerLabel: "재성",
+      courses: [course("A1"), course("B1")],
+      requiredCourseIds: ["A1", "missing", "A1"],
+    });
+    if (result.outcome !== "created") {
+      throw new Error("expected created");
+    }
+
+    const view = await getFriendTimetable(result.code);
+    expect(view?.requiredCourseIds).toEqual(["A1"]);
+  });
 });
 
 describe("saveFriendTimetable — updating an existing entry", () => {

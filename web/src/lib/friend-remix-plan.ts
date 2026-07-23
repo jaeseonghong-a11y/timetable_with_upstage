@@ -3,24 +3,37 @@ import { getFriendRemixCourseKey } from "./friend-remix-course-origin";
 import type { CourseCandidate, Timetable } from "./timetable";
 
 /**
- * Keep the viewer's course-count while offering the sections that either timetable already uses.
- * Different sections of the same course number intentionally become alternatives of one subject.
+ * A remix starts from the viewer's own required subjects. Their earlier optional selections are
+ * intentionally discarded; the remaining course count is filled with the friend's subjects.
+ * Different sections of one course number remain alternatives of the same subject.
  */
 export function createFriendRemixSelectionPlan(
   mine: Timetable,
   friend: Timetable,
+  requiredCourseIds: readonly string[],
 ): SelectionPlan | null {
-  const subjects = toSubjects([...mine.courses, ...friend.courses]);
-  if (subjects.length === 0 || mine.courses.length === 0) return null;
-  const numberToChoose = Math.min(mine.courses.length, subjects.length);
-  const bag: ChoiceBag = {
-    id: "friend-remix",
-    title: "내 시간표와 친구 시간표의 과목",
-    subjects,
-    minSubjects: numberToChoose,
-    maxSubjects: numberToChoose,
-  };
-  return { requiredSubjects: [], choiceBags: [bag] };
+  const requiredIdSet = new Set(requiredCourseIds);
+  const requiredSubjects = toSubjects(mine.courses.filter((course) => requiredIdSet.has(course.id)));
+  if (requiredSubjects.length === 0) return null;
+
+  const requiredSubjectIds = new Set(requiredSubjects.map((subject) => subject.id));
+  const friendSubjects = toSubjects(friend.courses).filter(
+    (subject) => !requiredSubjectIds.has(subject.id),
+  );
+  const optionalCourseCount = Math.min(
+    Math.max(0, mine.courses.length - requiredSubjects.length),
+    friendSubjects.length,
+  );
+  const choiceBags: ChoiceBag[] = optionalCourseCount > 0
+    ? [{
+        id: "friend-remix",
+        title: "친구 시간표 과목",
+        subjects: friendSubjects,
+        minSubjects: optionalCourseCount,
+        maxSubjects: optionalCourseCount,
+      }]
+    : [];
+  return { requiredSubjects, choiceBags };
 }
 
 function toSubjects(courses: readonly CourseCandidate[]): SubjectOption[] {

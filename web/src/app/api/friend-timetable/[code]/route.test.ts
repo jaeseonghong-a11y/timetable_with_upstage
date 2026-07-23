@@ -23,6 +23,7 @@ describe("GET /api/friend-timetable/[code]", () => {
     vi.mocked(getFriendTimetable).mockResolvedValueOnce({
       ownerLabel: "재성",
       timetable: { courses: [{ id: "A1", title: "과목", schedule: "" }], meetings: [], fixedEvents: [] },
+      requiredCourseIds: ["A1"],
       updatedAt: "2026-07-20T00:00:00.000Z",
     });
 

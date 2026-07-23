@@ -52,6 +52,26 @@ describe("POST /api/friend-timetable", () => {
     expect(body).toEqual({ code: "ABCD2345", editToken: "secret-token" });
   });
 
+  it("passes required-course ids through with the saved timetable", async () => {
+    vi.mocked(saveFriendTimetable).mockResolvedValueOnce({
+      outcome: "created",
+      code: "ABCD2345",
+      editToken: "secret-token",
+    });
+
+    await POST(
+      jsonRequest({
+        ownerLabel: "재성",
+        courses: [{ id: "A1", title: "과목", schedule: "" }],
+        requiredCourseIds: ["A1"],
+      }),
+    );
+
+    expect(saveFriendTimetable).toHaveBeenCalledWith(expect.objectContaining({
+      requiredCourseIds: ["A1"],
+    }));
+  });
+
   it("returns 200 with only the code on update", async () => {
     vi.mocked(saveFriendTimetable).mockResolvedValueOnce({ outcome: "updated", code: "ABCD2345" });
 

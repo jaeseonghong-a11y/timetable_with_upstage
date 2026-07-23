@@ -1348,6 +1348,13 @@
   list-style: none;
 }
 
+/* Valid schedules are comparison material, so use the available desktop width instead of
+   making the student scroll through one long single-column list. */
+.validTimetableList {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
 .timetableCard {
   border: 1px solid var(--border-subtle);
   border-radius: 14px;
@@ -1908,6 +1915,12 @@
   line-height: 1.55;
 }
 
+.aiLoadingPanel .aiLoadingTiming {
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .aiSpinner {
   width: 36px;
   height: 36px;
@@ -2218,6 +2231,10 @@
 
 @media (max-width: 760px) {
   .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .validTimetableList {
     grid-template-columns: 1fr;
   }
 
